@@ -172,10 +172,10 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 
 // updateProxyName 更新代理名称
 func (pc *ProxyChecker) updateProxyName(proxy map[string]any, client *http.Client, speed int) {
-	country := proxyutils.GetProxyCountry(client)
-	if country == "" {
-		country = "未识别"
-	}
+	// country := proxyutils.GetProxyCountry(client)
+	// if country == "" {
+	// 	country = "未识别"
+	// }
 
 	// 获取速度
 	if config.GlobalConfig.SpeedTestUrl != "" {
@@ -185,11 +185,8 @@ func (pc *ProxyChecker) updateProxyName(proxy map[string]any, client *http.Clien
 		} else {
 			speedStr = fmt.Sprintf("%.1fMB/s", float64(speed)/1024)
 		}
-		proxy["name"] = proxyutils.Rename(country) + " | ⬇️ " + speedStr
-	} else {
-		proxy["name"] = proxyutils.Rename(country)
+		proxy["name"] = (proxy["name"]).(string) + " | ⬇️ " + speedStr
 	}
-
 }
 
 // showProgress 显示进度条
@@ -197,6 +194,7 @@ func (pc *ProxyChecker) showProgress(done chan bool) {
 	for {
 		select {
 		case <-done:
+			fmt.Println()
 			return
 		default:
 			pc.mu.Lock()
