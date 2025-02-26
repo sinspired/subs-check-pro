@@ -5,6 +5,7 @@ test
 
 output/*
 subs-check*
+mihomo-check*
 
 .idea
 .vscode
