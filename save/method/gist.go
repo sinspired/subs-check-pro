@@ -10,7 +10,7 @@ import (
 
 	"log/slog"
 
-	"github.com/bestruirui/mihomo-check/config"
+	"github.com/beck-8/subs-check/config"
 )
 
 var (

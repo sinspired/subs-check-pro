@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bestruirui/mihomo-check/utils"
+	"github.com/beck-8/subs-check/utils"
 )
 
 const (

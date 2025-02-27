@@ -14,9 +14,9 @@ import (
 
 	"log/slog"
 
-	"github.com/bestruirui/mihomo-check/check/platfrom"
-	"github.com/bestruirui/mihomo-check/config"
-	proxyutils "github.com/bestruirui/mihomo-check/proxy"
+	"github.com/beck-8/subs-check/check/platfrom"
+	"github.com/beck-8/subs-check/config"
+	proxyutils "github.com/beck-8/subs-check/proxy"
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/constant"
 )

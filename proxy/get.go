@@ -10,8 +10,8 @@ import (
 
 	"log/slog"
 
-	"github.com/bestruirui/mihomo-check/config"
-	"github.com/bestruirui/mihomo-check/proxy/parser"
+	"github.com/beck-8/subs-check/config"
+	"github.com/beck-8/subs-check/proxy/parser"
 	"gopkg.in/yaml.v3"
 )
 

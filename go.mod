@@ -1,4 +1,4 @@
-module github.com/bestruirui/mihomo-check
+module github.com/beck-8/subs-check
 
 go 1.23.0
 

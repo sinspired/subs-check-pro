@@ -3,7 +3,7 @@ package proxies
 import (
 	"strings"
 
-	"github.com/bestruirui/mihomo-check/proxy/parser"
+	"github.com/beck-8/subs-check/proxy/parser"
 )
 
 func ParseProxy(proxy string) (map[string]any, error) {

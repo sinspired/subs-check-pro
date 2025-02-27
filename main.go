@@ -9,11 +9,11 @@ import (
 
 	"log/slog"
 
-	"github.com/bestruirui/mihomo-check/check"
-	"github.com/bestruirui/mihomo-check/config"
-	"github.com/bestruirui/mihomo-check/save"
-	"github.com/bestruirui/mihomo-check/save/method"
-	"github.com/bestruirui/mihomo-check/utils"
+	"github.com/beck-8/subs-check/check"
+	"github.com/beck-8/subs-check/config"
+	"github.com/beck-8/subs-check/save"
+	"github.com/beck-8/subs-check/save/method"
+	"github.com/beck-8/subs-check/utils"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"

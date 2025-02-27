@@ -8,7 +8,7 @@ import (
 
 	"log/slog"
 
-	"github.com/bestruirui/mihomo-check/config"
+	"github.com/beck-8/subs-check/config"
 )
 
 // 定义通用的 HTTP 客户端接口
