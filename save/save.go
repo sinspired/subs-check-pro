@@ -200,10 +200,28 @@ func genUrls(data []byte) (string, error) {
 			switch keyStr {
 			case "type", "password", "server", "port", "name", "uuid":
 				return nil
+
+			// 单独处理vless，因为vless的clash的network字段是url的type字段
+			// 我也不知道有没有更好的正确的处理方法或者库
+			case "network":
+				if t == "vless" {
+					q.Set("type", string(val))
+				}
+				return nil
 			}
+
 			// 如果val是对象，则递归解析
 			if dataType == jsonparser.Object {
 				return jsonparser.ObjectEach(val, func(key []byte, val []byte, dataType jsonparser.ValueType, offset int) error {
+					// vless的特殊情况 headers {"host":"vn.oldcloud.online"}
+					// 前边处理过vless了，暂时保留，万一后边其他协议还需要
+					if dataType == jsonparser.Object {
+						// return jsonparser.ObjectEach(val, func(key []byte, val []byte, dataType jsonparser.ValueType, offset int) error {
+						// 	q.Set(string(key), string(val))
+						// 	return nil
+						// })
+						return nil
+					}
 					q.Set(string(key), string(val))
 					return nil
 				})

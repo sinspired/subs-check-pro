@@ -44,23 +44,41 @@ func ParseVless(data string) (map[string]any, error) {
 		"servername":         query.Get("sni"),
 		"flow":               query.Get("flow"),
 		"client-fingerprint": query.Get("fp"),
-	}
-
-	// 添加 ws 特定配置
-	if query.Get("type") == "ws" {
-		wsOpts := map[string]any{
+		"ws-opts": map[string]any{
 			"path": query.Get("path"),
 			"headers": map[string]any{
-				"Host": query.Get("host"),
+				"host": query.Get("host"),
 			},
-		}
-		proxy["ws-opts"] = wsOpts
+		},
+		"reality-opts": map[string]any{
+			"public-key": query.Get("pbk"),
+			"short-id":   query.Get("sid"),
+		},
+		// 给 URI使用，Clash 的 参数不叫这个
+		"security": query.Get("security"),
+		"sni":      query.Get("sni"),
+		"fp":       query.Get("fp"),
+		"pbk":      query.Get("pbk"),
+		"sid":      query.Get("sid"),
+		"path":     query.Get("path"),
+		"host":     query.Get("host"),
 	}
-	realityOpts := map[string]any{
-		"public-key": query.Get("pbk"),
-		"short-id":   query.Get("sid"),
-	}
-	proxy["reality-opts"] = realityOpts
+
+	// // 添加 ws 特定配置
+	// if query.Get("type") == "ws" {
+	// 	wsOpts := map[string]any{
+	// 		"path": query.Get("path"),
+	// 		"headers": map[string]any{
+	// 			"host": query.Get("host"),
+	// 		},
+	// 	}
+	// 	proxy["ws-opts"] = wsOpts
+	// }
+	// realityOpts := map[string]any{
+	// 	"public-key": query.Get("pbk"),
+	// 	"short-id":   query.Get("sid"),
+	// }
+	// proxy["reality-opts"] = realityOpts
 
 	return proxy, nil
 }

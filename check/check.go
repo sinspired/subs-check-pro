@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,9 +134,19 @@ func (pc *ProxyChecker) worker(wg *sync.WaitGroup) {
 func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	httpClient := CreateClient(proxy)
 	if httpClient == nil {
+		log.Debugln("创建代理Client失败: %v", proxy["name"])
 		return nil
 	}
-	log.Debugln("开始检测代理: %v", proxy["name"])
+
+	res := &Result{
+		Proxy: proxy,
+	}
+
+	if os.Getenv("SUB_CHECK_SKIP") == "true" {
+		log.Debugln("跳过检测代理: %v", proxy["name"])
+		return res
+	}
+
 	cloudflare, err := platfrom.CheckCloudflare(httpClient)
 	if err != nil || !cloudflare {
 		return nil
@@ -162,15 +173,13 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	pc.updateProxyName(proxy, httpClient, speed)
 	pc.incrementAvailable()
 
-	return &Result{
-		Proxy:      proxy,
-		Cloudflare: cloudflare,
-		Google:     google,
-		Openai:     openai,
-		Youtube:    youtube,
-		Netflix:    netflix,
-		Disney:     disney,
-	}
+	res.Cloudflare = cloudflare
+	res.Google = google
+	res.Openai = openai
+	res.Youtube = youtube
+	res.Netflix = netflix
+	res.Disney = disney
+	return res
 }
 
 // updateProxyName 更新代理名称
