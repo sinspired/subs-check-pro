@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
-	"github.com/metacubex/mihomo/log"
 )
 
 const (
@@ -99,11 +100,11 @@ func (r *R2Uploader) uploadWithRetry(jsonData []byte, filename string) error {
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if err := r.doUpload(jsonData); err != nil {
 			lastErr = err
-			log.Errorln("上传失败(尝试 %d/%d): %v", attempt+1, maxRetries, err)
+			slog.Error(fmt.Sprintf("R2上传失败(尝试 %d/%d) %v", attempt+1, maxRetries, err))
 			time.Sleep(retryInterval)
 			continue
 		}
-		log.Infoln("上传成功: %s", filename)
+		slog.Info("R2上传成功", "filename", filename)
 		return nil
 	}
 

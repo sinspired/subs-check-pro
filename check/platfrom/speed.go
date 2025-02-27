@@ -1,12 +1,14 @@
 package platfrom
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
-	"github.com/metacubex/mihomo/log"
 )
 
 func CheckSpeed(httpClient *http.Client) (int, error) {
@@ -20,7 +22,7 @@ func CheckSpeed(httpClient *http.Client) (int, error) {
 
 	resp, err := speedClient.Get(config.GlobalConfig.SpeedTestUrl)
 	if err != nil {
-		log.Debugln("测速请求失败: %v", err)
+		slog.Debug(fmt.Sprintf("测速请求失败: %v", err))
 		return 0, err
 	}
 	defer resp.Body.Close()
@@ -46,7 +48,7 @@ func CheckSpeed(httpClient *http.Client) (int, error) {
 			if totalBytes > 0 {
 				break
 			}
-			log.Debugln("读取数据时发生错误: %v", err)
+			slog.Debug(fmt.Sprintf("读取数据时发生错误: %v", err))
 			return 0, err
 		}
 	}

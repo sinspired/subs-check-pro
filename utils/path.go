@@ -1,16 +1,17 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/metacubex/mihomo/log"
+	"log/slog"
 )
 
 func GetExecutablePath() string {
 	ex, err := os.Executable()
 	if err != nil {
-		log.Errorln("获取程序路径失败: %v", err)
+		slog.Error(fmt.Sprintf("获取程序路径失败: %v", err))
 		return "."
 	}
 	return filepath.Dir(ex)

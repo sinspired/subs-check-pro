@@ -8,11 +8,12 @@ import (
 	"strconv"
 	"strings"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/check"
 	"github.com/bestruirui/mihomo-check/config"
 	"github.com/bestruirui/mihomo-check/save/method"
 	"github.com/buger/jsonparser"
-	"github.com/metacubex/mihomo/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -69,11 +70,11 @@ func NewConfigSaver(results []check.Result) *ConfigSaver {
 func SaveConfig(results []check.Result) {
 	tmp := config.GlobalConfig.SaveMethod
 	config.GlobalConfig.SaveMethod = "local"
+	// 奇技淫巧，保存到本地一份，因为我没想道其他更好的方法同时保存
 	{
-		// 奇技淫巧，保存到本地一份，因为我没想道其他更好的方法同时保存
 		saver := NewConfigSaver(results)
 		if err := saver.Save(); err != nil {
-			log.Errorln("保存配置失败: %v", err)
+			slog.Error(fmt.Sprintf("保存配置失败: %v", err))
 		}
 	}
 
@@ -81,10 +82,11 @@ func SaveConfig(results []check.Result) {
 		return
 	}
 	config.GlobalConfig.SaveMethod = tmp
+	// 如果其他配置验证失败，还会保存到本地一次
 	{
 		saver := NewConfigSaver(results)
 		if err := saver.Save(); err != nil {
-			log.Errorln("保存配置失败: %v", err)
+			slog.Error(fmt.Sprintf("保存配置失败: %v", err))
 		}
 	}
 }
@@ -97,13 +99,14 @@ func (cs *ConfigSaver) Save() error {
 	// 保存各个类别的代理
 	for _, category := range cs.categories {
 		if err := cs.saveCategory(category); err != nil {
-			log.Errorln("保存 %s 类别失败: %v", category.Name, err)
+			slog.Error(fmt.Sprintf("保存yaml类别失败: %v", err))
 			continue
 		}
 
 		category.Name = strings.TrimSuffix(category.Name, ".yaml") + ".txt"
 		if err := cs.saveCategoryBase64(category); err != nil {
-			log.Errorln("保存base64 %s 类别失败: %v", category.Name, err)
+			slog.Error(fmt.Sprintf("保存base64类别失败: %v", err))
+
 			continue
 		}
 	}
@@ -125,7 +128,7 @@ func (cs *ConfigSaver) categorizeProxies() {
 // saveCategory 保存单个类别的代理
 func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 	if len(category.Proxies) == 0 {
-		log.Warnln("%s 节点为空，跳过保存到 %v", category.Name, config.GlobalConfig.SaveMethod)
+		slog.Warn(fmt.Sprintf("yaml节点为空，跳过保存: %s, saveMethod: %s", category.Name, config.GlobalConfig.SaveMethod))
 		return nil
 	}
 	yamlData, err := yaml.Marshal(map[string]any{
@@ -144,7 +147,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 // saveCategoryBase64 用base64保存单个类别的代理
 func (cs *ConfigSaver) saveCategoryBase64(category ProxyCategory) error {
 	if len(category.Proxies) == 0 {
-		log.Warnln("%s 节点为空，跳过保存到 %v", category.Name, config.GlobalConfig.SaveMethod)
+		slog.Warn(fmt.Sprintf("base64节点为空，跳过保存: %s, saveMethod: %s", category.Name, config.GlobalConfig.SaveMethod))
 		return nil
 	}
 
@@ -263,11 +266,10 @@ func genUrls(data []byte) (string, error) {
 	})
 
 	if err != nil {
+		// todo: 日志库已经替换，后续可以将错误日志在上面展示出来
+		slog.Debug(fmt.Sprintf("解析字段错误: %v", parseErr))
 		return "", fmt.Errorf("解析代理配置转成urls时失败: %w", err)
 	}
-
-	// todo: 暂时在这里打印日志，不做返回错误，这样解析单个失败，不回导致全部失败
-	log.Debugln("解析字段错误：%v", parseErr)
 
 	return urls, nil
 }
@@ -277,26 +279,26 @@ func chooseSaveMethod() func([]byte, string) error {
 	switch config.GlobalConfig.SaveMethod {
 	case "r2":
 		if err := method.ValiR2Config(); err != nil {
-			log.Errorln("R2配置不完整: %v ,使用本地保存", err)
+			slog.Error(fmt.Sprintf("R2配置不完整: %v", err))
 			return method.SaveToLocal
 		}
 		return method.UploadToR2Storage
 	case "gist":
 		if err := method.ValiGistConfig(); err != nil {
-			log.Errorln("Gist配置不完整: %v ,使用本地保存", err)
+			slog.Error(fmt.Sprintf("Gist配置不完整: %v", err))
 			return method.SaveToLocal
 		}
 		return method.UploadToGist
 	case "webdav":
 		if err := method.ValiWebDAVConfig(); err != nil {
-			log.Errorln("WebDAV配置不完整: %v ,使用本地保存", err)
+			slog.Error(fmt.Sprintf("WebDAV配置不完整: %v", err))
 			return method.SaveToLocal
 		}
 		return method.UploadToWebDAV
 	case "local":
 		return method.SaveToLocal
 	default:
-		log.Errorln("未知的保存方法: %s，使用本地保存", config.GlobalConfig.SaveMethod)
+		slog.Error(fmt.Sprintf("未知的保存方法或其他方法配置错误: %v", config.GlobalConfig.SaveMethod))
 		return method.SaveToLocal
 	}
 }

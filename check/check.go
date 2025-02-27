@@ -12,12 +12,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/check/platfrom"
 	"github.com/bestruirui/mihomo-check/config"
 	proxyutils "github.com/bestruirui/mihomo-check/proxy"
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
 )
 
 // Result 存储节点检测结果
@@ -68,9 +69,9 @@ func Check() ([]Result, error) {
 		return nil, fmt.Errorf("获取节点失败: %w", err)
 	}
 
-	log.Infoln("共获取到 %v 个节点", len(proxies))
+	slog.Info(fmt.Sprintf("获取节点数量: %d", len(proxies)))
 	proxies = proxyutils.DeduplicateProxies(proxies)
-	log.Infoln("去重后共 %v 个节点", len(proxies))
+	slog.Info(fmt.Sprintf("去重后节点数量: %d", len(proxies)))
 
 	checker := NewProxyChecker(proxies)
 	return checker.run(proxies)
@@ -78,13 +79,11 @@ func Check() ([]Result, error) {
 
 // Run 运行检测流程
 func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
-	log.Infoln("开始检测节点")
+	slog.Info("开始检测节点")
 	done := make(chan bool)
 	if config.GlobalConfig.PrintProgress {
 		go pc.showProgress(done)
 	}
-	// todo: 替换掉日志库
-	log.SetLevel(log.ERROR)
 	var wg sync.WaitGroup
 	// 启动工作线程
 	for i := 0; i < pc.threadCount; i++ {
@@ -114,8 +113,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	if config.GlobalConfig.PrintProgress {
 		done <- true
 	}
-	log.SetLevel(log.INFO)
-	log.Infoln("共 %v 个可用节点", len(pc.results))
+	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
 	return pc.results, nil
 }
 
@@ -134,7 +132,7 @@ func (pc *ProxyChecker) worker(wg *sync.WaitGroup) {
 func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	httpClient := CreateClient(proxy)
 	if httpClient == nil {
-		log.Debugln("创建代理Client失败: %v", proxy["name"])
+		slog.Debug(fmt.Sprintf("创建代理Client失败: %v", proxy["name"]))
 		return nil
 	}
 
@@ -143,7 +141,7 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	}
 
 	if os.Getenv("SUB_CHECK_SKIP") == "true" {
-		log.Debugln("跳过检测代理: %v", proxy["name"])
+		slog.Debug(fmt.Sprintf("跳过检测代理: %v", proxy["name"]))
 		return res
 	}
 

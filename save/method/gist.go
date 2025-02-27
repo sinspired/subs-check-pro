@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
-	"github.com/metacubex/mihomo/log"
 )
 
 var (
@@ -113,11 +114,11 @@ func (g *GistUploader) uploadWithRetry(jsonData []byte, filename string) error {
 	for attempt := 0; attempt < gistMaxRetries; attempt++ {
 		if err := g.doUpload(jsonData); err != nil {
 			lastErr = err
-			log.Errorln("gist上传失败(尝试 %d/%d): %v", attempt+1, gistMaxRetries, err)
+			slog.Error(fmt.Sprintf("gist上传失败(尝试 %d/%d) %v", attempt+1, gistMaxRetries, err))
 			time.Sleep(gistRetryDelay)
 			continue
 		}
-		log.Infoln("gist上传成功: %s", filename)
+		slog.Info("gist上传成功", "filename", filename)
 		return nil
 	}
 

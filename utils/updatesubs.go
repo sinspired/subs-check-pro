@@ -6,8 +6,9 @@ import (
 	"io"
 	"net/http"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
-	"github.com/metacubex/mihomo/log"
 )
 
 // 定义通用的 HTTP 客户端接口
@@ -58,29 +59,29 @@ func makeRequest(client httpClient, method, url string) ([]byte, error) {
 
 func UpdateSubs() {
 	if config.GlobalConfig.MihomoApiUrl == "" {
-		log.Warnln("未配置 MihomoApiUrl，跳过更新")
+		slog.Warn("未配置 MihomoApiUrl，跳过更新")
 		return
 	}
 
 	version, err := getVersion(http.DefaultClient)
 	if err != nil {
-		log.Errorln("获取版本失败: %v", err)
+		slog.Error(fmt.Sprintf("获取版本失败: %v", err))
 		return
 	}
 
-	log.Infoln("当前Mihomo版本: %s", version)
+	slog.Info(fmt.Sprintf("当前Mihomo版本: %s", version))
 
 	names, err := getNeedUpdateNames(http.DefaultClient)
 	if err != nil {
-		log.Errorln("获取需要更新的订阅失败: %v", err)
+		slog.Error(fmt.Sprintf("获取需要更新的订阅失败: %v", err))
 		return
 	}
 
 	if err := updateSubs(http.DefaultClient, names); err != nil {
-		log.Errorln("更新订阅失败: %v", err)
+		slog.Error(fmt.Sprintf("更新订阅失败: %v", err))
 		return
 	}
-	log.Infoln("订阅更新完成")
+	slog.Info("订阅更新完成")
 }
 
 func getVersion(client httpClient) (string, error) {
@@ -122,9 +123,9 @@ func updateSubs(client httpClient, names []string) error {
 	for _, name := range names {
 		url := fmt.Sprintf("%s/providers/proxies/%s", config.GlobalConfig.MihomoApiUrl, name)
 		if _, err := makeRequest(client, http.MethodPut, url); err != nil {
-			log.Errorln("更新订阅%s 失败: %v", name, err)
+			slog.Error(fmt.Sprintf("更新订阅%v失败: %v", name, err))
 		}
-		log.Infoln("成功更新订阅: %s", name)
+		slog.Info(fmt.Sprintf("成功更新订阅: %s", name))
 	}
 	return nil
 }

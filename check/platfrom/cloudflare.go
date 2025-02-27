@@ -1,9 +1,10 @@
 package platfrom
 
 import (
+	"fmt"
 	"net/http"
 
-	"github.com/metacubex/mihomo/log"
+	"log/slog"
 )
 
 func CheckCloudflare(httpClient *http.Client) (bool, error) {
@@ -32,6 +33,6 @@ func checkCloudflareEndpoint(httpClient *http.Client, url string, statusCode int
 		return false, err
 	}
 	defer resp.Body.Close()
-	log.Debugln("resp.StatusCode: %d ,url: %s", resp.StatusCode, url)
+	slog.Debug(fmt.Sprintf("CheckCloudflare resp.StatusCode: %d, url: %s", resp.StatusCode, url))
 	return resp.StatusCode == statusCode, nil
 }

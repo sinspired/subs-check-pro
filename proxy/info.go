@@ -1,13 +1,15 @@
 package proxies
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
-	"github.com/metacubex/mihomo/log"
 )
 
 func GetProxyCountry(httpClient *http.Client) string {
@@ -25,7 +27,7 @@ func GetProxyCountry(httpClient *http.Client) string {
 			continue
 		}
 		defer resp.Body.Close()
-		log.Debugln("获取节点位置返回码 %v 检查链接：%v", resp.Status, url)
+		slog.Debug(fmt.Sprintf("获取节点位置返回码: %d, url: %s", resp.StatusCode, url))
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {

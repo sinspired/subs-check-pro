@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/check"
 	"github.com/bestruirui/mihomo-check/config"
 	"github.com/bestruirui/mihomo-check/save"
@@ -14,7 +16,6 @@ import (
 	"github.com/bestruirui/mihomo-check/utils"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
-	"github.com/metacubex/mihomo/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -92,20 +93,20 @@ func (app *App) loadConfig() error {
 		return fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
-	log.Infoln("配置文件读取成功")
+	slog.Info("配置文件读取成功")
 	return nil
 }
 
 // createDefaultConfig 创建默认配置文件
 func (app *App) createDefaultConfig() error {
-	log.Infoln("配置文件不存在，创建默认配置文件")
+	slog.Info("配置文件不存在，创建默认配置文件")
 
 	if err := os.WriteFile(app.configPath, []byte(config.DefaultConfigTemplate), 0644); err != nil {
 		return fmt.Errorf("写入默认配置文件失败: %w", err)
 	}
 
-	log.Infoln("默认配置文件创建成功")
-	log.Infoln("请编辑配置文件: %v", app.configPath)
+	slog.Info("默认配置文件创建成功")
+	slog.Info(fmt.Sprintf("请编辑配置文件: %s", app.configPath))
 	os.Exit(0)
 	return nil
 }
@@ -136,9 +137,9 @@ func (app *App) initConfigWatcher() error {
 
 					go func() {
 						<-app.reloadTimer.C
-						log.Infoln("配置文件发生变化，正在重新加载")
+						slog.Info("配置文件发生变化，正在重新加载")
 						if err := app.loadConfig(); err != nil {
-							log.Errorln("重新加载配置文件失败: %v", err)
+							slog.Error(fmt.Sprintf("重新加载配置文件失败: %v", err))
 							return
 						}
 						// 更新检查间隔
@@ -149,7 +150,7 @@ func (app *App) initConfigWatcher() error {
 				if !ok {
 					return
 				}
-				log.Errorln("配置文件监听错误: %v", err)
+				slog.Error(fmt.Sprintf("配置文件监听错误: %v", err))
 			}
 		}
 	}()
@@ -159,7 +160,7 @@ func (app *App) initConfigWatcher() error {
 		return fmt.Errorf("添加配置文件监听失败: %w", err)
 	}
 
-	log.Infoln("配置文件监听已启动")
+	slog.Info("配置文件监听已启动")
 	return nil
 }
 
@@ -174,10 +175,10 @@ func (app *App) initHttpServer() error {
 	router.Static("/", saver.OutputPath)
 	go func() {
 		if err := router.Run(config.GlobalConfig.ListenPort); err != nil {
-			log.Errorln("HTTP服务器启动失败: %v", err)
+			slog.Error(fmt.Sprintf("HTTP服务器启动失败: %v", err))
 		}
 	}()
-	log.Infoln("HTTP服务器已启动，监听端口: %v", config.GlobalConfig.ListenPort)
+	slog.Info(fmt.Sprintf("HTTP服务器已启动 %s", config.GlobalConfig.ListenPort))
 	return nil
 }
 
@@ -190,30 +191,30 @@ func (app *App) Run() {
 		}
 	}()
 
-	log.Infoln("进度展示: %v", config.GlobalConfig.PrintProgress)
+	slog.Info(fmt.Sprintf("进度展示: %v", config.GlobalConfig.PrintProgress))
 
 	for {
 		if err := app.checkProxies(); err != nil {
-			log.Errorln("检测代理失败: %v", err)
+			slog.Error(fmt.Sprintf("检测代理失败: %v", err))
 			os.Exit(1)
 		}
 
 		nextCheck := time.Now().Add(time.Duration(app.interval) * time.Minute)
-		log.Infoln("下次检查时间: %v", nextCheck.Format("2006-01-02 15:04:05"))
+		slog.Info(fmt.Sprintf("下次检查时间: %s", nextCheck.Format("2006-01-02 15:04:05")))
 		time.Sleep(time.Duration(app.interval) * time.Minute)
 	}
 }
 
 // checkProxies 执行代理检测
 func (app *App) checkProxies() error {
-	log.Infoln("开始检测代理")
+	slog.Info("开始检测代理")
 
 	results, err := check.Check()
 	if err != nil {
 		return fmt.Errorf("检测代理失败: %w", err)
 	}
 
-	log.Infoln("检测完成")
+	slog.Info("检测完成")
 	save.SaveConfig(results)
 	utils.UpdateSubs()
 	return nil
@@ -224,7 +225,7 @@ func main() {
 	app := NewApp()
 
 	if err := app.Initialize(); err != nil {
-		log.Errorln("初始化失败: %v", err)
+		slog.Error(fmt.Sprintf("初始化失败: %v", err))
 		os.Exit(1)
 	}
 

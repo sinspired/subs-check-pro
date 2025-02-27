@@ -8,14 +8,16 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
 	"github.com/bestruirui/mihomo-check/proxy/parser"
-	"github.com/metacubex/mihomo/log"
 	"gopkg.in/yaml.v3"
 )
 
 func GetProxies() ([]map[string]any, error) {
-	log.Infoln("当前共设置了%d个订阅链接", len(config.GlobalConfig.SubUrls))
+	slog.Info(fmt.Sprintf("当前设置订阅链接数量: %d", len(config.GlobalConfig.SubUrls)))
+
 	var mihomoProxies []map[string]any
 
 	for _, subUrl := range config.GlobalConfig.SubUrls {
@@ -51,7 +53,7 @@ func GetProxies() ([]map[string]any, error) {
 		}
 		proxyInterface, ok := config["proxies"]
 		if !ok || proxyInterface == nil {
-			log.Errorln("订阅链接: %s 没有proxies", subUrl)
+			slog.Error(fmt.Sprintf("订阅链接没有proxies: %s", subUrl))
 			continue
 		}
 

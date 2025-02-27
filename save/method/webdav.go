@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"log/slog"
+
 	"github.com/bestruirui/mihomo-check/config"
-	"github.com/metacubex/mihomo/log"
 )
 
 var (
@@ -84,11 +85,11 @@ func (w *WebDAVUploader) uploadWithRetry(yamlData []byte, filename string) error
 	for attempt := 0; attempt < webdavMaxRetries; attempt++ {
 		if err := w.doUpload(yamlData, filename); err != nil {
 			lastErr = err
-			log.Errorln("webdav上传失败(尝试 %d/%d): %v", attempt+1, webdavMaxRetries, err)
+			slog.Error(fmt.Sprintf("webdav上传失败(尝试 %d/%d) %v", attempt+1, webdavMaxRetries, err))
 			time.Sleep(webdavRetryDelay)
 			continue
 		}
-		log.Infoln("webdav上传成功: %s", filename)
+		slog.Info("webdav上传成功", "filename", filename)
 		return nil
 	}
 
