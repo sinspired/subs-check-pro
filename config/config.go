@@ -25,6 +25,7 @@ type Config struct {
 	MihomoApiUrl    string   `yaml:"mihomo-api-url"`
 	MihomoApiSecret string   `yaml:"mihomo-api-secret"`
 	ListenPort      string   `yaml:"listen-port"`
+	RenameNode      bool     `yaml:"rename-node"`
 }
 
 var GlobalConfig = &Config{

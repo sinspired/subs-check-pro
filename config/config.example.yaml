@@ -26,6 +26,10 @@ download-timeout: 10
 # 注意：为方便小白默认监听0.0.0.0:8199，请自行修改
 listen-port: ":8199"
 
+# 以节点IP查询位置重命名节点
+# 质量差的节点可能造成IP查询失败，造成整体检查速度稍微变慢，默认false
+rename-node: false
+
 # mihomo api url(测试完成后自动更新mihomo订阅)
 mihomo-api-url: ""
 
