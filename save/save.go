@@ -205,6 +205,15 @@ func genUrls(data []byte) (string, error) {
 				return
 			}
 		}
+		// 如果是ss，则将cipher和password拼接
+		if t == "ss" {
+			cipher, err := jsonparser.GetString(value, "cipher")
+			if err != nil {
+				slog.Debug(fmt.Sprintf("获取cipher字段失败: %s", err))
+				return
+			}
+			password = cipher + ":" + password
+		}
 		server, err := jsonparser.GetString(value, "server")
 		if err != nil {
 			slog.Debug(fmt.Sprintf("获取server字段失败: %s", err))

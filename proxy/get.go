@@ -23,7 +23,8 @@ func GetProxies() ([]map[string]any, error) {
 	for _, subUrl := range config.GlobalConfig.SubUrls {
 		data, err := GetDateFromSubs(subUrl)
 		if err != nil {
-			return nil, err
+			slog.Error(fmt.Sprintf("获取订阅链接错误跳过: %v", err))
+			continue
 		}
 		slog.Debug(fmt.Sprintf("获取订阅链接: %s，数据长度: %d", subUrl, len(data)))
 		var config map[string]any
