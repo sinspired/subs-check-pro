@@ -6,9 +6,14 @@ import (
 	"strings"
 
 	"github.com/lmittmann/tint"
+	mihomoLog "github.com/metacubex/mihomo/log"
 )
 
 func init() {
+	// 设置依赖库日志级别
+	// 如果要深入排查协议问题，后边可能要动态调整这个参数
+	mihomoLog.SetLevel(mihomoLog.ERROR)
+
 	// 获取日志级别
 	logLevel := getLogLevel()
 
