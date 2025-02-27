@@ -25,6 +25,7 @@ func GetProxies() ([]map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
+		slog.Debug(fmt.Sprintf("获取订阅链接: %s，数据: %s", subUrl, string(data)))
 		var config map[string]any
 		err = yaml.Unmarshal(data, &config)
 		if err != nil {
@@ -39,6 +40,7 @@ func GetProxies() ([]map[string]any, error) {
 				for _, proxy := range proxies {
 					parseProxy, err := ParseProxy(proxy)
 					if err != nil {
+						slog.Debug(fmt.Sprintf("解析proxy错误: %s , %v", proxy, err))
 						continue
 					}
 					//如果proxy为空，则跳过

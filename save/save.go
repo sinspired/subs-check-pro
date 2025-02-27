@@ -173,7 +173,6 @@ func (cs *ConfigSaver) saveCategoryBase64(category ProxyCategory) error {
 // hysteria2://b82f14be-9225-48cb-963e-0350c86c31d3@sg1.interld123456789.com:32000/?insecure=1&sni=234224.1234567890spcloud.com&mport=32000-33000#新加坡hy2-1-移动优化
 func genUrls(data []byte) (string, error) {
 	var urls string
-	var parseErr error
 
 	_, err := jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 		if err != nil {
@@ -183,7 +182,18 @@ func genUrls(data []byte) (string, error) {
 		// 获取必需字段
 		t, err := jsonparser.GetString(value, "type")
 		if err != nil {
-			parseErr = fmt.Errorf("获取type字段失败: %w", err)
+			slog.Debug(fmt.Sprintf("获取type字段失败: %s", err))
+			return
+		}
+
+		// 如果是vmess，则将raw字段base64编码，直接返回
+		if t == "vmess" {
+			raw, _, _, err := jsonparser.Get(value, "raw")
+			if err != nil {
+				slog.Debug(fmt.Sprintf("获取raw字段失败: %s", err))
+				return
+			}
+			urls += "vmess://" + base64.StdEncoding.EncodeToString(raw) + "\n"
 			return
 		}
 		password, err := jsonparser.GetString(value, "password")
@@ -191,23 +201,23 @@ func genUrls(data []byte) (string, error) {
 			if err == jsonparser.KeyPathNotFoundError {
 				password, _ = jsonparser.GetString(value, "uuid")
 			} else {
-				parseErr = fmt.Errorf("获取password/uuid字段失败: %w", err)
+				slog.Debug(fmt.Sprintf("获取password/uuid字段失败: %s", err))
 				return
 			}
 		}
 		server, err := jsonparser.GetString(value, "server")
 		if err != nil {
-			parseErr = fmt.Errorf("获取server字段失败: %w", err)
+			slog.Debug(fmt.Sprintf("获取server字段失败: %s", err))
 			return
 		}
 		port, err := jsonparser.GetInt(value, "port")
 		if err != nil {
-			parseErr = fmt.Errorf("获取port字段失败: %w", err)
+			slog.Debug(fmt.Sprintf("获取port字段失败: %s", err))
 			return
 		}
 		name, err := jsonparser.GetString(value, "name")
 		if err != nil {
-			parseErr = fmt.Errorf("获取name字段失败: %w", err)
+			slog.Debug(fmt.Sprintf("获取name字段失败: %s", err))
 			return
 		}
 
@@ -251,7 +261,7 @@ func genUrls(data []byte) (string, error) {
 			return nil
 		})
 		if err != nil {
-			parseErr = fmt.Errorf("获取其他字段失败: %w", err)
+			slog.Debug(fmt.Sprintf("获取其他字段失败: %s", err))
 			return
 		}
 
@@ -266,8 +276,6 @@ func genUrls(data []byte) (string, error) {
 	})
 
 	if err != nil {
-		// todo: 日志库已经替换，后续可以将错误日志在上面展示出来
-		slog.Debug(fmt.Sprintf("解析字段错误: %v", parseErr))
 		return "", fmt.Errorf("解析代理配置转成urls时失败: %w", err)
 	}
 

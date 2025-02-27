@@ -90,9 +90,11 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		wg.Add(1)
 		go pc.worker(&wg)
 	}
+	slog.Debug(fmt.Sprintf("启动工作线程: %d", pc.threadCount))
 
 	// 发送任务
 	go pc.distributeProxies(proxies)
+	slog.Debug(fmt.Sprintf("发送任务: %d", len(proxies)))
 
 	// 收集结果 - 添加一个 WaitGroup 来等待结果收集完成
 	var collectWg sync.WaitGroup
@@ -107,6 +109,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 
 	// 等待结果收集完成
 	collectWg.Wait()
+	slog.Debug(fmt.Sprintf("结果收集完成"))
 	// 等待进度条显示完成
 	time.Sleep(100 * time.Millisecond)
 
@@ -212,6 +215,11 @@ func (pc *ProxyChecker) showProgress(done chan bool) {
 		default:
 			current := atomic.LoadInt32(&pc.progress)
 			available := atomic.LoadInt32(&pc.available)
+
+			if available == 0 {
+				time.Sleep(100 * time.Millisecond)
+				break
+			}
 
 			// if 0/0 = NaN ,shoule panic
 			percent := float64(current) / float64(pc.proxyCount) * 100

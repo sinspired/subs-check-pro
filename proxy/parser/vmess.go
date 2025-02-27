@@ -4,31 +4,33 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 )
 
 type vmessJson struct {
-	V    string      `json:"v"`
-	Ps   string      `json:"ps"`
-	Add  string      `json:"add"`
-	Port interface{} `json:"port"`
-	Id   string      `json:"id"`
-	Aid  interface{} `json:"aid"`
-	Scy  string      `json:"scy"`
-	Net  string      `json:"net"`
-	Type string      `json:"type"`
-	Host string      `json:"host"`
-	Path string      `json:"path"`
-	Tls  string      `json:"tls"`
-	Sni  string      `json:"sni"`
-	Alpn string      `json:"alpn"`
-	Fp   string      `json:"fp"`
+	V    any    `json:"v"`
+	Ps   string `json:"ps"`
+	Add  string `json:"add"`
+	Port any    `json:"port"`
+	Id   string `json:"id"`
+	Aid  any    `json:"aid"`
+	Scy  string `json:"scy"`
+	Net  string `json:"net"`
+	Type string `json:"type"`
+	Host string `json:"host"`
+	Path string `json:"path"`
+	Tls  string `json:"tls"`
+	Sni  string `json:"sni"`
+	Alpn string `json:"alpn"`
+	Fp   string `json:"fp"`
 }
 
 // 将vmess格式的节点转换为clash格式
 func ParseVmess(data string) (map[string]any, error) {
 	if !strings.HasPrefix(data, "vmess://") {
+		slog.Debug(fmt.Sprintf("不是vmess格式: %s", data))
 		return nil, fmt.Errorf("不是vmess格式")
 	}
 	// 移除 "vmess://" 前缀
@@ -37,11 +39,13 @@ func ParseVmess(data string) (map[string]any, error) {
 	// base64解码
 	decoded, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
+		slog.Debug(fmt.Sprintf("base64解码失败: %s", err))
 		return nil, err
 	}
 	// 解析JSON
 	var vmessInfo vmessJson
 	if err := json.Unmarshal(decoded, &vmessInfo); err != nil {
+		slog.Debug(fmt.Sprintf("json解析失败: %s , 原数据：%s", err, string(decoded)))
 		return nil, err
 	}
 
@@ -83,6 +87,8 @@ func ParseVmess(data string) (map[string]any, error) {
 		"network":    vmessInfo.Net,
 		"tls":        vmessInfo.Tls == "tls",
 		"servername": vmessInfo.Sni,
+		// 添加原格式
+		"raw": vmessInfo,
 	}
 
 	// 根据不同传输方式添加特定配置
@@ -108,6 +114,9 @@ func ParseVmess(data string) (map[string]any, error) {
 	if vmessInfo.Alpn != "" {
 		proxy["alpn"] = strings.Split(vmessInfo.Alpn, ",")
 	}
+
+	json, _ := json.Marshal(proxy)
+	slog.Debug(fmt.Sprintf("vmess解析结果: %s", string(json)))
 
 	return proxy, nil
 }
