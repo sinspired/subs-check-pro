@@ -54,14 +54,19 @@ func ParseVless(data string) (map[string]any, error) {
 			"public-key": query.Get("pbk"),
 			"short-id":   query.Get("sid"),
 		},
+		"grpc-opts": map[string]any{
+			"grpc-service-name": query.Get("serviceName"),
+		},
 		// 给 URI使用，Clash 的 参数不叫这个
-		"security": query.Get("security"),
-		"sni":      query.Get("sni"),
-		"fp":       query.Get("fp"),
-		"pbk":      query.Get("pbk"),
-		"sid":      query.Get("sid"),
-		"path":     query.Get("path"),
-		"host":     query.Get("host"),
+		"security":    query.Get("security"),
+		"sni":         query.Get("sni"),
+		"fp":          query.Get("fp"),
+		"pbk":         query.Get("pbk"),
+		"sid":         query.Get("sid"),
+		"path":        query.Get("path"),
+		"host":        query.Get("host"),
+		"serviceName": query.Get("serviceName"),
+		"mode":        query.Get("mode"),
 	}
 
 	return proxy, nil
