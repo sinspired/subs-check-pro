@@ -165,10 +165,10 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 		}
 	}
 	// 执行其他平台检测
-	openai, _ := platfrom.CheckOpenai(httpClient)
-	youtube, _ := platfrom.CheckYoutube(httpClient)
-	netflix, _ := platfrom.CheckNetflix(httpClient)
-	disney, _ := platfrom.CheckDisney(httpClient)
+	// openai, _ := platfrom.CheckOpenai(httpClient)
+	// youtube, _ := platfrom.CheckYoutube(httpClient)
+	// netflix, _ := platfrom.CheckNetflix(httpClient)
+	// disney, _ := platfrom.CheckDisney(httpClient)
 
 	// 更新代理名称
 	pc.updateProxyName(proxy, httpClient, speed)
@@ -176,15 +176,22 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 
 	res.Cloudflare = cloudflare
 	res.Google = google
-	res.Openai = openai
-	res.Youtube = youtube
-	res.Netflix = netflix
-	res.Disney = disney
+	// res.Openai = openai
+	// res.Youtube = youtube
+	// res.Netflix = netflix
+	// res.Disney = disney
 	return res
 }
 
 // updateProxyName 更新代理名称
 func (pc *ProxyChecker) updateProxyName(proxy map[string]any, client *http.Client, speed int) {
+	// hy2协议 不知道为什么在被前边测速后就脏了，就不能用了，我也不知道为什么，奇葩。
+	// 可能底层mihomo的bug，什么泄露之类的，请求任何网址都超时。所以这里创新创建一个client
+	httpClient := CreateClient(proxy)
+	if httpClient == nil {
+		slog.Debug(fmt.Sprintf("创建updateProxyName代理Client失败: %v", proxy["name"]))
+		return
+	}
 	// 以节点IP查询位置重命名节点
 	if config.GlobalConfig.RenameNode {
 		country := proxyutils.GetProxyCountry(client)

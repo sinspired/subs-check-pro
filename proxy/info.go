@@ -15,13 +15,7 @@ import (
 func GetProxyCountry(httpClient *http.Client) string {
 	url := "https://www.cloudflare.com/cdn-cgi/trace"
 	for attempts := 0; attempts < config.GlobalConfig.SubUrlsReTry; attempts++ {
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			time.Sleep(time.Second * time.Duration(attempts))
-			continue
-		}
-
-		resp, err := httpClient.Do(req)
+		resp, err := httpClient.Get(url)
 		if err != nil {
 			slog.Debug(fmt.Sprintf("获取节点位置失败: %s", err))
 			time.Sleep(time.Second * time.Duration(attempts))
