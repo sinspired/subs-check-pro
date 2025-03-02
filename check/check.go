@@ -68,8 +68,17 @@ func Check() ([]Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("获取节点失败: %w", err)
 	}
-
 	slog.Info(fmt.Sprintf("获取节点数量: %d", len(proxies)))
+
+	if config.GlobalConfig.KeepSuccessProxies {
+		slog.Info(fmt.Sprintf("添加之前测试成功的节点，数量: %d", len(config.GlobalProxies)))
+		for _, proxy := range config.GlobalProxies {
+			proxies = append(proxies, proxy)
+		}
+	}
+	// 重置全局节点
+	config.GlobalProxies = make([]map[string]any, 0)
+
 	proxies = proxyutils.DeduplicateProxies(proxies)
 	slog.Info(fmt.Sprintf("去重后节点数量: %d", len(proxies)))
 
