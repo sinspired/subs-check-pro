@@ -2,6 +2,8 @@
 
 对比原项目是修复了一些逻辑、简化了一些东西、增加了一些功能
 
+**请尽快升级至v1.0.9，大幅减少内存占用！！**
+
 ## 预览
 
 ![preview](./doc/images/preview.png)
@@ -49,6 +51,9 @@
 
 ```bash
 docker run -d --name subs-check -p 8199:8199 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
+
+# 如果想使用代理，加上环境变量，如
+docker run -d --name subs-check -p 8199:8199  -e HTTP_PROXY=http://192.168.1.1:7890 -e HTTPS_PROXY=http://192.168.1.1:7890 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
 ```
 
 ### docker-compose
@@ -66,6 +71,9 @@ services:
       - "8199:8199"
     environment:
       - TZ=Asia/Shanghai
+      # 是否使用代理
+      # - HTTP_PROXY=http://192.168.1.1:7890
+      # - HTTPS_PROXY=http://192.168.1.1:7890
     restart: always
     tty: true
     network_mode: bridge
