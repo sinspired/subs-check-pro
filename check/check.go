@@ -142,12 +142,6 @@ func (pc *ProxyChecker) worker(wg *sync.WaitGroup) {
 
 // checkProxy 检测单个代理
 func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
-	httpClient := CreateClient(proxy)
-	if httpClient == nil {
-		slog.Debug(fmt.Sprintf("创建代理Client失败: %v", proxy["name"]))
-		return nil
-	}
-
 	res := &Result{
 		Proxy: proxy,
 	}
@@ -156,6 +150,13 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 		// slog.Debug(fmt.Sprintf("跳过检测代理: %v", proxy["name"]))
 		return res
 	}
+
+	httpClient := CreateClient(proxy)
+	if httpClient == nil {
+		slog.Debug(fmt.Sprintf("创建代理Client失败: %v", proxy["name"]))
+		return nil
+	}
+	defer httpClient.Close()
 
 	cloudflare, err := platfrom.CheckCloudflare(httpClient.Client)
 	if err != nil || !cloudflare {
@@ -173,8 +174,6 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 			return nil
 		}
 	}
-	// 及时的关闭，减少内存使用
-	httpClient.Close()
 	// 执行其他平台检测
 	// openai, _ := platfrom.CheckOpenai(httpClient)
 	// youtube, _ := platfrom.CheckYoutube(httpClient)
@@ -317,10 +316,9 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 }
 
 // Close closes the proxy client and cleans up resources
+// 防止底层库有一些泄露，所以这里手动关闭
 func (pc *ProxyClient) Close() {
-	if pc != nil {
-		if transport, ok := pc.Transport.(*http.Transport); ok {
-			transport.CloseIdleConnections()
-		}
+	if transport, ok := pc.Transport.(*http.Transport); ok {
+		transport.CloseIdleConnections()
 	}
 }

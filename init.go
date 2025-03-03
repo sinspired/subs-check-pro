@@ -29,7 +29,7 @@ func init() {
 	// 设置为全局日志记录器
 	slog.SetDefault(logger)
 
-	if strings.ToLower(os.Getenv("SUBS_CHECK_PPROF")) != "" {
+	if strings.ToLower(os.Getenv("SUB_CHECK_PPROF")) != "" {
 		// 在调试模式下启动 pprof 服务器
 		go func() {
 			slog.Info("Starting pprof server on localhost:8299")
