@@ -13,7 +13,7 @@ import (
 
 	"github.com/beck-8/subs-check/config"
 	"github.com/beck-8/subs-check/proxy/parser"
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 func GetProxies() ([]map[string]any, error) {

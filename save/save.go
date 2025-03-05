@@ -1,6 +1,7 @@
 package save
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 	"github.com/beck-8/subs-check/config"
 	"github.com/beck-8/subs-check/save/method"
 	"github.com/buger/jsonparser"
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 // ProxyCategory 定义代理分类
@@ -159,9 +160,10 @@ func (cs *ConfigSaver) saveCategoryBase64(category ProxyCategory) error {
 	if err != nil {
 		return fmt.Errorf("生成urls %s 失败: %w", category.Name, err)
 	}
-
-	encoded := base64.StdEncoding.EncodeToString([]byte(urls))
-	if err := cs.saveMethod([]byte(encoded), category.Name); err != nil {
+	srcBytes := urls.Bytes()
+	dstBytes := make([]byte, base64.StdEncoding.EncodedLen(len(srcBytes)))
+	base64.StdEncoding.Encode(dstBytes, srcBytes)
+	if err := cs.saveMethod(dstBytes, category.Name); err != nil {
 		return fmt.Errorf("保存base64 %s 失败: %w", category.Name, err)
 	}
 
@@ -171,8 +173,8 @@ func (cs *ConfigSaver) saveCategoryBase64(category ProxyCategory) error {
 // 生成类似urls
 // hysteria2://b82f14be-9225-48cb-963e-0350c86c31d3@us2.interld123456789.com:32000/?insecure=1&sni=234224.1234567890spcloud.com&mport=32000-33000#美国hy2-2-联通电信
 // hysteria2://b82f14be-9225-48cb-963e-0350c86c31d3@sg1.interld123456789.com:32000/?insecure=1&sni=234224.1234567890spcloud.com&mport=32000-33000#新加坡hy2-1-移动优化
-func genUrls(data []byte) (string, error) {
-	var urls string
+func genUrls(data []byte) (*bytes.Buffer, error) {
+	urls := bytes.NewBuffer(make([]byte, 0, len(data)*11/10))
 
 	_, err := jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 		if err != nil {
@@ -204,7 +206,9 @@ func genUrls(data []byte) (string, error) {
 				slog.Debug(fmt.Sprintf("修改vmess ps字段失败: %s", err))
 				return
 			}
-			urls += "vmess://" + base64.StdEncoding.EncodeToString(raw) + "\n"
+			urls.WriteString("vmess://")
+			urls.WriteString(base64.StdEncoding.EncodeToString(raw))
+			urls.WriteByte('\n')
 			return
 		}
 		password, err := jsonparser.GetString(value, "password")
@@ -321,11 +325,12 @@ func genUrls(data []byte) (string, error) {
 			RawQuery: q.Encode(),
 			Fragment: name,
 		}
-		urls += u.String() + "\n"
+		urls.WriteString(u.String())
+		urls.WriteByte('\n')
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("解析代理配置转成urls时失败: %w", err)
+		return nil, fmt.Errorf("解析代理配置转成urls时失败: %w", err)
 	}
 
 	return urls, nil

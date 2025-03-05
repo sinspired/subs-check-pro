@@ -6,8 +6,9 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/metacubex/mihomo v1.19.3
-	gopkg.in/yaml.v3 v3.0.1
 )
+
+require gopkg.in/yaml.v3 v3.0.1 // indirect
 
 require (
 	github.com/3andne/restls-client-go v0.1.6 // indirect
@@ -40,6 +41,7 @@ require (
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/goccy/go-yaml v1.15.23
 	github.com/gofrs/uuid/v5 v5.3.1 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect

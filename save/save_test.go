@@ -63,7 +63,7 @@ func TestGenUrls(t *testing.T) {
 				return
 			}
 
-			parsedGot, _ := url.Parse(got)
+			parsedGot, _ := url.Parse(got.String())
 
 			// 重建 URL 进行比较
 			gotDecoded := fmt.Sprintf("%s://%s@%s%s?%s#%s",

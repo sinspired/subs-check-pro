@@ -16,15 +16,14 @@ import (
 	"github.com/beck-8/subs-check/utils"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 // App 结构体用于管理应用程序状态
 type App struct {
-	configPath  string
-	interval    int
-	watcher     *fsnotify.Watcher
-	reloadTimer *time.Timer
+	configPath string
+	interval   int
+	watcher    *fsnotify.Watcher
 }
 
 // NewApp 创建新的应用实例
@@ -118,9 +117,6 @@ func (app *App) initConfigWatcher() error {
 	}
 
 	app.watcher = watcher
-	app.reloadTimer = time.NewTimer(0)
-	<-app.reloadTimer.C
-
 	go func() {
 		for {
 			select {
@@ -129,21 +125,13 @@ func (app *App) initConfigWatcher() error {
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					if app.reloadTimer != nil {
-						app.reloadTimer.Stop()
+					slog.Info("配置文件发生变化，正在重新加载")
+					if err := app.loadConfig(); err != nil {
+						slog.Error(fmt.Sprintf("重新加载配置文件失败: %v", err))
+						return
 					}
-					app.reloadTimer.Reset(100 * time.Millisecond)
-
-					go func() {
-						<-app.reloadTimer.C
-						slog.Info("配置文件发生变化，正在重新加载")
-						if err := app.loadConfig(); err != nil {
-							slog.Error(fmt.Sprintf("重新加载配置文件失败: %v", err))
-							return
-						}
-						// 更新检查间隔
-						app.interval = config.GlobalConfig.CheckInterval
-					}()
+					// 更新检查间隔
+					app.interval = config.GlobalConfig.CheckInterval
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
@@ -185,9 +173,6 @@ func (app *App) initHttpServer() error {
 func (app *App) Run() {
 	defer func() {
 		app.watcher.Close()
-		if app.reloadTimer != nil {
-			app.reloadTimer.Stop()
-		}
 	}()
 
 	slog.Info(fmt.Sprintf("进度展示: %v", config.GlobalConfig.PrintProgress))
