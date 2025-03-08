@@ -28,6 +28,8 @@ type Config struct {
 	RenameNode         bool     `yaml:"rename-node"`
 	KeepSuccessProxies bool     `yaml:"keep-success-proxies"`
 	OutputDir          string   `yaml:"output-dir"`
+	AppriseApiServer   string   `yaml:"apprise-api-server"`
+	RecipientUrl       []string `yaml:"recipient-url"`
 }
 
 var GlobalConfig = &Config{

@@ -7,7 +7,9 @@
 ## 预览
 
 ![preview](./doc/images/preview.png)
-![result](./doc/images/results.jpg)
+![result](./doc/images/results.png)
+![tgram](./doc/images/tgram.png)
+![dingtalk](./doc/images/dingtalk.png)
 
 ## 功能
 
@@ -25,6 +27,7 @@
 - 节点测速（单线程）
 - 根据解锁情况分类保存
 - 支持外部拉取结果（默认监听 :8199）
+- 支持100+ 个通知渠道 通知检测结果
 
 ## 特点
 
@@ -43,8 +46,9 @@
     - [x] http server
     - [ ] 其他
 - [ ] 已知从clash格式转base64时vmess节点会丢失。因为太麻烦了，我不想处理了。
+- [ ] 可能在某些平台、某些环境下长时间运行还是会有内存溢出的问题
 
-## 使用方法
+## 测速使用方法
 > 如果拉取订阅速度慢，可使用通用的 `HTTP_PROXY` `HTTPS_PROXY` 环境变量加快速度；此变量不会影响节点测试速度
 
 > 因为上游订阅链接可能是爬虫，所以本地可用的节点经常被刷新掉，所以可以使用 `keep-success-proxies` 参数持久保存测试成功的节点
@@ -54,7 +58,8 @@
 
 ```bash
 docker run -d --name subs-check -p 8199:8199 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
-
+```
+```bash
 # 如果想使用代理，加上环境变量，如
 docker run -d --name subs-check -p 8199:8199  -e HTTP_PROXY=http://192.168.1.1:7890 -e HTTPS_PROXY=http://192.168.1.1:7890 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
 ```
@@ -91,6 +96,31 @@ go run main.go -f /path/to/config.yaml
 
 直接运行即可,会在当前目录生成配置文件
 
+## 通知渠道配置方法
+目前，此项目使用[Apprise](https://github.com/caronc/apprise)发送通知，并支持 100+ 个通知渠道。  
+但是 apprise 库是用 Python 编写的，Cloudflare 最近发布的 python worker在部署 apprise 时仍然存在问题  
+所以我们下边提供两种部署方式的教程（当然实际不止两种）
+### Vercel serverless 部署
+1. 请单击[**此处**](https://vercel.com/new/clone?repository-url=https://github.com/beck-8/apprise_vercel)即可在您的 Vercel 帐户上部署 Apprise  
+2. 部署后，您将获得一个类似 `https://testapprise-beck8s-projects.vercel.app/` 的链接，在其后附加`/notify` ，然后您将获得 Apprise API 服务器的链接： `https://testapprise-beck8s-projects.vercel.app/notify`
+3. 请将你的Vercel项目添加一个自定义域名，因为Vercel在国内几乎访问不了
+
+### docker部署
+```bash
+docker run --name apprise -p 8000:8000 --restart always -d caronc/apprise:latest
+```
+```bash
+# 如果你将docker部署在国内，你还想要发送到国外的平台，那需要添加 HTTP_PROXY HTTPS_PROXY 环境变量
+docker run --name apprise \
+   -p 8000:8000 \
+   -e HTTP_PROXY=http://192.168.1.1:7890 \
+   -e HTTPS_PROXY=http://192.168.1.1:7890 \
+   --restart always \
+   -d caronc/apprise:latest
+```
+
+然后根据[Apprise wiki](https://github.com/caronc/apprise/wiki)编写发送通知的 URL，其中有关于如何设置每个通知渠道的详细文档和说明。例如，对于电报，您的 URL 是`tgram://botToken/chatId`，我在默认配置里边写了一些示例，可以当作参考
+
 ## 保存方法配置
 
 - 本地保存: 将结果保存到本地,默认保存到可执行文件目录下的 output 文件夹
@@ -102,7 +132,7 @@ go run main.go -f /path/to/config.yaml
 - `http://127.0.0.1:8199/all.yaml` 返回yaml格式节点
 - `http://127.0.0.1:8199/all.txt` 返回base64格式节点
 
-可以直接将base64格式订阅放到V2rayN中
+可以直接将base64格式订阅放到V2rayN中或者Mihomo party当中
 ![subset](./doc/images/subset.jpeg)
 ![nodeinfo](./doc/images/nodeinfo.jpeg)
 
