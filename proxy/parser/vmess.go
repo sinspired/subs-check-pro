@@ -36,6 +36,9 @@ func ParseVmess(data string) (map[string]any, error) {
 	// 移除 "vmess://" 前缀
 	data = data[8:]
 
+	// 移除 ` 符号，不知道为什么很多节点结尾有这个
+	data = strings.ReplaceAll(data, "`", "")
+
 	// base64解码
 	decoded, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {

@@ -291,6 +291,8 @@ func genUrls(data []byte) (*bytes.Buffer, error) {
 					}
 				case "Host":
 					q.Set("host", v)
+				case "grpc-service-name":
+					q.Set("serviceName", v)
 				default:
 					q.Set(k, v)
 				}

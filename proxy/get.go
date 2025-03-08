@@ -17,6 +17,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var proxyRegex = regexp.MustCompile("(ssr|ss|vmess|trojan|vless|hysteria|hy2|hysteria2)://")
+
 func GetProxies() ([]map[string]any, error) {
 	slog.Info(fmt.Sprintf("当前设置订阅链接数量: %d", len(config.GlobalConfig.SubUrls)))
 
@@ -53,11 +55,10 @@ func GetProxies() ([]map[string]any, error) {
 			var con map[string]any
 			err = yaml.Unmarshal(data, &con)
 			if err != nil {
-				reg, _ := regexp.Compile("(ssr|ss|vmess|trojan|vless|hysteria|hy2|hysteria2)://")
-				if !reg.Match(data) {
+				if !proxyRegex.Match(data) {
 					data = []byte(parser.DecodeBase64(string(data)))
 				}
-				if reg.Match(data) {
+				if proxyRegex.Match(data) {
 					scanner := bufio.NewScanner(strings.NewReader(string(data)))
 					for scanner.Scan() {
 						proxy := scanner.Text()
