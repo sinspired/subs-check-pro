@@ -27,7 +27,7 @@
 ## 获取订阅
 
 > 如果配置了Woker , 将 `key` 修改为对应的即可
-> 订阅格式为 `https://your-worker-url/bestrui?key=all.yaml&token=AUTH_TOKEN`
+> 订阅格式为 `https://your-worker-url/gist?key=all.yaml&token=AUTH_TOKEN`
 
 - 全部订阅
 
