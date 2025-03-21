@@ -123,6 +123,68 @@ const routeHandlers = {
         } catch (error) {
             return handleError('测速失败: ' + error.message);
         }
+    },
+    async raw(request, url) {
+        try {
+            // 从 pathname 中提取 /raw 后的部分
+            const inputPath = url.pathname.replace('/raw', '');
+            if (!inputPath || inputPath == '/') {
+                return handleError('请提供 GitHub 相关路径', 400);
+            }
+    
+            let targetUrl;
+            // 判断是否包含域名部分
+            if (inputPath.includes('raw.githubusercontent.com')) {
+                // 提取 raw.githubusercontent.com 后的路径
+                const rawIndex = inputPath.indexOf('raw.githubusercontent.com');
+                const githubPath = inputPath.substring(rawIndex + 'raw.githubusercontent.com'.length);
+                targetUrl = `https://raw.githubusercontent.com${githubPath}`;
+            } else if (inputPath.includes('github.com')) {
+                // 提取 github.com 后的路径（release 或 archive）
+                const githubIndex = inputPath.indexOf('github.com');
+                const githubPath = inputPath.substring(githubIndex + 'github.com'.length);
+                if (githubPath.includes('/releases/download/') || githubPath.includes('/archive/')) {
+                    targetUrl = `https://github.com${githubPath}`;
+                } else {
+                    return handleError('仅支持 raw 文件、release 或 archive 路径', 400);
+                }
+            } else {
+                // 不含域名，假设是 raw 文件路径或 release/archive 路径
+                const path = inputPath.startsWith('/') ? inputPath : `/${inputPath}`;
+                if (path.includes('/releases/download/') || path.includes('/archive/')) {
+                    targetUrl = `https://github.com${path}`;
+                } else {
+                    targetUrl = `https://raw.githubusercontent.com${path}`;
+                }
+            }
+    
+            // 设置请求头
+            const headers = new Headers(request.headers);
+            headers.set('User-Agent', 'Cloudflare-Worker');
+    
+            // 通过 Cloudflare 代理下载
+            const response = await fetch(targetUrl, {
+                method: 'GET',
+                headers
+            });
+    
+            if (!response.ok) {
+                return handleError('GitHub 下载失败', response.status);
+            }
+    
+            const contentType = response.headers.get('Content-Type') || 'application/octet-stream';
+            return new Response(response.body, {
+                status: response.status,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Content-Type': contentType
+                }
+            });
+        } catch (error) {
+            return handleError('GitHub 代理失败: ' + error.message);
+        }
     }
 };
 
@@ -162,7 +224,8 @@ export default {
                 '/github/': () => routeHandlers.github(request, url),
                 '/gist': () => routeHandlers.gist(request, url, env),
                 '/storage': () => routeHandlers.storage(request, url, env),
-                '/speedtest': () => routeHandlers.speedtest(request, url, env)
+                '/speedtest': () => routeHandlers.speedtest(request, url, env),
+                '/raw': () => routeHandlers.raw(request, url)
             };
 
             for (const [route, handler] of Object.entries(routes)) {

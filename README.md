@@ -48,7 +48,7 @@
 - [ ] 已知从clash格式转base64时vmess节点会丢失。因为太麻烦了，我不想处理了。
 - [ ] 可能在某些平台、某些环境下长时间运行还是会有内存溢出的问题
 
-## 测速使用方法
+## 部署/使用方式
 > 如果拉取订阅速度慢，可使用通用的 `HTTP_PROXY` `HTTPS_PROXY` 环境变量加快速度；此变量不会影响节点测试速度
 
 > 带用户名密码的Proxy也支持，使用 `http://username:password@host:port` 格式，比如
@@ -57,11 +57,23 @@
 export HTTP_PROXY=http://username:password@192.168.1.1:7890
 export HTTPS_PROXY=http://username:password@192.168.1.1:7890
 ```
+如果想加速github的链接，可使用网上公开的`github proxy`，或者使用下方**自建测速地址**处的`worker.js`自建加速，自建的加速使用方式：
+```
+# 注意只能加速 GitHub的链接。带不带协议头均可，支持 release、archive 以及文件
+https://custom-domain/raw/https://raw.githubusercontent.com/mfuu/v2ray/master/clash.yaml
+https://custom-domain/raw/链接
+
+# 这是部署完后的固定前缀 ----> https://custom-domain/raw/ <---- 就是那个/raw/
+```
+
+---
 
 > 因为上游订阅链接可能是爬虫，所以本地可用的节点经常被刷新掉，所以可以使用 `keep-success-proxies` 参数持久保存测试成功的节点
 > 此参数默认关闭。并且会将数据临时存放到内存中，如果可用节点数量非常多，请不要打开此参数（因为可能会占用一点内存）。
 > **可将生成的链接添加到订阅链接当中一样可以实现此效果**
-
+### 编辑配置文件（可选）
+> 程序内置了部分订阅地址，不需要任何更改即可使用  
+程序运行第一次会在程序当前目录生成默认配置文件，再次运行即可起飞。
 ### 自建测速地址（可选）
 > 尽量不要使用Speedtest，Cloudflare提供的下载链接，因为很多节点屏蔽测速网站
 1. 将 [worker.js](./doc/cloudflare/worker.js) 部署到 Cloudflare Workers
@@ -112,10 +124,10 @@ go run main.go -f /path/to/config.yaml
 ```
 
 ### 二进制文件运行
-
+下载 [releases](https://github.com/beck-8/subs-check/releases)当中的适合自己的版本解压  
 直接运行即可,会在当前目录生成配置文件
 
-## 通知渠道配置方法
+## 通知渠道配置方法（可选）
 目前，此项目使用[Apprise](https://github.com/caronc/apprise)发送通知，并支持 100+ 个通知渠道。  
 但是 apprise 库是用 Python 编写的，Cloudflare 最近发布的 python worker在部署 apprise 时仍然存在问题  
 所以我们下边提供两种部署方式的教程（当然实际不止两种）
@@ -152,7 +164,8 @@ recipient-url:
   # - dingtalk://xxxxxx@xxxxxxx/123123
 ```
 ## 保存方法配置
-> 注意：选择保存方法时，记得更改 `save-method` 配置
+> 注意：选择保存方法时，记得更改 `save-method` 配置  
+> 如果上边部署了`worker.js`，下方使用即可，无需重复部署
 
 - 本地保存: 将结果保存到本地,默认保存到可执行文件目录下的 output 文件夹
 - r2: 将结果保存到 cloudflare r2 存储桶 [配置方法](./doc/r2.md)
