@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"log/slog"
 
@@ -105,12 +104,12 @@ func (cs *ConfigSaver) Save() error {
 			continue
 		}
 
-		category.Name = strings.TrimSuffix(category.Name, ".yaml") + ".txt"
-		if err := cs.saveCategoryBase64(category); err != nil {
-			slog.Error(fmt.Sprintf("保存到%s失败: %v", config.GlobalConfig.SaveMethod, err))
+		// category.Name = strings.TrimSuffix(category.Name, ".yaml") + ".txt"
+		// if err := cs.saveCategoryBase64(category); err != nil {
+		// 	slog.Error(fmt.Sprintf("保存到%s失败: %v", config.GlobalConfig.SaveMethod, err))
 
-			continue
-		}
+		// 	continue
+		// }
 	}
 
 	return nil

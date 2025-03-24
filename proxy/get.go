@@ -1,23 +1,20 @@
 package proxies
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
 	"log/slog"
 
 	"github.com/beck-8/subs-check/config"
-	"github.com/beck-8/subs-check/proxy/parser"
+	"github.com/metacubex/mihomo/common/convert"
 	"gopkg.in/yaml.v3"
 )
 
-var proxyRegex = regexp.MustCompile("(ssr|ss|vmess|trojan|vless|hysteria|hy2|hysteria2)://")
+// var proxyRegex = regexp.MustCompile("(ssr|ss|vmess|trojan|vless|hysteria|hy2|hysteria2)://")
 
 func GetProxies() ([]map[string]any, error) {
 	slog.Info(fmt.Sprintf("当前设置订阅链接数量: %d", len(config.GlobalConfig.SubUrls)))
@@ -55,30 +52,39 @@ func GetProxies() ([]map[string]any, error) {
 			var con map[string]any
 			err = yaml.Unmarshal(data, &con)
 			if err != nil {
-				if !proxyRegex.Match(data) {
-					data = []byte(parser.DecodeBase64(string(data)))
-				}
-				if proxyRegex.Match(data) {
-					scanner := bufio.NewScanner(strings.NewReader(string(data)))
-					for scanner.Scan() {
-						proxy := scanner.Text()
-						if proxy == "" {
-							continue
-						}
-						parseProxy, err := ParseProxy(proxy)
-						if err != nil {
-							slog.Debug(fmt.Sprintf("解析proxy错误: %s , %v", proxy, err))
-							continue
-						}
-						if parseProxy != nil {
-							proxyChan <- parseProxy
-						}
-					}
-					if err := scanner.Err(); err != nil {
-						slog.Error(fmt.Sprintf("扫描数据时发生错误: %v", err))
-					}
+				// if !proxyRegex.Match(data) {
+				// 	data = []byte(parser.DecodeBase64(string(data)))
+				// }
+				// if proxyRegex.Match(data) {
+				// 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+				// 	for scanner.Scan() {
+				// 		proxy := scanner.Text()
+				// 		if proxy == "" {
+				// 			continue
+				// 		}
+				// 		parseProxy, err := ParseProxy(proxy)
+				// 		if err != nil {
+				// 			slog.Debug(fmt.Sprintf("解析proxy错误: %s , %v", proxy, err))
+				// 			continue
+				// 		}
+				// 		if parseProxy != nil {
+				// 			proxyChan <- parseProxy
+				// 		}
+				// 	}
+				// 	if err := scanner.Err(); err != nil {
+				// 		slog.Error(fmt.Sprintf("扫描数据时发生错误: %v", err))
+				// 	}
+				// 	return
+				// }
+				proxyList, err := convert.ConvertsV2Ray(data)
+				if err != nil {
+					slog.Error(fmt.Sprintf("解析proxy错误: %v", err), "url", url)
 					return
 				}
+				for _, proxy := range proxyList {
+					proxyChan <- proxy
+				}
+				return
 			}
 
 			proxyInterface, ok := con["proxies"]

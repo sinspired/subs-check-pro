@@ -40,14 +40,14 @@ func startSubStore() error {
 	}
 
 	// 打开日志文件
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return fmt.Errorf("创建日志文件失败: %w", err)
 	}
 	defer logFile.Close()
 
 	// 运行 JavaScript 文件
-	cmd := exec.Command("node", jsPath)
+	cmd := exec.Command(nodePath, jsPath)
 	cmd.Dir = saver.OutputPath
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
