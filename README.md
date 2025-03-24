@@ -2,7 +2,7 @@
 
 对比原项目是修复了一些逻辑、简化了一些东西、增加了一些功能、节省很多内存、一键启动无需配置
 
-**请尽快升级至v1.1.0+，大幅减少内存占用！！**
+**注意：当前是V2版本，有重大更新，请看最新Releases**
 
 ## 预览
 
@@ -96,6 +96,7 @@ speed-test-url: https://custom-domain/speedtest?bytes=104857600
 speed-test-url: https://custom-domain/speedtest?bytes=1073741824
 ```
 ### docker运行
+> 如果使用新功能sub-store，需要额外增加端口如 `-p 8299:8299`
 
 ```bash
 docker run -d --name subs-check -p 8199:8199 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
@@ -118,6 +119,7 @@ services:
       - ./output:/app/output
     ports:
       - "8199:8199"
+      # - "8299:8299"
     environment:
       - TZ=Asia/Shanghai
       # 是否使用代理
@@ -238,6 +240,11 @@ http://127.0.0.1:8299/download/sub?target=Surfboard
 # mihomo 带规则的配置
 http://127.0.0.1:8299/api/file/mihomo
 ```
+> 小白勿看！！！  
+> 这个依赖github上的yaml文件进行覆写  
+> 默认使用: `https://slink.ltd/https://raw.githubusercontent.com/mihomo-party-org/override-hub/main/yaml/ACL4SSR_Online_Full.yaml`  
+> 如果遇到无法下载或者想使用其他格式，可以自己进后端管理配置，此处是判断是否有mihomo这个file，不管内容是什么，所以你做的更改不会被覆盖。  
+
 如果你还有什么其他的需求，使用上方的通用订阅自己处理，或者学习[sub-store](https://github.com/sub-store-org/sub-store-docs)中的文件管理，可以写任意插件，功能真的很强大！！！
 
 ---
