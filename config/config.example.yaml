@@ -53,6 +53,9 @@ recipient-url:
 # sub-store-port: 8299
 sub-store-port: 
 
+# 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
+mihomo-overwrite-url: "https://slink.ltd/https://raw.githubusercontent.com/mihomo-party-org/override-hub/main/yaml/ACL4SSR_Online_Full.yaml"
+
 # mihomo api url(测试完成后自动更新mihomo订阅)
 mihomo-api-url: ""
 

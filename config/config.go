@@ -31,6 +31,7 @@ type Config struct {
 	AppriseApiServer   string   `yaml:"apprise-api-server"`
 	RecipientUrl       []string `yaml:"recipient-url"`
 	SubStorePort       string   `yaml:"sub-store-port"`
+	MihomoOverwriteUrl string   `yaml:"mihomo-overwrite-url"`
 }
 
 var GlobalConfig = &Config{

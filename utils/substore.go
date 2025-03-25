@@ -57,6 +57,9 @@ const (
 	mihomoName = "mihomo"
 )
 
+// 用来判断用户是否在运行时更改了覆写订阅的url
+var mihomoOverwriteUrl string
+
 func UpdateSubStore(yamlData []byte) {
 	// 调试的时候等一等node启动
 	if os.Getenv("SUB_CHECK_SKIP") != "" && config.GlobalConfig.SubStorePort != "" {
@@ -69,16 +72,29 @@ func UpdateSubStore(yamlData []byte) {
 			return
 		}
 	}
+	if config.GlobalConfig.MihomoOverwriteUrl == "" {
+		slog.Error("mihomo覆写订阅url未设置")
+		return
+	}
 	if err := checkfile(); err != nil {
 		slog.Debug(fmt.Sprintf("检查mihomo配置文件失败: %v, 正在创建中...", err))
 		if err := createfile(); err != nil {
 			slog.Error(fmt.Sprintf("创建mihomo配置文件失败: %v", err))
 			return
 		}
+		mihomoOverwriteUrl = config.GlobalConfig.MihomoOverwriteUrl
 	}
 	if err := updateSub(yamlData); err != nil {
 		slog.Error(fmt.Sprintf("更新sub配置文件失败: %v", err))
 		return
+	}
+	if config.GlobalConfig.MihomoOverwriteUrl != mihomoOverwriteUrl {
+		if err := updatefile(); err != nil {
+			slog.Error(fmt.Sprintf("更新mihomo配置文件失败: %v", err))
+			return
+		}
+		mihomoOverwriteUrl = config.GlobalConfig.MihomoOverwriteUrl
+		slog.Debug("mihomo覆写订阅url已更新")
 	}
 	slog.Info("substore更新完成")
 }
@@ -191,7 +207,7 @@ func createfile() error {
 		Process: []Operator{
 			{
 				Args: args{
-					Content: "https://slink.ltd/https://raw.githubusercontent.com/mihomo-party-org/override-hub/main/yaml/ACL4SSR_Online_Full.yaml",
+					Content: config.GlobalConfig.MihomoOverwriteUrl,
 					Mode:    "link",
 				},
 				Disabled: false,
@@ -213,8 +229,49 @@ func createfile() error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("创建mihomo配置文件失败,错误码:%d", resp.StatusCode)
+	}
+	return nil
+}
+
+func updatefile() error {
+	file := file{
+		Name: mihomoName,
+		Process: []Operator{
+			{
+				Args: args{
+					Content: config.GlobalConfig.MihomoOverwriteUrl,
+					Mode:    "link",
+				},
+				Disabled: false,
+				Type:     "Script Operator",
+			},
+		},
+		Remark:     "subs-check专用,勿动",
+		Source:     "local",
+		SourceName: "sub",
+		SourceType: "subscription",
+		Type:       "mihomoProfile",
+	}
+	json, err := json.Marshal(file)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPatch,
+		fmt.Sprintf("http://127.0.0.1:%s/api/file/%s", config.GlobalConfig.SubStorePort, mihomoName),
+		bytes.NewBuffer(json))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("更新mihomo配置文件失败,错误码:%d", resp.StatusCode)
 	}
 	return nil
 }
