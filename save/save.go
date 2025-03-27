@@ -168,12 +168,12 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 			return fmt.Errorf("获取mihomo file请求失败: %w", err)
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("获取mihomo file失败，状态码: %w", err)
-		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("读取mihomo file失败: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("获取mihomo file失败, 状态码: %d, 错误信息: %s", resp.StatusCode, body)
 		}
 		if err := cs.saveMethod(body, category.Name); err != nil {
 			return fmt.Errorf("保存 %s 失败: %w", category.Name, err)
@@ -188,7 +188,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("获取base64.txt失败，状态码: %w", err)
+			return fmt.Errorf("获取base64.txt失败，状态码: %d", resp.StatusCode)
 		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
