@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/beck-8/subs-check/config"
@@ -65,6 +66,8 @@ func UpdateSubStore(yamlData []byte) {
 	if os.Getenv("SUB_CHECK_SKIP") != "" && config.GlobalConfig.SubStorePort != "" {
 		time.Sleep(time.Second * 1)
 	}
+	// 处理用户输入的格式
+	config.GlobalConfig.SubStorePort = formatPort(config.GlobalConfig.SubStorePort)
 	if err := checkSub(); err != nil {
 		slog.Debug(fmt.Sprintf("检查sub配置文件失败: %v, 正在创建中...", err))
 		if err := createSub(yamlData); err != nil {
@@ -99,7 +102,7 @@ func UpdateSubStore(yamlData []byte) {
 	slog.Info("substore更新完成")
 }
 func checkSub() error {
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/api/sub/%s", config.GlobalConfig.SubStorePort, SubName))
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1%s/api/sub/%s", config.GlobalConfig.SubStorePort, SubName))
 	if err != nil {
 		return err
 	}
@@ -135,7 +138,7 @@ func createSub(data []byte) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%s/api/subs", config.GlobalConfig.SubStorePort), "application/json", bytes.NewBuffer(json))
+	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1%s/api/subs", config.GlobalConfig.SubStorePort), "application/json", bytes.NewBuffer(json))
 	if err != nil {
 		return err
 	}
@@ -164,7 +167,7 @@ func updateSub(data []byte) error {
 		return err
 	}
 	req, err := http.NewRequest(http.MethodPatch,
-		fmt.Sprintf("http://127.0.0.1:%s/api/sub/%s", config.GlobalConfig.SubStorePort, SubName),
+		fmt.Sprintf("http://127.0.0.1%s/api/sub/%s", config.GlobalConfig.SubStorePort, SubName),
 		bytes.NewBuffer(json))
 	if err != nil {
 		return err
@@ -182,7 +185,7 @@ func updateSub(data []byte) error {
 }
 
 func checkfile() error {
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/api/wholeFile/%s", config.GlobalConfig.SubStorePort, MihomoName))
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1%s/api/wholeFile/%s", config.GlobalConfig.SubStorePort, MihomoName))
 	if err != nil {
 		return err
 	}
@@ -224,7 +227,7 @@ func createfile() error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%s/api/files", config.GlobalConfig.SubStorePort), "application/json", bytes.NewBuffer(json))
+	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1%s/api/files", config.GlobalConfig.SubStorePort), "application/json", bytes.NewBuffer(json))
 	if err != nil {
 		return err
 	}
@@ -259,7 +262,7 @@ func updatefile() error {
 		return err
 	}
 	req, err := http.NewRequest(http.MethodPatch,
-		fmt.Sprintf("http://127.0.0.1:%s/api/file/%s", config.GlobalConfig.SubStorePort, MihomoName),
+		fmt.Sprintf("http://127.0.0.1%s/api/file/%s", config.GlobalConfig.SubStorePort, MihomoName),
 		bytes.NewBuffer(json))
 	if err != nil {
 		return err
@@ -274,4 +277,13 @@ func updatefile() error {
 		return fmt.Errorf("更新mihomo配置文件失败,错误码:%d", resp.StatusCode)
 	}
 	return nil
+}
+
+// 如果用户监听了局域网IP，后续会请求失败
+func formatPort(port string) string {
+	if strings.Contains(port, ":") {
+		parts := strings.Split(port, ":")
+		return ":" + parts[len(parts)-1]
+	}
+	return ":" + port
 }

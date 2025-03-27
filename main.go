@@ -58,8 +58,10 @@ func (app *App) Initialize() error {
 
 	app.interval = config.GlobalConfig.CheckInterval
 
-	if err := app.initHttpServer(); err != nil {
-		return fmt.Errorf("初始化HTTP服务器失败: %w", err)
+	if config.GlobalConfig.ListenPort != "" {
+		if err := app.initHttpServer(); err != nil {
+			return fmt.Errorf("初始化HTTP服务器失败: %w", err)
+		}
 	}
 
 	if config.GlobalConfig.SubStorePort != "" {
@@ -184,7 +186,7 @@ func (app *App) initHttpServer() error {
 			slog.Error(fmt.Sprintf("HTTP服务器启动失败: %v", err))
 		}
 	}()
-	slog.Info(fmt.Sprintf("HTTP服务器已启动 %s", config.GlobalConfig.ListenPort))
+	slog.Info("HTTP服务器启动", "port", config.GlobalConfig.ListenPort)
 	return nil
 }
 

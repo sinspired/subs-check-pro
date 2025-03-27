@@ -163,7 +163,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 		return nil
 	}
 	if category.Name == "mihomo.yaml" && config.GlobalConfig.SubStorePort != "" {
-		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/api/file/%s", config.GlobalConfig.SubStorePort, utils.MihomoName))
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1%s/api/file/%s", config.GlobalConfig.SubStorePort, utils.MihomoName))
 		if err != nil {
 			return fmt.Errorf("获取mihomo file请求失败: %w", err)
 		}
@@ -182,7 +182,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 	}
 	if category.Name == "base64.txt" && config.GlobalConfig.SubStorePort != "" {
 		// http://127.0.0.1:8299/download/sub?target=V2Ray
-		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/download/%s?target=V2Ray", config.GlobalConfig.SubStorePort, utils.SubName))
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1%s/download/%s?target=V2Ray", config.GlobalConfig.SubStorePort, utils.SubName))
 		if err != nil {
 			return fmt.Errorf("获取base64.txt请求失败: %w", err)
 		}

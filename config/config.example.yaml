@@ -24,6 +24,7 @@ download-timeout: 10
 # 监听端口，用于直接返回节点信息，方便订阅转换
 # http://127.0.0.1:8199/all.yaml
 # 注意：为方便小白默认监听0.0.0.0:8199，请自行修改
+# 更新需重启程序
 listen-port: ":8199"
 
 # 以节点IP查询位置重命名节点
@@ -49,9 +50,10 @@ recipient-url:
   # 钉钉格式：dingtalk://<secret>@<dd_token>/<chat_id>
   # - dingtalk://xxxxxx@xxxxxxx/123123
 
-# sub-store的启动端口，注意没有冒号(:)，为空则不启动sub-store
-# sub-store-port: 8299
-sub-store-port: 
+# sub-store的启动端口，为空则不启动sub-store
+# 更新需重启程序，不可监听局域网IP，只有三种写法 :8299, 127.0.0.1:8299, 0.0.0.0:8299
+# sub-store-port: ":8299"
+sub-store-port: ":8299"
 
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
 mihomo-overwrite-url: "https://slink.ltd/https://raw.githubusercontent.com/mihomo-party-org/override-hub/main/yaml/ACL4SSR_Online_Full.yaml"

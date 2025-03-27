@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/beck-8/subs-check/config"
@@ -66,8 +67,22 @@ func startSubStore() error {
 	cmd.Dir = saver.OutputPath
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
-	if config.GlobalConfig.ListenPort != "" {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("SUB_STORE_BACKEND_API_PORT=%s", config.GlobalConfig.SubStorePort)) // 设置端口
+
+	// 应该早做这件事的，现在有点不兼容，所以向下兼容
+	hostPort := strings.Split(config.GlobalConfig.SubStorePort, ":")
+	if len(hostPort) == 2 {
+		host := hostPort[0]
+		if host == "" {
+			host = "0.0.0.0" // 如果主机名为空，使用默认值
+		}
+		cmd.Env = append(os.Environ(),
+			fmt.Sprintf("SUB_STORE_BACKEND_API_HOST=%s", host),
+			fmt.Sprintf("SUB_STORE_BACKEND_API_PORT=%s", hostPort[1]),
+		)
+	} else if len(hostPort) == 1 {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("SUB_STORE_BACKEND_API_PORT=%s", hostPort[0])) // 设置端口
+	} else {
+		return fmt.Errorf("invalid port format: %s", config.GlobalConfig.SubStorePort)
 	}
 
 	if err := cmd.Start(); err != nil {
