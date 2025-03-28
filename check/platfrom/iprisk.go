@@ -24,13 +24,13 @@ func CheckIPRisk(httpClient *http.Client, ip string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-
-		apiIndex := strings.Index(string(body), "IP Fraud Risk API")
+		bodyStr := string(body)
+		apiIndex := strings.Index(bodyStr, "IP Fraud Risk API")
 		if apiIndex == -1 {
 			return "", fmt.Errorf("未找到IP Fraud Risk API")
 		}
 		// 从 "IP Fraud Risk API" 后的内容开始
-		contentAfterAPI := string(body)[apiIndex+len("IP Fraud Risk API"):]
+		contentAfterAPI := bodyStr[apiIndex+len("IP Fraud Risk API"):]
 		// 按行分割
 		lines := strings.Split(contentAfterAPI, "\n")
 
@@ -51,7 +51,8 @@ func CheckIPRisk(httpClient *http.Client, ip string) (string, error) {
 		}
 
 		if score != "" && rist != "" {
-			return fmt.Sprintf("%s%% %s", score, rist), nil
+			// return fmt.Sprintf("%s%% %s", score, rist), nil
+			return fmt.Sprintf("%s%%", score), nil
 		}
 	}
 	return "", nil

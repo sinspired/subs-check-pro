@@ -192,6 +192,7 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 
 // updateProxyName 更新代理名称
 func (pc *ProxyChecker) updateProxyName(res *Result, speed int) {
+	var ipRisk string
 	// 以节点IP查询位置重命名节点
 	if config.GlobalConfig.RenameNode {
 		// hy2协议 不知道为什么在被前边测速后就脏了，就不能用了，我也不知道为什么，奇葩。
@@ -208,11 +209,13 @@ func (pc *ProxyChecker) updateProxyName(res *Result, speed int) {
 		}
 		res.Proxy["name"] = proxyutils.Rename(country)
 
-		ipRisk, err := platfrom.CheckIPRisk(httpClient.Client, ip)
-		if err == nil {
-			res.Proxy["name"] = res.Proxy["name"].(string) + "|" + ipRisk
-		} else {
-			slog.Debug(fmt.Sprintf("查询IP欺诈失败: %v", err))
+		if config.GlobalConfig.MediaCheck {
+			risk, err := platfrom.CheckIPRisk(httpClient.Client, ip)
+			if err == nil {
+				ipRisk = risk
+			} else {
+				slog.Debug(fmt.Sprintf("查询IP欺诈失败: %v", err))
+			}
 		}
 	}
 	// 获取速度
@@ -226,17 +229,22 @@ func (pc *ProxyChecker) updateProxyName(res *Result, speed int) {
 		res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + " | ⬇️ " + speedStr
 	}
 
-	if res.Netflix {
-		res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Netflix"
-	}
-	if res.Disney {
-		res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Disney"
-	}
-	if res.Youtube {
-		res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Youtube"
-	}
-	if res.Openai {
-		res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Openai"
+	if config.GlobalConfig.MediaCheck {
+		if ipRisk != "" {
+			res.Proxy["name"] = res.Proxy["name"].(string) + "|" + ipRisk
+		}
+		if res.Netflix {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Netflix"
+		}
+		if res.Disney {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Disney"
+		}
+		if res.Youtube {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Youtube"
+		}
+		if res.Openai {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Openai"
+		}
 	}
 
 }

@@ -30,6 +30,9 @@ listen-port: ":8199"
 # 质量差的节点可能造成IP查询失败，造成整体检查速度稍微变慢，默认true
 rename-node: true
 
+# 是否开启流媒体检测，依赖重命名开启
+media-check: false
+
 # 保留之前测试成功的节点
 # 如果为true，则保留之前测试成功的节点，这样就不会因为上游链接更新，导致可用的节点被清除掉
 keep-success-proxies: false
