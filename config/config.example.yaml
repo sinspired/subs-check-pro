@@ -133,8 +133,6 @@ sub-urls:
   - "https://raw.githubusercontent.com/ripaojiedian/freenode/main/clash"
   - "https://raw.githubusercontent.com/go4sharing/sub/main/sub.yaml"
   - "https://raw.githubusercontent.com/mfuu/v2ray/master/clash.yaml"
-  - "https://api.mxlweb.xyz/sub?target=clash&url=https://www.xrayvip.com/free.yaml&insert=false"
-  - "https://api.mxlweb.xyz/sub?target=clash&url=https://mxlsub.me/free&insert=false"
   - "https://sub.reajason.eu.org/clash.yaml"
   - "https://proxypool.link/trojan/sub"
   - "https://proxypool.link/vmess/sub"

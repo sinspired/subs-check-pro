@@ -229,7 +229,8 @@ func (pc *ProxyChecker) updateProxyName(res *Result, speed int) {
 		} else {
 			speedStr = fmt.Sprintf("%.1fMB/s", float64(speed)/1024)
 		}
-		res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + " | ⬇️ " + speedStr
+		// 防止重复添加速度
+		res.Proxy["name"] = strings.Split(strings.TrimSpace(res.Proxy["name"].(string)), " | ⬇️ ")[0] + " | ⬇️ " + speedStr
 	}
 
 	if config.GlobalConfig.RenameNode && config.GlobalConfig.MediaCheck {
