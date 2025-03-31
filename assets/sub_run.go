@@ -15,6 +15,7 @@ import (
 	"github.com/beck-8/subs-check/config"
 	"github.com/beck-8/subs-check/save/method"
 	"github.com/klauspost/compress/zstd"
+	"github.com/shirou/gopsutil/v4/process"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -48,7 +49,22 @@ func startSubStore() error {
 	jsPath := filepath.Join(saver.OutputPath, "sub-store.bundle.js")
 	logPath := filepath.Join(saver.OutputPath, "sub-store.log")
 
+	killNode := func() {
+		pid, err := findProcesses(nodePath)
+		if err == nil {
+			err := killProcess(pid)
+			if err != nil {
+				slog.Debug("Sub-store service kill failed", "error", err)
+			}
+			slog.Debug("Sub-store service already killed", "pid", pid)
+		}
+	}
+
+	// 如果subs-check内存问题退出，会导致node二进制损坏，启动的node变成僵尸，所以删一遍
+	os.Remove(nodePath)
+	os.Remove(jsPath)
 	if err := decodeZstd(nodePath, jsPath); err != nil {
+		killNode()
 		return err
 	}
 
@@ -86,6 +102,7 @@ func startSubStore() error {
 	}
 
 	if err := cmd.Start(); err != nil {
+		killNode()
 		return fmt.Errorf("启动 sub-store 失败: %w", err)
 	}
 
@@ -125,6 +142,36 @@ func decodeZstd(nodePath, jsPath string) error {
 	zstdDecoder.Reset(bytes.NewReader(EmbeddedSubStore))
 	if _, err := io.Copy(jsFile, zstdDecoder); err != nil {
 		return fmt.Errorf("解压 sub-store 脚本失败: %w", err)
+	}
+	return nil
+}
+
+func findProcesses(targetName string) (int32, error) {
+	processes, err := process.Processes()
+	if err != nil {
+		return 0, fmt.Errorf("获取进程列表失败: %v", err)
+	}
+
+	for _, p := range processes {
+		name, err := p.Exe()
+		// if err != nil {
+		// 	// slog.Debug("获取进程名称失败", "error", err)
+		// }
+		if err == nil && name == targetName {
+			return p.Pid, nil
+		}
+	}
+	return 0, fmt.Errorf("未找到进程")
+}
+
+func killProcess(pid int32) error {
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return fmt.Errorf("无法找到进程 %d: %v", pid, err)
+	}
+
+	if err := p.Kill(); err != nil {
+		return fmt.Errorf("杀死进程 %d 失败: %v", pid, err)
 	}
 	return nil
 }

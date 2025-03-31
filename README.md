@@ -15,11 +15,12 @@
 
 - 检测节点可用性,去除不可用节点
   - 新增参数`keep-success-proxies`用于持久保存测试成功的节点，可避免上游链接更新导致可用节点丢失，此功能默认关闭
-- ~~检测平台解锁情况~~ 暂时注释了，因为我觉得没啥用
-    - ~~openai~~
-    - ~~youtube~~
-    - ~~netflix~~
-    - ~~disney~~
+- 检测平台解锁情况（需要手动开启参数`media-check`）
+  - openai
+  - youtube
+  - netflix
+  - disney
+  - IP欺诈分数
 - 合并多个订阅
 - 将订阅转换为clash/mihomo/base64/QX等等[任意格式的订阅](https://github.com/beck-8/subs-check?tab=readme-ov-file#%E8%AE%A2%E9%98%85%E4%BD%BF%E7%94%A8%E6%96%B9%E6%B3%95)
 - 节点去重
@@ -48,6 +49,10 @@
     - [ ] 其他
 - [x] 已知从clash格式转base64时vmess节点会丢失。因为太麻烦了，我不想处理了。
 - [ ] 可能在某些平台、某些环境下长时间运行还是会有内存溢出的问题
+    - [x] 新增内存限制环境变量，用于限制内存使用，超出会自动重启（docker用户请使用docker的内存限制）
+      - [x] 环境变量 `SUB_CHECK_MEM_LIMIT=500M` `SUB_CHECK_MEM_LIMIT=1G`
+      - [x] 重启后的进程无法使用`ctrl c`退出，只能关闭终端
+    - [ ] 彻底解决
 
 ## 部署/使用方式
 > 如果拉取订阅速度慢，可使用通用的 `HTTP_PROXY` `HTTPS_PROXY` 环境变量加快速度；此变量不会影响节点测试速度
@@ -96,14 +101,14 @@ speed-test-url: https://custom-domain/speedtest?bytes=104857600
 speed-test-url: https://custom-domain/speedtest?bytes=1073741824
 ```
 ### docker运行
-> 如果使用新功能sub-store，需要额外增加端口如 `-p 8299:8299`
+> 如果需要限制内存，请使用docker自带的内存限制参数 `--memory="500m"`
 
 ```bash
-docker run -d --name subs-check -p 8199:8199 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
+docker run -d --name subs-check -p 8199:8199 -p 8299:8299 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
 ```
 ```bash
 # 如果想使用代理，加上环境变量，如
-docker run -d --name subs-check -p 8199:8199  -e HTTP_PROXY=http://192.168.1.1:7890 -e HTTPS_PROXY=http://192.168.1.1:7890 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
+docker run -d --name subs-check -p 8199:8199 -p 8299:8299 -e HTTP_PROXY=http://192.168.1.1:7890 -e HTTPS_PROXY=http://192.168.1.1:7890 -v ./config:/app/config  -v ./output:/app/output --restart always ghcr.io/beck-8/subs-check:latest
 ```
 
 ### docker-compose
@@ -114,12 +119,13 @@ services:
   mihomo-check:
     image: ghcr.io/beck-8/subs-check:latest
     container_name: subs-check
+    # mem_limit: 500m
     volumes:
       - ./config:/app/config
       - ./output:/app/output
     ports:
       - "8199:8199"
-      # - "8299:8299"
+      - "8299:8299"
     environment:
       - TZ=Asia/Shanghai
       # 是否使用代理

@@ -32,6 +32,7 @@ type Config struct {
 	RecipientUrl       []string `yaml:"recipient-url"`
 	SubStorePort       string   `yaml:"sub-store-port"`
 	MihomoOverwriteUrl string   `yaml:"mihomo-overwrite-url"`
+	MediaCheck         bool     `yaml:"media-check"`
 }
 
 var GlobalConfig = &Config{

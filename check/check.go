@@ -164,6 +164,22 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	if err != nil || !google {
 		return nil
 	}
+
+	if config.GlobalConfig.RenameNode && config.GlobalConfig.MediaCheck {
+		// 执行其他平台检测
+		openai, _ := platfrom.CheckOpenai(httpClient.Client)
+		youtube, _ := platfrom.CheckYoutube(httpClient.Client)
+		netflix, _ := platfrom.CheckNetflix(httpClient.Client)
+		disney, _ := platfrom.CheckDisney(httpClient.Client)
+
+		res.Cloudflare = cloudflare
+		res.Google = google
+		res.Openai = openai
+		res.Youtube = youtube
+		res.Netflix = netflix
+		res.Disney = disney
+	}
+
 	var speed int
 	if config.GlobalConfig.SpeedTestUrl != "" {
 		speed, err = platfrom.CheckSpeed(httpClient.Client)
@@ -171,42 +187,39 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 			return nil
 		}
 	}
-	// 执行其他平台检测
-	// openai, _ := platfrom.CheckOpenai(httpClient)
-	// youtube, _ := platfrom.CheckYoutube(httpClient)
-	// netflix, _ := platfrom.CheckNetflix(httpClient)
-	// disney, _ := platfrom.CheckDisney(httpClient)
-
 	// 更新代理名称
-	pc.updateProxyName(proxy, speed)
+	pc.updateProxyName(res, speed)
 	pc.incrementAvailable()
-
-	res.Cloudflare = cloudflare
-	res.Google = google
-	// res.Openai = openai
-	// res.Youtube = youtube
-	// res.Netflix = netflix
-	// res.Disney = disney
 	return res
 }
 
 // updateProxyName 更新代理名称
-func (pc *ProxyChecker) updateProxyName(proxy map[string]any, speed int) {
+func (pc *ProxyChecker) updateProxyName(res *Result, speed int) {
+	var ipRisk string
 	// 以节点IP查询位置重命名节点
 	if config.GlobalConfig.RenameNode {
 		// hy2协议 不知道为什么在被前边测速后就脏了，就不能用了，我也不知道为什么，奇葩。
 		// 可能底层mihomo的bug，什么泄露之类的，请求任何网址都超时。所以这里创新创建一个client
-		httpClient := CreateClient(proxy)
+		httpClient := CreateClient(res.Proxy)
 		if httpClient == nil {
-			slog.Debug(fmt.Sprintf("创建updateProxyName代理Client失败: %v", proxy["name"]))
+			slog.Debug(fmt.Sprintf("创建updateProxyName代理Client失败: %v", res.Proxy["name"]))
 			return
 		}
 		defer httpClient.Close()
-		country := proxyutils.GetProxyCountry(httpClient.Client)
+		country, ip := proxyutils.GetProxyCountry(httpClient.Client)
 		if country == "" {
 			country = "未识别"
 		}
-		proxy["name"] = proxyutils.Rename(country)
+		res.Proxy["name"] = proxyutils.Rename(country)
+
+		if config.GlobalConfig.MediaCheck {
+			risk, err := platfrom.CheckIPRisk(httpClient.Client, ip)
+			if err == nil {
+				ipRisk = risk
+			} else {
+				slog.Debug(fmt.Sprintf("查询IP欺诈失败: %v", err))
+			}
+		}
 	}
 	// 获取速度
 	if config.GlobalConfig.SpeedTestUrl != "" {
@@ -216,8 +229,28 @@ func (pc *ProxyChecker) updateProxyName(proxy map[string]any, speed int) {
 		} else {
 			speedStr = fmt.Sprintf("%.1fMB/s", float64(speed)/1024)
 		}
-		proxy["name"] = strings.TrimSpace(proxy["name"].(string)) + " | ⬇️ " + speedStr
+		// 防止重复添加速度
+		res.Proxy["name"] = strings.Split(strings.TrimSpace(res.Proxy["name"].(string)), " | ⬇️ ")[0] + " | ⬇️ " + speedStr
 	}
+
+	if config.GlobalConfig.RenameNode && config.GlobalConfig.MediaCheck {
+		if ipRisk != "" {
+			res.Proxy["name"] = res.Proxy["name"].(string) + " |" + ipRisk
+		}
+		if res.Netflix {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Netflix"
+		}
+		if res.Disney {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Disney"
+		}
+		if res.Youtube {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Youtube"
+		}
+		if res.Openai {
+			res.Proxy["name"] = strings.TrimSpace(res.Proxy["name"].(string)) + "|Openai"
+		}
+	}
+
 }
 
 // showProgress 显示进度条

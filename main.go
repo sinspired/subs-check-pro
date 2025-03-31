@@ -3,13 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"time"
 
-	"log/slog"
+	human "github.com/docker/go-units"
 
 	"github.com/beck-8/subs-check/assets"
 	"github.com/beck-8/subs-check/check"
@@ -69,8 +71,65 @@ func (app *App) Initialize() error {
 			slog.Warn("node不支持Linux 32位系统，不启动sub-store服务")
 		}
 		go assets.RunSubStoreService()
+		// 求等吗得，日志会按预期顺序输出
+		time.Sleep(500 * time.Millisecond)
 	}
+
+	// mihomo的内存问题解决不了，所以加个内存限制自动重启
+	if limit := os.Getenv("SUB_CHECK_MEM_LIMIT"); limit != "" {
+		MemoryLimit, err := human.FromHumanSize(limit)
+		if err != nil {
+			slog.Error("内存限制参数错误", "error", err)
+		}
+		go func() {
+			if MemoryLimit == 0 {
+				return
+			}
+			for {
+				time.Sleep(30 * time.Second)
+				checkMemory(uint64(MemoryLimit))
+			}
+		}()
+	}
+
 	return nil
+}
+
+func checkMemory(MemoryLimit uint64) {
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	currentUsage := m.HeapAlloc + m.StackInuse
+	if currentUsage > MemoryLimit {
+		metadata := m.Sys - m.HeapSys - m.StackSys
+		heapFrag := m.HeapInuse - m.HeapAlloc
+		approxRSS := m.HeapAlloc + m.StackInuse + metadata + heapFrag
+		slog.Warn("内存超过使用限制", "rss", human.HumanSize(float64(approxRSS)), "metadata", human.HumanSize(float64(metadata)), "heapFrag", human.HumanSize(float64(heapFrag)), "limit", human.HumanSize(float64(MemoryLimit)))
+
+		// 重新启动自己
+		cmd := getSelfCommand()
+		if cmd != nil {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Start() // 让新进程启动
+			slog.Warn("因为内存问题启动了新进程，二进制用户如果需要关闭请关闭此窗口/终端")
+		}
+
+		// 退出当前进程
+		os.Exit(1)
+	}
+}
+
+// 获取当前程序路径和参数
+func getSelfCommand() *exec.Cmd {
+	exePath, err := os.Executable()
+	if err != nil {
+		slog.Error("获取可执行文件路径失败:", "error", err)
+		return nil
+	}
+	args := os.Args[1:] // 获取参数（不包括程序名）
+	slog.Warn("🔄 进程即将重启...", "path", exePath, "args", args)
+	return exec.Command(exePath, args...)
 }
 
 // initConfigPath 初始化配置文件路径
@@ -182,9 +241,13 @@ func (app *App) initHttpServer() error {
 	}
 	router.Static("/", saver.OutputPath)
 	go func() {
-		if err := router.Run(config.GlobalConfig.ListenPort); err != nil {
-			slog.Error(fmt.Sprintf("HTTP服务器启动失败: %v", err))
+		for {
+			if err := router.Run(config.GlobalConfig.ListenPort); err != nil {
+				slog.Error(fmt.Sprintf("HTTP服务器启动失败，正在重启中: %v", err))
+			}
+			time.Sleep(30 * time.Second)
 		}
+
 	}()
 	slog.Info("HTTP服务器启动", "port", config.GlobalConfig.ListenPort)
 	return nil
@@ -243,7 +306,6 @@ func main() {
 		slog.Error(fmt.Sprintf("初始化失败: %v", err))
 		os.Exit(1)
 	}
-	// 求等吗得，日志会按预期顺序输出
-	time.Sleep(500 * time.Millisecond)
+
 	app.Run()
 }

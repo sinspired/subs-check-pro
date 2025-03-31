@@ -7,18 +7,19 @@ import (
 )
 
 func CheckOpenai(httpClient *http.Client) (bool, error) {
-	resp, err := httpClient.Get("https://android.chat.openai.com")
+	resp, err := httpClient.Get("https://api.openai.com/compliance/cookie_requirements")
 	if err != nil {
 		return false, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 403 {
+	if resp.StatusCode == http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return false, err
 		}
-		if strings.Contains(string(body), "Request is not allowed. Please try again later.") {
+
+		if !strings.Contains(strings.ToLower(string(body)), "unsupported_country") {
 			return true, nil
 		}
 	}

@@ -12,8 +12,9 @@ import (
 	"github.com/beck-8/subs-check/config"
 )
 
-func GetProxyCountry(httpClient *http.Client) string {
+func GetProxyCountry(httpClient *http.Client) (string, string) {
 	url := "https://www.cloudflare.com/cdn-cgi/trace"
+	var loc, ip string
 	for attempts := 0; attempts < config.GlobalConfig.SubUrlsReTry; attempts++ {
 		resp, err := httpClient.Get(url)
 		if err != nil {
@@ -32,11 +33,17 @@ func GetProxyCountry(httpClient *http.Client) string {
 		// Parse the response text to find loc=XX
 		for _, line := range strings.Split(string(body), "\n") {
 			if strings.HasPrefix(line, "loc=") {
-				return strings.TrimPrefix(line, "loc=")
+				loc = strings.TrimPrefix(line, "loc=")
 			}
+			if strings.HasPrefix(line, "ip=") {
+				ip = strings.TrimPrefix(line, "ip=")
+			}
+		}
+		if loc != "" && ip != "" {
+			return loc, ip
 		}
 		time.Sleep(time.Second * time.Duration(attempts))
 		continue
 	}
-	return ""
+	return "", ""
 }
