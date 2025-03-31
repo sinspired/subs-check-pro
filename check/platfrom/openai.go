@@ -13,15 +13,13 @@ func CheckOpenai(httpClient *http.Client) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return false, err
-		}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
 
-		if !strings.Contains(strings.ToLower(string(body)), "unsupported_country") {
-			return true, nil
-		}
+	if !strings.Contains(strings.ToLower(string(body)), "unsupported_country") {
+		return true, nil
 	}
 
 	return false, nil
