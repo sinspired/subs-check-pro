@@ -256,6 +256,8 @@ http://127.0.0.1:8299/api/file/mihomo
 
 如果你还有什么其他的需求，使用上方的通用订阅自己处理，或者学习[sub-store](https://github.com/sub-store-org/sub-store-docs)中的文件管理，可以写任意插件，功能真的很强大！！！
 
+当你打开`http://127.0.0.1:8299`，你发现跳转到了`https://sub-store.vercel.app/subs`，看[**这里**](./doc/sub-store.md)
+
 ---
 **直接裸核运行 tun 模式（忽略）**
 
