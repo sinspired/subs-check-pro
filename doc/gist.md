@@ -29,32 +29,20 @@
 > 如果配置了Woker , 将 `key` 修改为对应的即可
 > 订阅格式为 `https://your-worker-url/gist?key=all.yaml&token=AUTH_TOKEN`
 
-- 全部订阅
+- yaml格式的订阅
 
 ```
 https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/all.yaml
 ```
 
-- 解锁openai的节点
+- base64编码的订阅
 
 ```
-https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/openai.yaml
+https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/base64.txt
 ```
 
-- 解锁netflix的节点
+- 带规则的mihomo.yaml文件
 
 ```
-https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/netflix.yaml
-```
-
-- 解锁disney的节点
-
-```
-https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/disney.yaml
-```
-
-- 解锁youtube的节点
-
-```
-https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/youtube.yaml
+https://gist.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_GIST_ID/raw/mihomo.yaml
 ```
