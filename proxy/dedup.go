@@ -2,7 +2,6 @@ package proxies
 
 import (
 	"fmt"
-	"strconv"
 )
 
 func DeduplicateProxies(proxies []map[string]any) []map[string]any {
@@ -10,10 +9,6 @@ func DeduplicateProxies(proxies []map[string]any) []map[string]any {
 
 	for _, proxy := range proxies {
 		server, _ := proxy["server"].(string)
-		port, ok := proxy["port"].(int)
-		if !ok {
-			port, _ = strconv.Atoi(proxy["port"].(string))
-		}
 		if server == "" {
 			continue
 		}
@@ -24,7 +19,7 @@ func DeduplicateProxies(proxies []map[string]any) []map[string]any {
 			password, _ = proxy["uuid"].(string)
 		}
 
-		key := fmt.Sprintf("%s:%v:%s:%s", server, port, servername, password)
+		key := fmt.Sprintf("%s:%v:%s:%s", server, proxy["port"], servername, password)
 		seen[key] = proxy
 	}
 
