@@ -85,12 +85,8 @@ func startSubStore() error {
 	// 应该早做这件事的，现在有点不兼容，所以向下兼容
 	hostPort := strings.Split(config.GlobalConfig.SubStorePort, ":")
 	if len(hostPort) == 2 {
-		host := hostPort[0]
-		if host == "" {
-			host = "0.0.0.0" // 如果主机名为空，使用默认值
-		}
 		cmd.Env = append(os.Environ(),
-			fmt.Sprintf("SUB_STORE_BACKEND_API_HOST=%s", host),
+			fmt.Sprintf("SUB_STORE_BACKEND_API_HOST=%s", hostPort[0]),
 			fmt.Sprintf("SUB_STORE_BACKEND_API_PORT=%s", hostPort[1]),
 		)
 	} else if len(hostPort) == 1 {
