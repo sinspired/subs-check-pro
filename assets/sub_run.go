@@ -45,6 +45,7 @@ func startSubStore() error {
 	os.MkdirAll(saver.OutputPath, 0755)
 	nodePath := filepath.Join(saver.OutputPath, nodeName)
 	jsPath := filepath.Join(saver.OutputPath, "sub-store.bundle.js")
+	overYamlPath := filepath.Join(saver.OutputPath, "ACL4SSR_Online_Full.yaml")
 	logPath := filepath.Join(saver.OutputPath, "sub-store.log")
 
 	killNode := func() {
@@ -62,7 +63,8 @@ func startSubStore() error {
 	// 如果subs-check内存问题退出，会导致node二进制损坏，启动的node变成僵尸，所以删一遍
 	os.Remove(nodePath)
 	os.Remove(jsPath)
-	if err := decodeZstd(nodePath, jsPath); err != nil {
+	os.Remove(overYamlPath)
+	if err := decodeZstd(nodePath, jsPath, overYamlPath); err != nil {
 		return err
 	}
 
@@ -105,7 +107,7 @@ func startSubStore() error {
 	return cmd.Wait()
 }
 
-func decodeZstd(nodePath, jsPath string) error {
+func decodeZstd(nodePath, jsPath, overYamlPath string) error {
 	// 创建 zstd 解码器
 	zstdDecoder, err := zstd.NewReader(nil)
 	if err != nil {
@@ -135,6 +137,18 @@ func decodeZstd(nodePath, jsPath string) error {
 	zstdDecoder.Reset(bytes.NewReader(EmbeddedSubStore))
 	if _, err := io.Copy(jsFile, zstdDecoder); err != nil {
 		return fmt.Errorf("解压 sub-store 脚本失败: %w", err)
+	}
+
+	// 解压 覆写文件
+	overYamlFile, err := os.OpenFile(overYamlPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("创建 ACL4SSR_Online_Full.yaml 文件失败: %w", err)
+	}
+	defer overYamlFile.Close()
+
+	zstdDecoder.Reset(bytes.NewReader(EmbeddedOverrideYaml))
+	if _, err := io.Copy(overYamlFile, zstdDecoder); err != nil {
+		return fmt.Errorf("解压 ACL4SSR_Online_Full.yaml 失败: %w", err)
 	}
 	return nil
 }

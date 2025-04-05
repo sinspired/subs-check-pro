@@ -42,7 +42,7 @@ var GlobalConfig = &Config{
 	// 新增配置，给未更改配置文件的用户一个默认值
 	ListenPort:         ":8199",
 	NotifyTitle:        "🔔 节点状态更新",
-	MihomoOverwriteUrl: "https://slink.ltd/https://raw.githubusercontent.com/mihomo-party-org/override-hub/main/yaml/ACL4SSR_Online_Full.yaml",
+	MihomoOverwriteUrl: "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml",
 }
 
 //go:embed config.example.yaml

@@ -69,7 +69,9 @@ notify-title: "🔔 节点状态更新"
 sub-store-port: ":8299"
 
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
-mihomo-overwrite-url: "https://slink.ltd/https://raw.githubusercontent.com/mihomo-party-org/override-hub/main/yaml/ACL4SSR_Online_Full.yaml"
+# 防止网络不好，所以现在内置，依赖:8199端口
+# 如果你想替换其他的自定义覆写文件，自己命名后放在output目录，然后更改此URL后缀即可
+mihomo-overwrite-url: "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml"
 
 # mihomo api url(测试完成后自动更新mihomo订阅)
 mihomo-api-url: ""
