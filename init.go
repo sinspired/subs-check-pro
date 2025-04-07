@@ -2,17 +2,22 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/lmittmann/tint"
 	mihomoLog "github.com/metacubex/mihomo/log"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var CurrentCommit = "unknown"
+
+var TempLog string
 
 func init() {
 	// 设置依赖库日志级别
@@ -22,8 +27,18 @@ func init() {
 	// 获取日志级别
 	logLevel := getLogLevel()
 
+	TempLog = filepath.Join(os.TempDir(), "subs-check.log")
+	// 配置日志文件
+	fileLogger := &lumberjack.Logger{
+		Filename:   TempLog,
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     7,
+	}
+	// 创建多输出 writer
+	multiWriter := io.MultiWriter(os.Stdout, fileLogger)
 	// 创建带有颜色金额日志级别的 Handler
-	handler := tint.NewHandler(os.Stdout, &tint.Options{
+	handler := tint.NewHandler(multiWriter, &tint.Options{
 		Level:      logLevel,
 		TimeFormat: "2006-01-02 15:04:05",
 	})
