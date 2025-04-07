@@ -36,7 +36,7 @@ func (app *App) initHttpServer() error {
 
 	// 根据配置决定是否启用Web控制面板
 	if config.GlobalConfig.EnableWebUI {
-		slog.Info("启用Web控制面板")
+		slog.Info("启用Web控制面板，路径：http://ip:port/admin")
 
 		// 设置模板加载 - 只有在启用Web控制面板时才加载
 		router.SetHTMLTemplate(template.Must(template.New("").ParseFS(configFS, "templates/*.html")))

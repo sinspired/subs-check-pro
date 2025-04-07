@@ -59,6 +59,7 @@ output-dir: ""
 
 # 是否启用Web控制面板
 # 如果为false，则不启动Web控制界面，仅启动订阅服务相关接口
+# 访问地址：http://127.0.0.1:8199/admin
 enable-web-ui: false
 
 # 填写Web控制面板的api-key

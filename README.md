@@ -10,6 +10,7 @@
 ![result](./doc/images/results.png)
 ![tgram](./doc/images/tgram.png)
 ![dingtalk](./doc/images/dingtalk.png)
+![admin](./doc/images/admin.png)
 
 ## 功能
 
@@ -33,6 +34,8 @@
 - 支持外部拉取结果（默认监听 :8199）（弃用）
 - 支持100+ 个通知渠道 通知检测结果
 - 内置sub-store程序（默认监听 :8299）
+- 支持WEB页面控制，无需登录服务器
+  - 访问地址：http://127.0.0.1:8199/admin
 
 ## 特点
 
