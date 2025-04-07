@@ -91,7 +91,11 @@ func (app *App) initConfigWatcher() error {
 							slog.Error(fmt.Sprintf("重新加载配置文件失败: %v", err))
 							return
 						}
-						app.interval = config.GlobalConfig.CheckInterval
+						if app.interval != config.GlobalConfig.CheckInterval {
+							slog.Warn(fmt.Sprintf("检测间隔时间发生变化，正在重置定时器: %v", config.GlobalConfig.CheckInterval))
+							app.interval = config.GlobalConfig.CheckInterval
+							app.ticker.Reset(time.Duration(app.interval) * time.Minute)
+						}
 					})
 				}
 			case err, ok := <-watcher.Errors:

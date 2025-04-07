@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	"github.com/beck-8/subs-check/app/monitor"
@@ -23,6 +24,9 @@ type App struct {
 	configPath string
 	interval   int
 	watcher    *fsnotify.Watcher
+	checkChan  chan struct{} // 触发检测的通道
+	checking   atomic.Bool   // 检测状态标志
+	ticker     *time.Ticker
 }
 
 // New 创建新的应用实例
@@ -32,6 +36,7 @@ func New() *App {
 
 	return &App{
 		configPath: *configPath,
+		checkChan:  make(chan struct{}),
 	}
 }
 
@@ -79,21 +84,59 @@ func (app *App) Initialize() error {
 func (app *App) Run() {
 	defer func() {
 		app.watcher.Close()
+		if app.ticker != nil {
+			app.ticker.Stop()
+		}
 	}()
 
 	slog.Info(fmt.Sprintf("进度展示: %v", config.GlobalConfig.PrintProgress))
 
-	for {
-		if err := app.checkProxies(); err != nil {
-			slog.Error(fmt.Sprintf("检测代理失败: %v", err))
-			os.Exit(1)
-		}
+	// 初始化定时器
+	app.ticker = time.NewTicker(time.Duration(app.interval) * time.Minute)
+	// 首次立即执行检测
+	app.triggerCheck()
 
-		nextCheck := time.Now().Add(time.Duration(app.interval) * time.Minute)
-		slog.Info(fmt.Sprintf("下次检查时间: %s", nextCheck.Format("2006-01-02 15:04:05")))
-		debug.FreeOSMemory()
-		time.Sleep(time.Duration(app.interval) * time.Minute)
+	for {
+		select {
+		case <-app.ticker.C:
+			go app.triggerCheck()
+		case <-app.checkChan:
+			go app.triggerCheck()
+		}
 	}
+}
+
+// TriggerCheck 供外部调用的触发检测方法
+func (app *App) TriggerCheck() {
+	select {
+	case app.checkChan <- struct{}{}:
+		slog.Info("手动触发检测")
+	default:
+		slog.Warn("已有检测正在进行，忽略本次触发")
+	}
+}
+
+// triggerCheck 内部检测方法
+func (app *App) triggerCheck() {
+	// 如果已经在检测中，直接返回
+	if !app.checking.CompareAndSwap(false, true) {
+		slog.Warn("已有检测正在进行，跳过本次检测")
+		return
+	}
+	defer app.checking.Store(false)
+
+	if err := app.checkProxies(); err != nil {
+		slog.Error(fmt.Sprintf("检测代理失败: %v", err))
+		os.Exit(1)
+	}
+
+	// 检测完成后重置定时器
+	if app.ticker != nil {
+		app.ticker.Reset(time.Duration(app.interval) * time.Minute)
+	}
+	nextCheck := time.Now().Add(time.Duration(app.interval) * time.Minute)
+	slog.Info(fmt.Sprintf("下次检查时间: %s", nextCheck.Format("2006-01-02 15:04:05")))
+	debug.FreeOSMemory()
 }
 
 // checkProxies 执行代理检测
