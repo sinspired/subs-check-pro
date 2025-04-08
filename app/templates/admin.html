@@ -251,7 +251,7 @@
                         </div>
                         <div class="progress-info">
                             <div>成功节点: <span id="successText">N/A</span></div>
-                            <div><span id="successPercent">N/A</span></div>
+                            <div><span id="processPercent">N/A</span></div>
                         </div>
                         <div class="progress">
                             <div id="progressBarSuccess" class="progress-bar progress-bar-success" role="progressbar" style="width: 0%"></div>
@@ -647,8 +647,8 @@
         
         // 更新进度条
         function updateProgressBar(total, processed, available) {
-            // 计算检测进度百分比
-            const percentTotal = total > 0 ? Math.floor((processed / total) * 100) : 0;
+            // 计算检测进度百分比，保留一位小数
+            const percentTotal = total > 0 ? (processed / total * 100).toFixed(1) : 0;
             
             // 更新总进度文本
             const progressText = document.getElementById('progressText');
@@ -658,21 +658,21 @@
             const progressPercent = document.getElementById('progressPercent');
             progressPercent.textContent = `${percentTotal}%`;
             
+            // 同时更新显示的处理进度百分比
+            const processPercent = document.getElementById('processPercent');
+            processPercent.textContent = `${percentTotal}%`;
+            
             // 更新总进度条
             const progressBarTotal = document.getElementById('progressBarTotal');
             progressBarTotal.style.width = `${percentTotal}%`;
             progressBarTotal.setAttribute('aria-valuenow', percentTotal);
             
-            // 计算成功率百分比
-            const percentSuccess = total > 0 ? Math.floor((available / total) * 100) : 0;
+            // 计算成功率百分比，保留一位小数
+            const percentSuccess = total > 0 ? (available / total * 100).toFixed(1) : 0;
             
             // 更新成功文本
             const successText = document.getElementById('successText');
             successText.textContent = `${available}/${total}`;
-            
-            // 更新成功百分比文本
-            const successPercent = document.getElementById('successPercent');
-            successPercent.textContent = `${percentSuccess}%`;
             
             // 更新成功进度条
             const progressBarSuccess = document.getElementById('progressBarSuccess');
@@ -713,8 +713,8 @@
                         // 显示N/A
                         document.getElementById('progressText').textContent = 'N/A';
                         document.getElementById('progressPercent').textContent = 'N/A';
+                        document.getElementById('processPercent').textContent = 'N/A';
                         document.getElementById('successText').textContent = 'N/A';
-                        document.getElementById('successPercent').textContent = 'N/A';
                         document.getElementById('progressBarTotal').style.width = '0%';
                         document.getElementById('progressBarSuccess').style.width = '0%';
                     }
@@ -733,8 +733,8 @@
                 // 显示N/A
                 document.getElementById('progressText').textContent = 'N/A';
                 document.getElementById('progressPercent').textContent = 'N/A';
+                document.getElementById('processPercent').textContent = 'N/A';
                 document.getElementById('successText').textContent = 'N/A';
-                document.getElementById('successPercent').textContent = 'N/A';
                 document.getElementById('progressBarTotal').style.width = '0%';
                 document.getElementById('progressBarSuccess').style.width = '0%';
             });
