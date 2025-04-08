@@ -34,15 +34,20 @@ type Config struct {
 	SubStorePort       string   `yaml:"sub-store-port"`
 	MihomoOverwriteUrl string   `yaml:"mihomo-overwrite-url"`
 	MediaCheck         bool     `yaml:"media-check"`
+	Platforms          []string `yaml:"platforms"`
 	SuccessLimit       int32    `yaml:"success-limit"`
 	NodePrefix         string   `yaml:"node-prefix"`
+	EnableWebUI        bool     `yaml:"enable-web-ui"`
+	APIKey             string   `yaml:"api-key"`
+	GithubProxy        string   `yaml:"github-proxy"`
 }
 
 var GlobalConfig = &Config{
 	// 新增配置，给未更改配置文件的用户一个默认值
 	ListenPort:         ":8199",
 	NotifyTitle:        "🔔 节点状态更新",
-	MihomoOverwriteUrl: "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml",
+	MihomoOverwriteUrl: "http://127.0.0.1:8199/sub/ACL4SSR_Online_Full.yaml",
+	Platforms:          []string{"openai", "youtube", "netflix", "disney", "gemini", "iprisk"},
 }
 
 //go:embed config.example.yaml

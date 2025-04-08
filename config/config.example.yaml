@@ -36,6 +36,13 @@ node-prefix: ""
 
 # 是否开启流媒体检测，其中IP欺诈依赖重命名
 media-check: false
+platforms:
+  - openai
+  - youtube
+  - netflix
+  - disney
+  - gemini
+  - iprisk
 
 # 保留之前测试成功的节点
 # 如果为true，则保留之前测试成功的节点，这样就不会因为上游链接更新，导致可用的节点被清除掉
@@ -49,6 +56,14 @@ success-limit: 0
 # 输出目录
 # 如果为空，则为程序所在目录的config目录
 output-dir: ""
+
+# 是否启用Web控制面板
+# 如果为false，则不启动Web控制界面，仅启动订阅服务相关接口
+# 访问地址：http://127.0.0.1:8199/admin
+enable-web-ui: false
+
+# 填写Web控制面板的api-key
+api-key: "subs-check-api-key"
 
 # 填写搭建的apprise API server 地址
 # https://notify.xxxx.us.kg/notify
@@ -71,7 +86,7 @@ sub-store-port: ":8299"
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
 # 防止网络不好，所以现在内置，依赖:8199端口
 # 如果你想替换其他的自定义覆写文件，自己命名后放在output目录，然后更改此URL后缀即可
-mihomo-overwrite-url: "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml"
+mihomo-overwrite-url: "http://127.0.0.1:8199/sub/ACL4SSR_Online_Full.yaml"
 
 # mihomo api url(测试完成后自动更新mihomo订阅)
 mihomo-api-url: ""
@@ -105,6 +120,10 @@ worker-token: 1234567890
 
 # 重试次数(获取订阅失败后重试次数)
 sub-urls-retry: 3
+
+# Github Proxy，获取订阅使用，结尾要带的 /
+# github-proxy: "https://ghfast.top/"
+github-proxy: ""
 
 # 订阅地址 支持 clash/mihomo/v2ray/base64 格式的订阅链接
 # 如果用户想使用clash类型，那可以在支持的订阅链接结尾加上 &flag=clash.meta
@@ -145,8 +164,3 @@ sub-urls:
   - "https://raw.githubusercontent.com/ripaojiedian/freenode/main/clash"
   - "https://raw.githubusercontent.com/go4sharing/sub/main/sub.yaml"
   - "https://raw.githubusercontent.com/mfuu/v2ray/master/clash.yaml"
-  - "https://sub.reajason.eu.org/clash.yaml"
-  - "https://proxypool.link/trojan/sub"
-  - "https://proxypool.link/vmess/sub"
-  - "https://mxlsub.me/newfull"
-  - "https://igdux.top/5Hna"

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,7 +113,7 @@ func GetProxies() ([]map[string]any, error) {
 					proxyChan <- proxyMap
 				}
 			}
-		}(subUrl)
+		}(warpUrl(subUrl))
 	}
 
 	// 等待所有工作协程完成
@@ -165,4 +166,12 @@ func GetDateFromSubs(subUrl string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("重试%d次后失败: %v", maxRetries, lastErr)
+}
+
+func warpUrl(url string) string {
+	// 如果url中以https://raw.githubusercontent.com开头，那么就使用github代理
+	if strings.HasPrefix(url, "https://raw.githubusercontent.com") {
+		return config.GlobalConfig.GithubProxy + url
+	}
+	return url
 }

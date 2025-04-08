@@ -1,20 +1,23 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime"
 	"strings"
-	"time"
 
+	"github.com/beck-8/subs-check/app"
 	"github.com/lmittmann/tint"
 	mihomoLog "github.com/metacubex/mihomo/log"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var CurrentCommit = "unknown"
+
+var TempLog string
 
 func init() {
 	// 设置依赖库日志级别
@@ -24,11 +27,34 @@ func init() {
 	// 获取日志级别
 	logLevel := getLogLevel()
 
-	// 创建带有颜色金额日志级别的 Handler
-	handler := tint.NewHandler(os.Stdout, &tint.Options{
+	// 配置日志文件
+	fileLogger := &lumberjack.Logger{
+		Filename:   app.TempLog(),
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     7,
+	}
+
+	// 创建两个单独的handler
+	// 1. 终端输出 - 带颜色
+	consoleHandler := tint.NewHandler(os.Stdout, &tint.Options{
 		Level:      logLevel,
 		TimeFormat: "2006-01-02 15:04:05",
 	})
+
+	// 2. 文件输出 - 不带颜色
+	fileHandler := tint.NewHandler(fileLogger, &tint.Options{
+		Level:      logLevel,
+		TimeFormat: "2006-01-02 15:04:05",
+		NoColor:    true, // 禁用颜色
+	})
+
+	// 创建一个自定义的Slog处理器，将日志同时发送到两个处理器
+	handler := &multiHandler{
+		console: consoleHandler,
+		file:    fileHandler,
+	}
+
 	logger := slog.New(handler)
 
 	// 设置为全局日志记录器
@@ -51,44 +77,6 @@ func init() {
 			}
 		}()
 	}
-	// 添加内存使用情况监控
-	if strings.ToLower(os.Getenv("SUB_CHECK_MEM_MONITOR")) != "" {
-		go func() {
-			var m runtime.MemStats
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-
-			for range ticker.C {
-				runtime.ReadMemStats(&m)
-				slog.Info("内存使用情况",
-					"Alloc", formatBytes(m.Alloc),
-					"TotalAlloc", formatBytes(m.TotalAlloc),
-					"Sys", formatBytes(m.Sys),
-					"HeapAlloc", formatBytes(m.HeapAlloc),
-					"HeapSys", formatBytes(m.HeapSys),
-					"HeapInuse", formatBytes(m.HeapInuse),
-					"HeapIdle", formatBytes(m.HeapIdle),
-					"HeapReleased", formatBytes(m.HeapReleased),
-					"HeapObjects", m.HeapObjects,
-					"StackInuse", formatBytes(m.StackInuse),
-					"StackSys", formatBytes(m.StackSys),
-					"MSpanInuse", formatBytes(m.MSpanInuse),
-					"MSpanSys", formatBytes(m.MSpanSys),
-					"MCacheInuse", formatBytes(m.MCacheInuse),
-					"MCacheSys", formatBytes(m.MCacheSys),
-					"BuckHashSys", formatBytes(m.BuckHashSys),
-					"GCSys", formatBytes(m.GCSys),
-					"OtherSys", formatBytes(m.OtherSys),
-					"NextGC", formatBytes(m.NextGC),
-					"LastGC", time.Unix(0, int64(m.LastGC)).Format("15:04:05"),
-					"PauseTotalNs", m.PauseTotalNs,
-					"NumGC", m.NumGC,
-					"NumForcedGC", m.NumForcedGC,
-					"GCCPUFraction", m.GCCPUFraction,
-				)
-			}
-		}()
-	}
 }
 
 func getLogLevel() slog.Level {
@@ -107,16 +95,39 @@ func getLogLevel() slog.Level {
 	}
 }
 
-// formatBytes 将字节数格式化为人类可读的形式
-func formatBytes(bytes uint64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+// 多输出处理器 - 简化版本
+type multiHandler struct {
+	console slog.Handler
+	file    slog.Handler
+}
+
+func (h *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.console.Enabled(ctx, level) || h.file.Enabled(ctx, level)
+}
+
+func (h *multiHandler) Handle(ctx context.Context, r slog.Record) error {
+	// 复制记录，避免竞态条件
+	r2 := r.Clone()
+
+	// 终端输出 - 带颜色
+	if err := h.console.Handle(ctx, r); err != nil {
+		return err
 	}
-	div, exp := uint64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+
+	// 文件输出 - 不带颜色
+	return h.file.Handle(ctx, r2)
+}
+
+func (h *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &multiHandler{
+		console: h.console.WithAttrs(attrs),
+		file:    h.file.WithAttrs(attrs),
 	}
-	return fmt.Sprintf("%.2f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func (h *multiHandler) WithGroup(name string) slog.Handler {
+	return &multiHandler{
+		console: h.console.WithGroup(name),
+		file:    h.file.WithGroup(name),
+	}
 }

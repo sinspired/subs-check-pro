@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,10 @@ type Result struct {
 	Google     bool
 	Cloudflare bool
 	Disney     bool
+	Gemini     bool
+	IP         string
+	IPRisk     string
+	Country    string
 }
 
 // ProxyChecker 处理代理检测的主要结构体
@@ -43,6 +48,12 @@ type ProxyChecker struct {
 	tasks       chan map[string]any
 }
 
+var Progress atomic.Uint32
+var Available atomic.Uint32
+var ProxyCount atomic.Uint32
+
+var ForceClose atomic.Bool
+
 // NewProxyChecker 创建新的检测器实例
 func NewProxyChecker(proxyCount int) *ProxyChecker {
 	threadCount := config.GlobalConfig.Concurrent
@@ -50,6 +61,9 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 		threadCount = proxyCount
 	}
 
+	ProxyCount.Store(uint32(proxyCount))
+	Available.Store(0)
+	Progress.Store(0)
 	return &ProxyChecker{
 		results:     make([]Result, 0),
 		proxyCount:  proxyCount,
@@ -62,17 +76,21 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 // Check 执行代理检测的主函数
 func Check() ([]Result, error) {
 	proxyutils.ResetRenameCounter()
+	ForceClose.Store(false)
 
-	proxies, err := proxyutils.GetProxies()
-	if err != nil {
-		return nil, fmt.Errorf("获取节点失败: %w", err)
-	}
-	slog.Info(fmt.Sprintf("获取节点数量: %d", len(proxies)))
-
+	// 之前好的节点前置
+	var proxies []map[string]any
 	if config.GlobalConfig.KeepSuccessProxies {
 		slog.Info(fmt.Sprintf("添加之前测试成功的节点，数量: %d", len(config.GlobalProxies)))
 		proxies = append(proxies, config.GlobalProxies...)
 	}
+	tmp, err := proxyutils.GetProxies()
+	if err != nil {
+		return nil, fmt.Errorf("获取节点失败: %w", err)
+	}
+	proxies = append(proxies, tmp...)
+	slog.Info(fmt.Sprintf("获取节点数量: %d", len(proxies)))
+
 	// 重置全局节点
 	config.GlobalProxies = make([]map[string]any, 0)
 
@@ -170,18 +188,44 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	}
 
 	if config.GlobalConfig.MediaCheck {
-		// 执行其他平台检测
-		openai, _ := platfrom.CheckOpenai(httpClient.Client)
-		youtube, _ := platfrom.CheckYoutube(httpClient.Client)
-		netflix, _ := platfrom.CheckNetflix(httpClient.Client)
-		disney, _ := platfrom.CheckDisney(httpClient.Client)
-
-		res.Cloudflare = cloudflare
-		res.Google = google
-		res.Openai = openai
-		res.Youtube = youtube
-		res.Netflix = netflix
-		res.Disney = disney
+		// 遍历需要检测的平台
+		for _, platform := range config.GlobalConfig.Platforms {
+			switch platform {
+			case "openai":
+				if ok, _ := platfrom.CheckOpenai(httpClient.Client); ok {
+					res.Openai = true
+				}
+			case "youtube":
+				if ok, _ := platfrom.CheckYoutube(httpClient.Client); ok {
+					res.Youtube = true
+				}
+			case "netflix":
+				if ok, _ := platfrom.CheckNetflix(httpClient.Client); ok {
+					res.Netflix = true
+				}
+			case "disney":
+				if ok, _ := platfrom.CheckDisney(httpClient.Client); ok {
+					res.Disney = true
+				}
+			case "gemini":
+				if ok, _ := platfrom.CheckGemini(httpClient.Client); ok {
+					res.Gemini = true
+				}
+			case "iprisk":
+				country, ip := proxyutils.GetProxyCountry(httpClient.Client)
+				if ip != "" && country != "" {
+					res.IP = ip
+					res.Country = country
+				}
+				risk, err := platfrom.CheckIPRisk(httpClient.Client, ip)
+				if err == nil {
+					res.IPRisk = risk
+				} else {
+					// 失败的可能性高，所以放上日志
+					slog.Debug(fmt.Sprintf("查询IP风险失败: %v", err))
+				}
+			}
+		}
 	}
 
 	var speed int
@@ -199,54 +243,63 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 
 // updateProxyName 更新代理名称
 func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, speed int) {
-	var ipRisk string
 	// 以节点IP查询位置重命名节点
 	if config.GlobalConfig.RenameNode {
-		// mihomo底层内存泄漏马上解决了
-		country, ip := proxyutils.GetProxyCountry(httpClient.Client)
-		if country == "" {
-			country = "未识别"
-		}
-		res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(country)
-
-		if config.GlobalConfig.MediaCheck {
-			risk, err := platfrom.CheckIPRisk(httpClient.Client, ip)
-			if err == nil {
-				ipRisk = risk
-			} else {
-				slog.Debug(fmt.Sprintf("查询IP欺诈失败: %v", err))
+		if res.Country != "" {
+			res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(res.Country)
+		} else {
+			country, _ := proxyutils.GetProxyCountry(httpClient.Client)
+			if country == "" {
+				country = "未识别"
 			}
+			res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(country)
 		}
 	}
+
+	name := res.Proxy["name"].(string)
+
+	// 移除所有已有的标记（包括速度、IPRisk和平台标记）
+	name = regexp.MustCompile(`\s*\|(?:Netflix|Disney|Youtube|Openai|Gemini|\d+%|\s*⬇️\s*[\d.]+[KM]B/s)`).ReplaceAllString(name, "")
+	name = strings.TrimSpace(name)
+
+	var tags []string
 	// 获取速度
 	if config.GlobalConfig.SpeedTestUrl != "" {
 		var speedStr string
 		if speed < 1024 {
-			speedStr = fmt.Sprintf("%dKB/s", speed)
+			speedStr = fmt.Sprintf(" ⬇️ %dKB/s", speed)
 		} else {
-			speedStr = fmt.Sprintf("%.1fMB/s", float64(speed)/1024)
+			speedStr = fmt.Sprintf(" ⬇️ %.1fMB/s", float64(speed)/1024)
 		}
-		// 防止重复添加速度
-		res.Proxy["name"] = strings.Split(strings.TrimSpace(res.Proxy["name"].(string)), " | ⬇️ ")[0] + " | ⬇️ " + speedStr
+		tags = append(tags, speedStr)
 	}
 
-	if config.GlobalConfig.MediaCheck {
-		if ipRisk != "" {
-			res.Proxy["name"] = res.Proxy["name"].(string) + " |" + ipRisk
-		}
-		if res.Netflix {
-			res.Proxy["name"] = strings.ReplaceAll(strings.TrimSpace(res.Proxy["name"].(string)), "|Netflix", "") + "|Netflix"
-		}
-		if res.Disney {
-			res.Proxy["name"] = strings.ReplaceAll(strings.TrimSpace(res.Proxy["name"].(string)), "|Disney", "") + "|Disney"
-		}
-		if res.Youtube {
-			res.Proxy["name"] = strings.ReplaceAll(strings.TrimSpace(res.Proxy["name"].(string)), "|Youtube", "") + "|Youtube"
-		}
-		if res.Openai {
-			res.Proxy["name"] = strings.ReplaceAll(strings.TrimSpace(res.Proxy["name"].(string)), "|Openai", "") + "|Openai"
-		}
+	// 添加其他标记
+	if res.IPRisk != "" {
+		tags = append(tags, res.IPRisk)
 	}
+	if res.Netflix {
+		tags = append(tags, "Netflix")
+	}
+	if res.Disney {
+		tags = append(tags, "Disney")
+	}
+	if res.Youtube {
+		tags = append(tags, "Youtube")
+	}
+	if res.Openai {
+		tags = append(tags, "Openai")
+	}
+	if res.Gemini {
+		tags = append(tags, "Gemini")
+	}
+
+	// 将所有标记添加到名称中
+	if len(tags) > 0 {
+		name += " |" + strings.Join(tags, "|")
+	}
+
+	res.Proxy["name"] = name
 
 }
 
@@ -282,16 +335,22 @@ func (pc *ProxyChecker) showProgress(done chan bool) {
 // 辅助方法
 func (pc *ProxyChecker) incrementProgress() {
 	atomic.AddInt32(&pc.progress, 1)
+	Progress.Add(1)
 }
 
 func (pc *ProxyChecker) incrementAvailable() {
 	atomic.AddInt32(&pc.available, 1)
+	Available.Add(1)
 }
 
 // distributeProxies 分发代理任务
 func (pc *ProxyChecker) distributeProxies(proxies []map[string]any) {
 	for _, proxy := range proxies {
 		if config.GlobalConfig.SuccessLimit > 0 && atomic.LoadInt32(&pc.available) >= config.GlobalConfig.SuccessLimit {
+			break
+		}
+		if ForceClose.Load() {
+			slog.Warn("收到强制关闭信号，停止派发任务")
 			break
 		}
 		pc.tasks <- proxy

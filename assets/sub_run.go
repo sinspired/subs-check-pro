@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,7 +86,20 @@ func startSubStore() error {
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
 
-	// 应该早做这件事的，现在有点不兼容，所以向下兼容
+	// 检查MihomoOverwriteUrl是否包含本地IP，如果是则移除代理环境变量
+	cleanProxyEnv := false
+	if config.GlobalConfig.MihomoOverwriteUrl != "" {
+		parsedURL, err := url.Parse(config.GlobalConfig.MihomoOverwriteUrl)
+		if err == nil {
+			host := parsedURL.Hostname()
+			if isLocalIP(host) {
+				cleanProxyEnv = true
+				slog.Debug("MihomoOverwriteUrl contains local IP, removing proxy environment variables")
+			}
+		}
+	}
+
+	// ipv4/ipv6 都支持
 	hostPort := strings.Split(config.GlobalConfig.SubStorePort, ":")
 	if len(hostPort) == 2 {
 		cmd.Env = append(os.Environ(),
@@ -97,6 +112,26 @@ func startSubStore() error {
 		return fmt.Errorf("invalid port format: %s", config.GlobalConfig.SubStorePort)
 	}
 
+	// 如果MihomoOverwriteUrl包含本地IP，则移除所有代理环境变量
+	if cleanProxyEnv {
+		filteredEnv := make([]string, 0, len(cmd.Env))
+		proxyVars := []string{"http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}
+
+		for _, env := range cmd.Env {
+			isProxyVar := false
+			for _, proxyVar := range proxyVars {
+				if strings.HasPrefix(strings.ToLower(env), strings.ToLower(proxyVar)+"=") {
+					isProxyVar = true
+					break
+				}
+			}
+			if !isProxyVar {
+				filteredEnv = append(filteredEnv, env)
+			}
+		}
+		cmd.Env = filteredEnv
+	}
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("启动 sub-store 失败: %w", err)
 	}
@@ -105,6 +140,41 @@ func startSubStore() error {
 
 	// 等待程序结束
 	return cmd.Wait()
+}
+
+// isLocalIP 检查IP是否是本地IP（127.0.0.1或局域网IP）
+func isLocalIP(host string) bool {
+	// 检查是否是localhost或127.0.0.1
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+
+	// 检查IP是否有效
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+
+	// 检查是否是私有IP范围
+	privateIPBlocks := []string{
+		"10.0.0.0/8",     // 10.0.0.0 - 10.255.255.255
+		"172.16.0.0/12",  // 172.16.0.0 - 172.31.255.255
+		"192.168.0.0/16", // 192.168.0.0 - 192.168.255.255
+		"169.254.0.0/16", // 169.254.0.0 - 169.254.255.255
+		"fd00::/8",       // fd00:: - fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+	}
+
+	for _, block := range privateIPBlocks {
+		_, ipNet, err := net.ParseCIDR(block)
+		if err != nil {
+			continue
+		}
+		if ipNet.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func decodeZstd(nodePath, jsPath, overYamlPath string) error {
