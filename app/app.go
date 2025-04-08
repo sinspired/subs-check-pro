@@ -78,6 +78,8 @@ func (app *App) Initialize() error {
 	// 启动内存监控
 	monitor.StartMemoryMonitor()
 
+	// 设置信号处理器
+	utils.SetupSignalHandler()
 	return nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/beck-8/subs-check/check"
 	"github.com/beck-8/subs-check/config"
 	"github.com/beck-8/subs-check/save/method"
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,7 @@ func (app *App) initHttpServer() error {
 			// 状态相关API
 			api.GET("/status", app.getStatus)
 			api.POST("/trigger-check", app.triggerCheckHandler)
+			api.POST("/force-close", app.forceCloseHandler)
 
 			// 日志相关API
 			api.GET("/logs", app.getLogs)
@@ -143,6 +145,12 @@ func (app *App) getStatus(c *gin.Context) {
 func (app *App) triggerCheckHandler(c *gin.Context) {
 	app.TriggerCheck()
 	c.JSON(http.StatusOK, gin.H{"message": "已触发检测"})
+}
+
+// forceCloseHandler 强制关闭
+func (app *App) forceCloseHandler(c *gin.Context) {
+	check.ForceClose.Store(true)
+	c.JSON(http.StatusOK, gin.H{"message": "已强制关闭"})
 }
 
 // getLogs 获取最近日志

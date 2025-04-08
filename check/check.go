@@ -48,6 +48,8 @@ type ProxyChecker struct {
 	tasks       chan map[string]any
 }
 
+var ForceClose atomic.Bool
+
 // NewProxyChecker 创建新的检测器实例
 func NewProxyChecker(proxyCount int) *ProxyChecker {
 	threadCount := config.GlobalConfig.Concurrent
@@ -67,6 +69,7 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 // Check 执行代理检测的主函数
 func Check() ([]Result, error) {
 	proxyutils.ResetRenameCounter()
+	ForceClose.Store(false)
 
 	proxies, err := proxyutils.GetProxies()
 	if err != nil {
@@ -332,6 +335,10 @@ func (pc *ProxyChecker) incrementAvailable() {
 func (pc *ProxyChecker) distributeProxies(proxies []map[string]any) {
 	for _, proxy := range proxies {
 		if config.GlobalConfig.SuccessLimit > 0 && atomic.LoadInt32(&pc.available) >= config.GlobalConfig.SuccessLimit {
+			break
+		}
+		if ForceClose.Load() {
+			slog.Warn("收到强制关闭信号，停止派发任务")
 			break
 		}
 		pc.tasks <- proxy

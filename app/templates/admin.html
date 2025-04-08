@@ -177,9 +177,16 @@
                     <span class="config-path" title="{{.configPath}}">{{.configPath}}</span>
                 </div>
                 <div class="col-md-3 col-sm-6 status-item">
-                    <strong>当前状态:</strong> <span id="nextCheckTime">加载中...</span>
+                    <strong>当前状态:</strong> 
+                    <span id="statusContainer">
+                        <span id="statusIcon" class="bi me-1"></span>
+                        <span id="nextCheckTime">加载中...</span>
+                    </span>
                 </div>
                 <div class="col-md-4 col-sm-6 status-item text-md-end">
+                    <button id="forceClose" class="btn btn-danger btn-sm me-2">
+                        <i class="bi bi-power me-1"></i>强制关闭
+                    </button>
                     <button id="triggerCheck" class="btn btn-primary btn-sm">
                         <i class="bi bi-play-fill me-1"></i>立即检测
                     </button>
@@ -441,6 +448,48 @@
                 });
         });
         
+        // 强制关闭
+        document.getElementById('forceClose').addEventListener('click', function() {
+            if (!confirm('确定要强制关闭程序吗？这将立即终止所有正在进行的任务。')) {
+                return;
+            }
+            
+            const button = this;
+            const icon = button.querySelector('i');
+            const originalIcon = icon.className;
+            
+            // 替换图标并添加旋转动画
+            icon.className = 'bi bi-arrow-repeat me-1 rotate-animation';
+            button.disabled = true;
+            
+            fetch('/api/force-close', {
+                method: 'POST',
+                headers: addApiKeyHeader()
+            })
+            .then(response => {
+                if (handleUnauthorized(response, true)) {
+                    throw new Error('未授权');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // 什么都不做，只是发送请求
+            })
+            .catch(error => {
+                if (error.message !== '未授权') {
+                    console.error('强制关闭失败:', error);
+                    alert('强制关闭失败: ' + error.message);
+                }
+            })
+            .finally(() => {
+                // 还原按钮
+                setTimeout(() => {
+                    icon.className = originalIcon;
+                    button.disabled = false;
+                }, 500);
+            });
+        });
+        
         // 立即检测
         document.getElementById('triggerCheck').addEventListener('click', function() {
             const button = this;
@@ -559,13 +608,30 @@
             })
             .then(data => {
                 if (data) {
-                    const statusText = data.checking ? '正在检测中...' : '空闲';
-                    document.getElementById('nextCheckTime').textContent = statusText;
+                    const statusContainer = document.getElementById('statusContainer');
+                    const statusIcon = document.getElementById('statusIcon');
+                    const statusText = document.getElementById('nextCheckTime');
+                    
+                    if (data.checking) {
+                        statusContainer.className = 'text-primary';
+                        statusIcon.className = 'bi bi-arrow-repeat me-1 rotate-animation';
+                        statusText.textContent = '正在检测中...';
+                    } else {
+                        statusContainer.className = 'text-success';
+                        statusIcon.className = 'bi bi-check-circle me-1';
+                        statusText.textContent = '空闲';
+                    }
                 }
             })
             .catch(error => {
                 console.error('获取状态失败:', error);
-                document.getElementById('nextCheckTime').textContent = '获取状态失败';
+                const statusContainer = document.getElementById('statusContainer');
+                const statusIcon = document.getElementById('statusIcon');
+                const statusText = document.getElementById('nextCheckTime');
+                
+                statusContainer.className = 'text-danger';
+                statusIcon.className = 'bi bi-exclamation-triangle me-1';
+                statusText.textContent = '获取状态失败';
             });
         }
         
