@@ -33,6 +33,9 @@ func (app *App) initHttpServer() error {
 	router.StaticFile("/all.txt", saver.OutputPath+"/all.txt")
 	router.StaticFile("/mihomo.yaml", saver.OutputPath+"/mihomo.yaml")
 	router.StaticFile("/ACL4SSR_Online_Full.yaml", saver.OutputPath+"/ACL4SSR_Online_Full.yaml")
+	// CM佬用的布丁狗
+	router.StaticFile("/bdg.yaml", saver.OutputPath+"/bdg.yaml")
+
 	router.Static("/sub/", saver.OutputPath)
 
 	// 根据配置决定是否启用Web控制面板
