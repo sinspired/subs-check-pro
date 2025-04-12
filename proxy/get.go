@@ -130,7 +130,7 @@ func GetDateFromSubs(subUrl string) ([]byte, error) {
 	var lastErr error
 
 	client := &http.Client{
-		Timeout: time.Duration(config.GlobalConfig.Timeout) * time.Millisecond,
+		Timeout: time.Duration(60) * time.Second,
 	}
 
 	for i := 0; i < maxRetries; i++ {

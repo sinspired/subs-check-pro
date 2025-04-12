@@ -5,7 +5,8 @@ import (
 )
 
 func DeduplicateProxies(proxies []map[string]any) []map[string]any {
-	seen := make(map[string]map[string]any)
+	seenKeys := make(map[string]bool)
+	result := make([]map[string]any, 0, len(proxies))
 
 	for _, proxy := range proxies {
 		server, _ := proxy["server"].(string)
@@ -20,12 +21,10 @@ func DeduplicateProxies(proxies []map[string]any) []map[string]any {
 		}
 
 		key := fmt.Sprintf("%s:%v:%s:%s", server, proxy["port"], servername, password)
-		seen[key] = proxy
-	}
-
-	result := make([]map[string]any, 0, len(seen))
-	for _, proxy := range seen {
-		result = append(result, proxy)
+		if !seenKeys[key] {
+			seenKeys[key] = true
+			result = append(result, proxy)
+		}
 	}
 
 	return result
