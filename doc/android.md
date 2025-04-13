@@ -17,10 +17,17 @@ pkg update && pkg add nodejs ca-certificates which -y
 
 ## 设置环境变量
 ```bash
+# 临时设置环境变量
 # 无Root权限的手机设置,有Root权限应该授权后无需设置
 export SSL_CERT_FILE="/data/data/com.termux/files/usr/etc/tls/cert.pem"
 
 export NODEBIN_PATH="$(which node)"
+```
+```bash
+# 设置持久环境变量，重新打开终端无需再次设置
+echo 'export SSL_CERT_FILE="/data/data/com.termux/files/usr/etc/tls/cert.pem"' >> ~/.bashrc
+echo 'export NODEBIN_PATH="$(which node)"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ## 开启热点
