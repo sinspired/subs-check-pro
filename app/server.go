@@ -41,7 +41,11 @@ func (app *App) initHttpServer() error {
 
 	// 根据配置决定是否启用Web控制面板
 	if config.GlobalConfig.EnableWebUI {
-		slog.Info("启用Web控制面板，路径：http://ip:port/admin")
+		if config.GlobalConfig.APIKey == "" {
+			config.GlobalConfig.APIKey = GenerateSimpleKey()
+			slog.Warn("未设置APIKey，已生成一个随机APIKey", "api-key", config.GlobalConfig.APIKey)
+		}
+		slog.Info("启用Web控制面板", "path", "http://ip:port/admin", "api-key", config.GlobalConfig.APIKey)
 
 		// 设置模板加载 - 只有在启用Web控制面板时才加载
 		router.SetHTMLTemplate(template.Must(template.New("").ParseFS(configFS, "templates/*.html")))
@@ -206,4 +210,8 @@ func ReadLastNLines(filePath string, n int) ([]string, error) {
 	start := count % n
 	result := append(ring[start:], ring[:start]...)
 	return result, nil
+}
+
+func GenerateSimpleKey() string {
+	return fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
 }

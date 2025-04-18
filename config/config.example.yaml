@@ -68,10 +68,10 @@ output-dir: ""
 # 是否启用Web控制面板
 # 如果为false，则不启动Web控制界面，仅启动订阅服务相关接口
 # 访问地址：http://127.0.0.1:8199/admin
-enable-web-ui: false
+enable-web-ui: true
 
-# 填写Web控制面板的api-key
-api-key: "subs-check-api-key"
+# 填写Web控制面板的api-key，如果为空，则自动生成
+api-key: ""
 
 # 填写搭建的apprise API server 地址
 # https://notify.xxxx.us.kg/notify
@@ -101,7 +101,7 @@ sub-store-path: ""
 # 如果你想替换其他的自定义覆写文件，自己命名后放在output目录，然后更改此URL后缀即可
 mihomo-overwrite-url: "http://127.0.0.1:8199/sub/ACL4SSR_Online_Full.yaml"
 
-# mihomo api url(测试完成后自动更新mihomo订阅)
+# mihomo api url(测试完成后自动更新mihomo订阅，使用场景有限)
 mihomo-api-url: ""
 
 # mihomo api secret
