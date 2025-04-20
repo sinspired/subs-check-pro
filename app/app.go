@@ -104,8 +104,12 @@ func (app *App) Run() {
 	// 设置初始定时器模式
 	app.setTimer()
 
-	// 首次立即执行检测
-	app.triggerCheck()
+	// 仅在cron表达式为空时，首次启动立即执行检测
+	if config.GlobalConfig.CronExpression != "" {
+		slog.Warn("使用cron表达式，首次启动不立即执行检测")
+	} else {
+		app.triggerCheck()
+	}
 
 	// 在主循环中处理手动触发
 	for range app.checkChan {
