@@ -30,7 +30,7 @@ body:
       description: 说明这个功能能解决什么问题或带来什么好处。
       placeholder: "例如：这能帮助我更高效地筛选可用节点。"
     validations:
-      required: false
+      required: true
   - type: textarea
     id: additional-info
     attributes:

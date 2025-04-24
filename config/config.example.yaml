@@ -74,6 +74,12 @@ enable-web-ui: true
 # 支持使用环境变量设置 API_KEY
 api-key: ""
 
+# 检测完成后执行的回调脚本路径
+# 脚本将在检测完成后执行，可用于自定义通知或其他操作
+# 例如: "/path/to/your/script.sh" 或 "C:\path\to\your\script.bat"
+# 请在脚本开头添加对应的：#!/bin/bash、#!/bin/sh、#!/usr/bin/env bash 等，编写标准的脚本
+callback-script: ""
+
 # 填写搭建的apprise API server 地址
 # https://notify.xxxx.us.kg/notify
 apprise-api-server: ""

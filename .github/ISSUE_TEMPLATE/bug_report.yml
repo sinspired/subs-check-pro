@@ -70,4 +70,4 @@ body:
       description: 可选：提供错误日志、终端输出或截图。
       placeholder: "请粘贴相关内容（移除敏感信息）"
     validations:
-      required: false
+      required: true
