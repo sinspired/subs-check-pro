@@ -13,7 +13,7 @@ RUN apk add --no-cache nodejs zstd && \
     esac
 RUN echo "Building commit: ${GITHUB_SHA:0:7}" && \
     go mod tidy && \
-    go build -ldflags="-s -w -X main.Version=${VERSION} -X main.CurrentCommit=${GITHUB_SHA:0:7}" -o main .
+    go build -ldflags="-s -w -X main.Version=${VERSION} -X main.CurrentCommit=${GITHUB_SHA:0:7}" -trimpath -o main .
 
 FROM alpine
 ENV TZ=Asia/Shanghai
