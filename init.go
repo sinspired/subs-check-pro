@@ -72,8 +72,8 @@ func init() {
 	if strings.ToLower(os.Getenv("SUB_CHECK_PPROF")) != "" {
 		// 在调试模式下启动 pprof 服务器
 		go func() {
-			slog.Info("Starting pprof server on localhost:61000")
-			if err := http.ListenAndServe("localhost:61000", nil); err != nil {
+			slog.Info("Starting pprof server on :61000")
+			if err := http.ListenAndServe(":61000", nil); err != nil {
 				slog.Error("Failed to start pprof server", "error", err)
 			}
 		}()
