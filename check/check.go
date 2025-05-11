@@ -15,7 +15,7 @@ import (
 
 	"log/slog"
 
-	"github.com/beck-8/subs-check/check/platfrom"
+	"github.com/beck-8/subs-check/check/platform"
 	"github.com/beck-8/subs-check/config"
 	proxyutils "github.com/beck-8/subs-check/proxy"
 	"github.com/metacubex/mihomo/adapter"
@@ -181,38 +181,38 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	}
 	defer httpClient.Close()
 
-	cloudflare, err := platfrom.CheckCloudflare(httpClient.Client)
+	cloudflare, err := platform.CheckCloudflare(httpClient.Client)
 	if err != nil || !cloudflare {
 		return nil
 	}
 
-	google, err := platfrom.CheckGoogle(httpClient.Client)
+	google, err := platform.CheckGoogle(httpClient.Client)
 	if err != nil || !google {
 		return nil
 	}
 
 	if config.GlobalConfig.MediaCheck {
 		// 遍历需要检测的平台
-		for _, platform := range config.GlobalConfig.Platforms {
-			switch platform {
+		for _, plat := range config.GlobalConfig.Platforms {
+			switch plat {
 			case "openai":
-				if ok, _ := platfrom.CheckOpenai(httpClient.Client); ok {
+				if ok, _ := platform.CheckOpenai(httpClient.Client); ok {
 					res.Openai = true
 				}
 			case "youtube":
-				if ok, _ := platfrom.CheckYoutube(httpClient.Client); ok {
+				if ok, _ := platform.CheckYoutube(httpClient.Client); ok {
 					res.Youtube = true
 				}
 			case "netflix":
-				if ok, _ := platfrom.CheckNetflix(httpClient.Client); ok {
+				if ok, _ := platform.CheckNetflix(httpClient.Client); ok {
 					res.Netflix = true
 				}
 			case "disney":
-				if ok, _ := platfrom.CheckDisney(httpClient.Client); ok {
+				if ok, _ := platform.CheckDisney(httpClient.Client); ok {
 					res.Disney = true
 				}
 			case "gemini":
-				if ok, _ := platfrom.CheckGemini(httpClient.Client); ok {
+				if ok, _ := platform.CheckGemini(httpClient.Client); ok {
 					res.Gemini = true
 				}
 			case "iprisk":
@@ -221,7 +221,7 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 					res.IP = ip
 					res.Country = country
 				}
-				risk, err := platfrom.CheckIPRisk(httpClient.Client, ip)
+				risk, err := platform.CheckIPRisk(httpClient.Client, ip)
 				if err == nil {
 					res.IPRisk = risk
 				} else {
@@ -234,7 +234,7 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 
 	var speed int
 	if config.GlobalConfig.SpeedTestUrl != "" {
-		speed, err = platfrom.CheckSpeed(httpClient.Client)
+		speed, err = platform.CheckSpeed(httpClient.Client)
 		if err != nil || speed < config.GlobalConfig.MinSpeed {
 			return nil
 		}

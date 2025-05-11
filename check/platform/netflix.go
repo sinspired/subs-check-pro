@@ -1,4 +1,4 @@
-package platfrom
+package platform
 
 import "net/http"
 
