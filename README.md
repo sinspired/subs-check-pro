@@ -231,16 +231,18 @@ docker run --name apprise \
 > 根据 [Apprise wiki](https://github.com/caronc/apprise/wiki) 编写发送通知的 URL，其中有关于如何设置每个通知渠道的详细文档和说明。
 
 ```yaml
-# Apprise API 服务器配置
+# 填写搭建的apprise API server 地址
+# https://notify.xxxx.us.kg/notify
 apprise-api-server: ""
-
-# 通知目标配置
-# 支持 100+ 个通知渠道，详见：https://github.com/caronc/apprise
+# 填写通知目标
+# 支持100+ 个通知渠道，详细格式请参照 https://github.com/caronc/apprise
 recipient-url: 
-  # Telegram 配置格式：tgram://<bot_token>/<chat_id>
-  - tgram://xxxxxx/-1002149239223
-  # 钉钉配置格式：dingtalk://<secret>@<dd_token>/<chat_id>
-  - dingtalk://xxxxxx@xxxxxxx/123123
+  # telegram格式：tgram://<bot_token>/<chat_id>
+  # - tgram://xxxxxx/-1002149239223
+  # 钉钉格式：dingtalk://<secret>@<dd_token>/<chat_id>
+  # - dingtalk://xxxxxx@xxxxxxx/123123
+# 自定义通知标题
+notify-title: "🔔 节点状态更新"
 ```
 
 ## 保存方法配置
