@@ -81,8 +81,8 @@ require (
 	github.com/metacubex/sing-shadowsocks2 v0.2.3 // indirect
 	github.com/metacubex/sing-vmess v0.2.1 // indirect
 	github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f // indirect
-	github.com/metacubex/tfo-go v0.0.0-20241231083714-66613d49c422 // indirect
-	github.com/metacubex/utls v1.7.0-alpha.2 // indirect
+	github.com/metacubex/tfo-go v0.0.0-20250503140532-decbcfccbfdf // indirect
+	github.com/metacubex/utls v1.7.3 // indirect
 	github.com/metacubex/wireguard-go v0.0.0-20240922131502-c182e7471181 // indirect
 	github.com/miekg/dns v1.1.63 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -128,4 +128,4 @@ require (
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
-replace github.com/metacubex/mihomo => github.com/beck-8/mihomo v1.19.5-0.20250513020202-e50cbbdb35aa
+replace github.com/metacubex/mihomo => github.com/beck-8/mihomo v1.19.5-0.20250517075509-9a8c29a9f58c

@@ -10,8 +10,8 @@ github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sx
 github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
-github.com/beck-8/mihomo v1.19.5-0.20250513020202-e50cbbdb35aa h1:KtllXSK/gvfI6hczP2iuonemmi8HxS8M7ZlmdAkuNag=
-github.com/beck-8/mihomo v1.19.5-0.20250513020202-e50cbbdb35aa/go.mod h1:l5uxMpnANXUzuH/v1+tiq9ugktt2B/7ub0vqZLxxc8k=
+github.com/beck-8/mihomo v1.19.5-0.20250517075509-9a8c29a9f58c h1:0JZeKS7PG03ikiMQmJjpQDSxLtEgykhYjn+GTKsTr5E=
+github.com/beck-8/mihomo v1.19.5-0.20250517075509-9a8c29a9f58c/go.mod h1:EAxqsPPEVuM/A1rcF4SmRUAUX+Rhq/sKEIPnTZ5tH4g=
 github.com/blang/semver v3.5.1+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
 github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
@@ -162,10 +162,10 @@ github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f h1:Sr/DYK
 github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f/go.mod h1:jpAkVLPnCpGSfNyVmj6Cq4YbuZsFepm/Dc+9BAOcR80=
 github.com/metacubex/smux v0.0.0-20250503055512-501391591dee h1:lp6hJ+4wCLZu113awp7P6odM2okB5s60HUyF0FMqKmo=
 github.com/metacubex/smux v0.0.0-20250503055512-501391591dee/go.mod h1:4bPD8HWx9jPJ9aE4uadgyN7D1/Wz3KmPy+vale8sKLE=
-github.com/metacubex/tfo-go v0.0.0-20241231083714-66613d49c422 h1:zGeQt3UyNydIVrMRB97AA5WsYEau/TyCnRtTf1yUmJY=
-github.com/metacubex/tfo-go v0.0.0-20241231083714-66613d49c422/go.mod h1:l9oLnLoEXyGZ5RVLsh7QCC5XsouTUyKk4F2nLm2DHLw=
-github.com/metacubex/utls v1.7.0-alpha.2 h1:kLRg6zDV12R1uclL5qW9Tx4RD6ztGIIrTZWY5zrJXCg=
-github.com/metacubex/utls v1.7.0-alpha.2/go.mod h1:oknYT0qTOwE4hjPmZOEpzVdefnW7bAdGLvZcqmk4TLU=
+github.com/metacubex/tfo-go v0.0.0-20250503140532-decbcfccbfdf h1:LwID1wz4tzypidd412dd4dC1H0m1TgRCQ/XvRvMJDFM=
+github.com/metacubex/tfo-go v0.0.0-20250503140532-decbcfccbfdf/go.mod h1:l9oLnLoEXyGZ5RVLsh7QCC5XsouTUyKk4F2nLm2DHLw=
+github.com/metacubex/utls v1.7.3 h1:yDcMEWojFh+t8rU9X0HPcZDPAoFze/rIIyssqivzj8A=
+github.com/metacubex/utls v1.7.3/go.mod h1:oknYT0qTOwE4hjPmZOEpzVdefnW7bAdGLvZcqmk4TLU=
 github.com/metacubex/wireguard-go v0.0.0-20240922131502-c182e7471181 h1:hJLQviGySBuaynlCwf/oYgIxbVbGRUIKZCxdya9YrbQ=
 github.com/metacubex/wireguard-go v0.0.0-20240922131502-c182e7471181/go.mod h1:phewKljNYiTVT31Gcif8RiCKnTUOgVWFJjccqYM8s+Y=
 github.com/miekg/dns v1.1.63 h1:8M5aAw6OMZfFXTT7K5V0Eu5YiiL8l7nUAkyN6C9YwaY=
