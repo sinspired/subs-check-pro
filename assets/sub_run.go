@@ -109,7 +109,8 @@ func startSubStore() error {
 
 	// ipv4/ipv6 都支持
 	hostPort := strings.Split(config.GlobalConfig.SubStorePort, ":")
-	if len(hostPort) == 2 {
+	// host可以为空，port不能为空
+	if len(hostPort) == 2 && hostPort[1] != "" {
 		cmd.Env = append(os.Environ(),
 			fmt.Sprintf("SUB_STORE_BACKEND_API_HOST=%s", hostPort[0]),
 			fmt.Sprintf("SUB_STORE_BACKEND_API_PORT=%s", hostPort[1]),
@@ -117,7 +118,7 @@ func startSubStore() error {
 	} else if len(hostPort) == 1 {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("SUB_STORE_BACKEND_API_PORT=%s", hostPort[0])) // 设置端口
 	} else {
-		return fmt.Errorf("invalid port format: %s", config.GlobalConfig.SubStorePort)
+		return fmt.Errorf("sub-store-port invalid port format: %s", config.GlobalConfig.SubStorePort)
 	}
 
 	// https://hub.docker.com/r/xream/sub-store
