@@ -85,6 +85,7 @@ api-key: ""
 # 脚本将在检测完成后执行，可用于自定义通知或其他操作
 # 例如: "/path/to/your/script.sh" 或 'C:\path\to\your\script.bat'
 # Linux请在脚本开头添加对应的：#!/bin/bash、#!/bin/sh、#!/usr/bin/env bash 等，编写标准的脚本
+# 注意如果使用docker，目前docker使用的alpine，只有sh，不支持bash
 callback-script: ""
 
 # 填写搭建的apprise API server 地址
