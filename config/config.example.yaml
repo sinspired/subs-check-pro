@@ -123,7 +123,7 @@ mihomo-api-url: ""
 mihomo-api-secret: ""
 
 # 保存方法
-# 目前支持的保存方法: r2, local, gist, webdav
+# 目前支持的保存方法: r2, local, gist, webdav, minio
 save-method: local
 
 # webdav
