@@ -123,7 +123,7 @@ mihomo-api-url: ""
 mihomo-api-secret: ""
 
 # 保存方法
-# 目前支持的保存方法: r2, local, gist, webdav
+# 目前支持的保存方法: r2, local, gist, webdav, minio
 save-method: local
 
 # webdav
@@ -145,6 +145,19 @@ worker-url: https://example.worker.dev
 
 # Worker令牌
 worker-token: 1234567890
+
+# 将测速结果推送到Minio的地址
+minio-endpoint: "127.0.0.1:9000"
+
+# Minio的访问凭证
+minio-access-id: "123"
+minio-secret-key: "123"
+
+# Minio的Bucket名称
+minio-bucket: "public"
+
+# Minio是否使用SSL,如果用域名，可以设置为true
+minio-use-ssl: false
 
 # 重试次数(获取订阅失败后重试次数)
 sub-urls-retry: 3

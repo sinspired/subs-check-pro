@@ -23,6 +23,11 @@ type Config struct {
 	GithubAPIMirror    string   `yaml:"github-api-mirror"`
 	WorkerURL          string   `yaml:"worker-url"`
 	WorkerToken        string   `yaml:"worker-token"`
+	MinioEndpoint      string   `yaml:"minio-endpoint"`
+	MinioAccessID      string   `yaml:"minio-access-id"`
+	MinioSecretKey     string   `yaml:"minio-secret-key"`
+	MinioBucket        string   `yaml:"minio-bucket"`
+	MinioUseSSL        bool     `yaml:"minio-use-ssl"`
 	SubUrlsReTry       int      `yaml:"sub-urls-retry"`
 	SubUrls            []string `yaml:"sub-urls"`
 	MihomoApiUrl       string   `yaml:"mihomo-api-url"`
