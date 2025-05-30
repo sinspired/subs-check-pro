@@ -6,12 +6,12 @@ import (
 	"github.com/beck-8/subs-check/config"
 )
 
-func TestUploadToMinio(t *testing.T) {
-	config.GlobalConfig.MinioEndpoint = "127.0.0.1:9000"
-	config.GlobalConfig.MinioAccessID = "123"
-	config.GlobalConfig.MinioSecretKey = "123"
-	config.GlobalConfig.MinioBucket = "public"
-	config.GlobalConfig.MinioUseSSL = false
+func TestUploadToS3(t *testing.T) {
+	config.GlobalConfig.S3Endpoint = "127.0.0.1:9000"
+	config.GlobalConfig.S3AccessID = "123"
+	config.GlobalConfig.S3SecretKey = "123"
+	config.GlobalConfig.S3Bucket = "public"
+	config.GlobalConfig.S3UseSSL = false
 	type args struct {
 		data     []byte
 		filename string
@@ -32,8 +32,8 @@ func TestUploadToMinio(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := UploadToMinio(tt.args.data, tt.args.filename); (err != nil) != tt.wantErr {
-				t.Errorf("UploadToMinio() error = %v, wantErr %v", err, tt.wantErr)
+			if err := UploadToS3(tt.args.data, tt.args.filename); (err != nil) != tt.wantErr {
+				t.Errorf("UploadToS3() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

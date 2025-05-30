@@ -23,11 +23,12 @@ type Config struct {
 	GithubAPIMirror    string   `yaml:"github-api-mirror"`
 	WorkerURL          string   `yaml:"worker-url"`
 	WorkerToken        string   `yaml:"worker-token"`
-	MinioEndpoint      string   `yaml:"minio-endpoint"`
-	MinioAccessID      string   `yaml:"minio-access-id"`
-	MinioSecretKey     string   `yaml:"minio-secret-key"`
-	MinioBucket        string   `yaml:"minio-bucket"`
-	MinioUseSSL        bool     `yaml:"minio-use-ssl"`
+	S3Endpoint         string   `yaml:"s3-endpoint"`
+	S3AccessID         string   `yaml:"s3-access-id"`
+	S3SecretKey        string   `yaml:"s3-secret-key"`
+	S3Bucket           string   `yaml:"s3-bucket"`
+	S3UseSSL           bool     `yaml:"s3-use-ssl"`
+	S3BucketLookup     string   `yaml:"s3-bucket-lookup"`
 	SubUrlsReTry       int      `yaml:"sub-urls-retry"`
 	SubUrls            []string `yaml:"sub-urls"`
 	MihomoApiUrl       string   `yaml:"mihomo-api-url"`

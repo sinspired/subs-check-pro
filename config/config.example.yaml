@@ -3,10 +3,8 @@ print-progress: true
 
 # 并发线程数
 concurrent: 20
-
 # 检查间隔(分钟)
 check-interval: 30
-
 # cron表达式，如果配置了此项，将忽略check-interval
 # 支持标准cron表达式，如：
 # "0 */2 * * *" 表示每2小时的整点执行
@@ -17,21 +15,16 @@ check-interval: 30
 
 # 超时时间(毫秒)(节点的最大延迟)
 timeout: 5000
-
 # 测速地址(注意 并发数*节点速度<最大网速 否则测速结果不准确)
 # 尽量不要使用Speedtest，Cloudflare提供的下载链接，因为很多节点屏蔽测速网站
 # 如果找不到稳定的测速地址，可以自建测速地址
 speed-test-url: https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z
-
 # 最低测速结果舍弃(KB/s)
 min-speed: 1024
-
 # 下载测试时间(s)(与下载链接大小相关，默认最大测试10s)
 download-timeout: 10
-
 # 单节点测速下载数据大小(MB)限制，0为不限
-download-mb: 0
-
+download-mb: 20
 # 总下载速度速度限制(MB/s)，0为不限
 # 限制与实际情况可能会有一定误差
 total-speed-limit: 0
@@ -45,7 +38,6 @@ listen-port: ":8199"
 # 以节点IP查询位置重命名节点
 # 质量差的节点可能造成IP查询失败，造成整体检查速度稍微变慢，默认true
 rename-node: true
-
 # 节点前缀，依赖rename-node为true才生效
 node-prefix: ""
 
@@ -62,7 +54,6 @@ platforms:
 # 保留之前测试成功的节点
 # 如果为true，则保留之前测试成功的节点，这样就不会因为上游链接更新，导致可用的节点被清除掉
 keep-success-proxies: false
-
 # 保存几个成功的节点，为0代表不限制 
 # 如果你的并发数量超过这个参数，那么成功的结果可能会大于这个数值
 # success-limit <= success <= success-limit+concurrent
@@ -76,7 +67,6 @@ output-dir: ""
 # 如果为false，则不启动Web控制界面，仅启动订阅服务相关接口
 # 访问地址：http://127.0.0.1:8199/admin
 enable-web-ui: true
-
 # 填写Web控制面板的api-key，如果为空，则自动生成
 # 配置文件为空时，支持使用环境变量设置 API_KEY
 api-key: ""
@@ -105,12 +95,10 @@ notify-title: "🔔 节点状态更新"
 # 更新需重启程序，不可监听局域网IP，只有三种写法 :8299, 127.0.0.1:8299, 0.0.0.0:8299
 # sub-store-port: ":8299"
 sub-store-port: ":8299"
-
 # sub-store自定义访问路径，必须以/开头，后续访问订阅也要带上此路径
 # 设置path之后，还可以开启订阅分享功能，无需暴露真实的path
 # sub-store-path: "/path"
 sub-store-path: ""
-
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
 # 防止网络不好，所以现在内置，依赖:8199端口
 # 如果你想替换其他的自定义覆写文件，自己命名后放在output目录，然后更改此URL后缀即可
@@ -118,12 +106,11 @@ mihomo-overwrite-url: "http://127.0.0.1:8199/sub/ACL4SSR_Online_Full.yaml"
 
 # mihomo api url(测试完成后自动更新mihomo订阅，使用场景有限不要使用)
 mihomo-api-url: ""
-
 # mihomo api secret
 mihomo-api-secret: ""
 
 # 保存方法
-# 目前支持的保存方法: r2, local, gist, webdav, minio
+# 目前支持的保存方法: r2, local, gist, webdav, s3
 save-method: local
 
 # webdav
@@ -133,39 +120,34 @@ webdav-password: "admin"
 
 # gist id
 github-gist-id: ""
-
 # github token
 github-token: ""
-
 # github api mirror
 github-api-mirror: ""
 
 # 将测速结果推送到Worker的地址
 worker-url: https://example.worker.dev
-
 # Worker令牌
 worker-token: 1234567890
 
-# 将测速结果推送到Minio的地址
-minio-endpoint: "127.0.0.1:9000"
-
-# Minio的访问凭证
-minio-access-id: "123"
-minio-secret-key: "123"
-
-# Minio的Bucket名称
-minio-bucket: "public"
-
-# Minio是否使用SSL,如果用域名，可以设置为true
-minio-use-ssl: false
+# 将测速结果推送到S3/Minio的地址
+s3-endpoint: "127.0.0.1:9000"
+# S3的访问凭证
+s3-access-id: "ak"
+s3-secret-key: "sk"
+# S3的Bucket名称
+s3-bucket: "public"
+# 是否使用SSL
+s3-use-ssl: false
+# 默认自动判断dns还是path，但一些云厂商不遵循规范，所以有时需要手动设置
+# 可选值：auto, path, dns
+s3-bucket-lookup: "auto"
 
 # 重试次数(获取订阅失败后重试次数)
 sub-urls-retry: 3
-
 # Github Proxy，获取订阅使用，结尾要带的 /
 # github-proxy: "https://ghfast.top/"
 github-proxy: ""
-
 # 订阅地址 支持 clash/mihomo/v2ray/base64 格式的订阅链接
 # 如果用户想使用clash类型，那可以在支持的订阅链接结尾加上 &flag=clash.meta
 # github 链接可自己添加ghproxy使用；订阅链接支持 HTTP_PROXY HTTPS_PROXY 环境变量加速拉取

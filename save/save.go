@@ -500,11 +500,11 @@ func chooseSaveMethod() func([]byte, string) error {
 		return method.UploadToWebDAV
 	case "local":
 		return method.SaveToLocal
-	case "minio": // New case for MinIO
-		if err := method.ValiMinioConfig(); err != nil {
-			return func(b []byte, s string) error { return fmt.Errorf("MinIO配置不完整: %v", err) }
+	case "s3": // New case for MinIO
+		if err := method.ValiS3Config(); err != nil {
+			return func(b []byte, s string) error { return fmt.Errorf("S3配置不完整: %v", err) }
 		}
-		return method.UploadToMinio
+		return method.UploadToS3
 	default:
 		return func(b []byte, s string) error {
 			return fmt.Errorf("未知的保存方法或其他方法配置错误: %v", config.GlobalConfig.SaveMethod)

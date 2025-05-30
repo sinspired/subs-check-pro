@@ -11,37 +11,49 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// ValiMinioConfig checks if the MinIO configuration is complete.
-func ValiMinioConfig() error {
-	if config.GlobalConfig.MinioEndpoint == "" {
-		return fmt.Errorf("MinioEndpoint is not configured")
+// ValiS3Config checks if the MinIO configuration is complete.
+func ValiS3Config() error {
+	if config.GlobalConfig.S3Endpoint == "" {
+		return fmt.Errorf("S3Endpoint is not configured")
 	}
-	if config.GlobalConfig.MinioAccessID == "" {
-		return fmt.Errorf("MinioAccessID is not configured")
+	if config.GlobalConfig.S3AccessID == "" {
+		return fmt.Errorf("S3AccessID is not configured")
 	}
-	if config.GlobalConfig.MinioSecretKey == "" {
-		return fmt.Errorf("MinioSecretKey is not configured")
+	if config.GlobalConfig.S3SecretKey == "" {
+		return fmt.Errorf("S3SecretKey is not configured")
 	}
-	if config.GlobalConfig.MinioBucket == "" {
-		return fmt.Errorf("MinioBucket is not configured")
+	if config.GlobalConfig.S3Bucket == "" {
+		return fmt.Errorf("S3Bucket is not configured")
 	}
 	return nil
 }
 
-// UploadToMinio uploads data to a MinIO bucket.
+// UploadToS3 uploads data to a MinIO bucket.
 // The 'filename' parameter will be used as the object name in the bucket.
-func UploadToMinio(data []byte, filename string) error {
+func UploadToS3(data []byte, filename string) error {
 	ctx := context.Background()
-	endpoint := config.GlobalConfig.MinioEndpoint
-	accessKeyID := config.GlobalConfig.MinioAccessID
-	secretAccessKey := config.GlobalConfig.MinioSecretKey
-	useSSL := config.GlobalConfig.MinioUseSSL // e.g., true for HTTPS, false for HTTP
-	bucketName := config.GlobalConfig.MinioBucket
+	endpoint := config.GlobalConfig.S3Endpoint
+	accessKeyID := config.GlobalConfig.S3AccessID
+	secretAccessKey := config.GlobalConfig.S3SecretKey
+	useSSL := config.GlobalConfig.S3UseSSL // e.g., true for HTTPS, false for HTTP
+	bucketName := config.GlobalConfig.S3Bucket
 
 	// Initialize minio client object.
 	minioClient, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
 		Secure: useSSL,
+		BucketLookup: func() minio.BucketLookupType {
+			switch config.GlobalConfig.S3BucketLookup {
+			case "dns":
+				return minio.BucketLookupDNS
+			case "path":
+				return minio.BucketLookupPath
+			case "auto":
+				return minio.BucketLookupAuto
+			default:
+				return minio.BucketLookupAuto
+			}
+		}(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize MinIO client: %w", err)
@@ -66,6 +78,6 @@ func UploadToMinio(data []byte, filename string) error {
 		return fmt.Errorf("failed to upload '%s' to bucket '%s': %w", objectName, bucketName, err)
 	}
 
-	slog.Info("Successfully uploaded '%s' of size %d to bucket '%s'. ETag: %s", objectName, info.Size, bucketName, info.ETag)
+	slog.Info(fmt.Sprintf("Successfully uploaded '%s' of size %d to bucket '%s'. ETag: %s", objectName, info.Size, bucketName, info.ETag))
 	return nil
 }
