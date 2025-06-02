@@ -6,6 +6,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/metacubex/mihomo v1.19.7-0.20250511034442-d22a893060c0
+	github.com/minio/minio-go/v7 v7.0.92
 	github.com/robfig/cron/v3 v3.0.1
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -21,7 +22,6 @@ require (
 	github.com/metacubex/smux v0.0.0-20250503055512-501391591dee // indirect
 	github.com/minio/crc64nvme v1.0.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/minio-go/v7 v7.0.92 // indirect
 	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
@@ -86,9 +86,9 @@ require (
 	github.com/metacubex/quic-go v0.52.1-0.20250522021943-aef454b9e639 // indirect
 	github.com/metacubex/randv2 v0.2.0 // indirect
 	github.com/metacubex/sing-quic v0.0.0-20250523120938-f1a248e5ec7f // indirect
-	github.com/metacubex/sing-shadowsocks v0.2.9 // indirect
-	github.com/metacubex/sing-shadowsocks2 v0.2.3 // indirect
-	github.com/metacubex/sing-vmess v0.2.1 // indirect
+	github.com/metacubex/sing-shadowsocks v0.2.10 // indirect
+	github.com/metacubex/sing-shadowsocks2 v0.2.4 // indirect
+	github.com/metacubex/sing-vmess v0.2.2 // indirect
 	github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f // indirect
 	github.com/metacubex/tfo-go v0.0.0-20250516165257-e29c16ae41d4 // indirect
 	github.com/metacubex/utls v1.7.3 // indirect
@@ -137,4 +137,4 @@ require (
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
-replace github.com/metacubex/mihomo => github.com/beck-8/mihomo v1.19.9-fix.0.20250525053213-cdbe8b4c5046
+replace github.com/metacubex/mihomo => github.com/beck-8/mihomo v1.19.11-0.20250602043834-fd85de546fb3
