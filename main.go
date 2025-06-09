@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	application := app.New()
+	application := app.New(fmt.Sprintf("%s-%s", Version, CurrentCommit))
 	slog.Info(fmt.Sprintf("当前版本: %s-%s", Version, CurrentCommit))
 
 	if err := application.Initialize(); err != nil {

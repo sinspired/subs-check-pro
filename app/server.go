@@ -66,6 +66,8 @@ func (app *App) initHttpServer() error {
 			api.GET("/status", app.getStatus)
 			api.POST("/trigger-check", app.triggerCheckHandler)
 			api.POST("/force-close", app.forceCloseHandler)
+			// 版本相关API
+			api.GET("/version", app.getVersion)
 
 			// 日志相关API
 			api.GET("/logs", app.getLogs)
@@ -183,6 +185,11 @@ func (app *App) getLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"logs": lines})
+}
+
+// getLogs 获取最近日志
+func (app *App) getVersion(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"version": app.version})
 }
 
 func ReadLastNLines(filePath string, n int) ([]string, error) {

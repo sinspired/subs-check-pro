@@ -196,7 +196,14 @@
 </head>
 <body>
     <div class="container-fluid">
-        <h1 class="mb-4">Subs Check 配置管理</h1>
+        <div class="row align-items-center mb-4">
+            <div class="col-md-8 col-sm-12">
+                <h1 class="mb-0">Subs Check 配置管理</h1>
+            </div>
+            <div class="col-md-4 col-sm-12 text-md-end">
+                <small class="text-muted" id="versionInfo">版本: 加载中...</small>
+            </div>
+        </div>
         
         <!-- 项目信息 -->
         <div class="alert alert-info mb-4 d-flex justify-content-between align-items-center">
@@ -811,5 +818,27 @@
     
     <!-- YAML解析库 -->
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    
+    <script>
+        // 获取版本信息
+        function getVersionInfo() {
+            fetch('/api/version', {
+                headers: addApiKeyHeader()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.version) {
+                    document.getElementById('versionInfo').textContent = '版本: ' + data.version;
+                }
+            })
+            .catch(error => {
+                console.error('获取版本信息失败:', error);
+                document.getElementById('versionInfo').textContent = '版本: 未知';
+            });
+        }
+        
+        // 初始加载版本信息
+        getVersionInfo();
+    </script>
 </body>
 </html>

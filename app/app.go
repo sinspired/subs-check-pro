@@ -31,10 +31,11 @@ type App struct {
 	ticker     *time.Ticker
 	done       chan struct{} // 用于结束ticker goroutine的信号
 	cron       *cron.Cron    // crontab调度器
+	version    string
 }
 
 // New 创建新的应用实例
-func New() *App {
+func New(version string) *App {
 	configPath := flag.String("f", "", "配置文件路径")
 	flag.Parse()
 
@@ -42,6 +43,7 @@ func New() *App {
 		configPath: *configPath,
 		checkChan:  make(chan struct{}),
 		done:       make(chan struct{}),
+		version:    version,
 	}
 }
 
