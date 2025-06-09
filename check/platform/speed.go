@@ -11,6 +11,7 @@ import (
 
 	"github.com/beck-8/subs-check/config"
 	"github.com/juju/ratelimit"
+	"github.com/metacubex/mihomo/common/convert"
 )
 
 func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket) (int, int64, error) {
@@ -22,7 +23,13 @@ func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket) (int, int64, 
 		Transport: httpClient.Transport,
 	}
 
-	resp, err := speedClient.Get(config.GlobalConfig.SpeedTestUrl)
+	req, err := http.NewRequest("GET", config.GlobalConfig.SpeedTestUrl, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	req.Header.Set("User-Agent", convert.RandUserAgent())
+
+	resp, err := speedClient.Do(req)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("测速请求失败: %v", err))
 		return 0, 0, err

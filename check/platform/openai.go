@@ -7,7 +7,12 @@ import (
 )
 
 func CheckOpenai(httpClient *http.Client) (bool, error) {
-	resp, err := httpClient.Get("https://api.openai.com/compliance/cookie_requirements")
+	req, err := http.NewRequest("GET", "https://api.openai.com/compliance/cookie_requirements", nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return false, err
 	}
