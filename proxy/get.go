@@ -83,6 +83,8 @@ func GetProxies() ([]map[string]any, error) {
 				}
 				slog.Debug(fmt.Sprintf("获取订阅链接: %s，有效节点数量: %d", url, len(proxyList)))
 				for _, proxy := range proxyList {
+					// 为每个节点添加订阅链接来源信息
+					proxy["subscription_url"] = url
 					proxyChan <- proxy
 				}
 				return
@@ -110,6 +112,8 @@ func GetProxies() ([]map[string]any, error) {
 							delete(proxyMap, "obfs_password")
 						}
 					}
+					// 为每个节点添加订阅链接来源信息
+					proxyMap["subscription_url"] = url
 					proxyChan <- proxyMap
 				}
 			}
