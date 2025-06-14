@@ -119,7 +119,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	}
 
 	slog.Info("开始检测节点")
-	slog.Info("当前参数", "concurrent", config.GlobalConfig.Concurrent, "min-speed", config.GlobalConfig.MinSpeed, "download-timeout", config.GlobalConfig.DownloadTimeout, "download-mb", config.GlobalConfig.DownloadMB, "total-speed-limit", config.GlobalConfig.TotalSpeedLimit)
+	slog.Info("当前参数", "timeout", config.GlobalConfig.Timeout, "concurrent", config.GlobalConfig.Concurrent, "min-speed", config.GlobalConfig.MinSpeed, "download-timeout", config.GlobalConfig.DownloadTimeout, "download-mb", config.GlobalConfig.DownloadMB, "total-speed-limit", config.GlobalConfig.TotalSpeedLimit)
 
 	done := make(chan bool)
 	if config.GlobalConfig.PrintProgress {
@@ -235,10 +235,11 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 				}
 			case "iprisk":
 				country, ip := proxyutils.GetProxyCountry(httpClient.Client)
-				if ip != "" && country != "" {
-					res.IP = ip
-					res.Country = country
+				if ip == "" {
+					break
 				}
+				res.IP = ip
+				res.Country = country
 				risk, err := platform.CheckIPRisk(httpClient.Client, ip)
 				if err == nil {
 					res.IPRisk = risk
@@ -273,9 +274,6 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 			res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(res.Country)
 		} else {
 			country, _ := proxyutils.GetProxyCountry(httpClient.Client)
-			if country == "" {
-				country = "未识别"
-			}
 			res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(country)
 		}
 	}
