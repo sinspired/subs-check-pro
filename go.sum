@@ -10,8 +10,6 @@ github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sx
 github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
-github.com/beck-8/mihomo v1.19.11-0.20250612130630-c4e33bf2306a h1:5m+4J7o90ofI+tCVhuEmWXxtLTrWVFufaCQdwRjsdSo=
-github.com/beck-8/mihomo v1.19.11-0.20250612130630-c4e33bf2306a/go.mod h1:SrCFvZ6lNKjpkEx6S5N9AiH0JbplI7Qzm92SugvQ/xw=
 github.com/blang/semver v3.5.1+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
 github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
@@ -146,6 +144,8 @@ github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvO
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20250324165734-5857f47bd43b h1:RUh4OdVPz/jDrM9MQ2ySuqu2aeBqcA8rtfWUYLZ8RtI=
 github.com/metacubex/gvisor v0.0.0-20250324165734-5857f47bd43b/go.mod h1:8LpS0IJW1VmWzUm3ylb0e2SK5QDm5lO/2qwWLZgRpBU=
+github.com/metacubex/mihomo v1.19.11-0.20250614075754-c60750d54919 h1:xYDUuBt2P/24l94HsonZJFIa4PTXMTWdDw+Fpbh6RQY=
+github.com/metacubex/mihomo v1.19.11-0.20250614075754-c60750d54919/go.mod h1:SrCFvZ6lNKjpkEx6S5N9AiH0JbplI7Qzm92SugvQ/xw=
 github.com/metacubex/quic-go v0.52.1-0.20250522021943-aef454b9e639 h1:L+1brQNzBhCCxWlicwfK1TlceemCRmrDE4HmcVHc29w=
 github.com/metacubex/quic-go v0.52.1-0.20250522021943-aef454b9e639/go.mod h1:Kc6h++Q/zf3AxcUCevJhJwgrskJumv+pZdR8g/E/10k=
 github.com/metacubex/randv2 v0.2.0 h1:uP38uBvV2SxYfLj53kuvAjbND4RUDfFJjwr4UigMiLs=

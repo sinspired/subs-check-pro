@@ -5,7 +5,7 @@ go 1.24.3
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.10.0
-	github.com/metacubex/mihomo v1.19.10
+	github.com/metacubex/mihomo v1.19.11-0.20250614075754-c60750d54919
 	github.com/minio/minio-go/v7 v7.0.92
 	github.com/robfig/cron/v3 v3.0.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -136,5 +136,3 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
-
-replace github.com/metacubex/mihomo => github.com/beck-8/mihomo v1.19.11-0.20250612130630-c4e33bf2306a
