@@ -691,14 +691,20 @@
                 if (data.error) {
                     logsContainer.textContent = '加载日志失败: ' + data.error;
                 } else {
+                    // 记录当前滚动位置
+                    const isScrolledToBottom = logsContainer.scrollHeight - logsContainer.clientHeight <= logsContainer.scrollTop + 1;
+                    
                     logsContainer.innerHTML = '';
                     data.logs.forEach(log => {
                         const logLine = document.createElement('div');
-                        // 应用颜色样式
                         logLine.innerHTML = colorizeLog(log);
                         logsContainer.appendChild(logLine);
                     });
-                    logsContainer.scrollTop = logsContainer.scrollHeight;
+                    
+                    // 只有当用户在底部时才自动滚动
+                    if (isScrolledToBottom) {
+                        logsContainer.scrollTop = logsContainer.scrollHeight;
+                    }
                 }
                 return data;
             })
