@@ -5,7 +5,7 @@ go 1.24.3
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.10.0
-	github.com/metacubex/mihomo v1.19.11-0.20250614075754-c60750d54919
+	github.com/metacubex/mihomo v1.19.11-0.20250621144655-56c0b088e893
 	github.com/minio/minio-go/v7 v7.0.92
 	github.com/robfig/cron/v3 v3.0.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -80,14 +80,14 @@ require (
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/metacubex/amneziawg-go v0.0.0-20240922133038-fdf3a4d5a4ab // indirect
 	github.com/metacubex/bbolt v0.0.0-20240822011022-aed6d4850399 // indirect
-	github.com/metacubex/chacha v0.1.2 // indirect
+	github.com/metacubex/chacha v0.1.5 // indirect
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 // indirect
 	github.com/metacubex/gvisor v0.0.0-20250324165734-5857f47bd43b // indirect
 	github.com/metacubex/quic-go v0.52.1-0.20250522021943-aef454b9e639 // indirect
 	github.com/metacubex/randv2 v0.2.0 // indirect
 	github.com/metacubex/sing-quic v0.0.0-20250523120938-f1a248e5ec7f // indirect
-	github.com/metacubex/sing-shadowsocks v0.2.11-0.20250531133822-e545de386d4c // indirect
-	github.com/metacubex/sing-shadowsocks2 v0.2.5-0.20250531133559-f4d53bd59335 // indirect
+	github.com/metacubex/sing-shadowsocks v0.2.11-0.20250621023810-0e9ef9dd0c92 // indirect
+	github.com/metacubex/sing-shadowsocks2 v0.2.5-0.20250621023950-93d605a2143d // indirect
 	github.com/metacubex/sing-vmess v0.2.2 // indirect
 	github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f // indirect
 	github.com/metacubex/tfo-go v0.0.0-20250516165257-e29c16ae41d4 // indirect
