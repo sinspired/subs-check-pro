@@ -209,6 +209,16 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 		return nil
 	}
 
+	var speed int
+	var totalBytes int64
+	if config.GlobalConfig.SpeedTestUrl != "" {
+		speed, totalBytes, err = platform.CheckSpeed(httpClient.Client, Bucket)
+		TotalBytes.Add(totalBytes)
+		if err != nil || speed < config.GlobalConfig.MinSpeed {
+			return nil
+		}
+	}
+
 	if config.GlobalConfig.MediaCheck {
 		// 遍历需要检测的平台
 		for _, plat := range config.GlobalConfig.Platforms {
@@ -248,16 +258,6 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 					slog.Debug(fmt.Sprintf("查询IP风险失败: %v", err))
 				}
 			}
-		}
-	}
-
-	var speed int
-	var totalBytes int64
-	if config.GlobalConfig.SpeedTestUrl != "" {
-		speed, totalBytes, err = platform.CheckSpeed(httpClient.Client, Bucket)
-		TotalBytes.Add(totalBytes)
-		if err != nil || speed < config.GlobalConfig.MinSpeed {
-			return nil
 		}
 	}
 	// 更新代理名称
