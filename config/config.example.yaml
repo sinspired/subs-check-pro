@@ -145,6 +145,10 @@ s3-bucket-lookup: "auto"
 
 # 重试次数(获取订阅失败后重试次数)
 sub-urls-retry: 3
+# 重试间隔(获取订阅失败后重试间隔（秒）)
+sub-urls-retry-interval: 1
+# 请求订阅地址超时时间(秒)
+sub-urls-timeout: 10
 # Github Proxy，获取订阅使用，结尾要带的 /
 # github-proxy: "https://ghfast.top/"
 github-proxy: ""
