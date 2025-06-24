@@ -131,15 +131,25 @@ func GetProxies() ([]map[string]any, error) {
 // 订阅链接中获取数据
 func GetDateFromSubs(subUrl string) ([]byte, error) {
 	maxRetries := config.GlobalConfig.SubUrlsReTry
+	// 重试间隔
+	retryInterval := config.GlobalConfig.SubUrlsRetryInterval
+	if retryInterval == 0 {
+		retryInterval = 1
+	}
+	// 超时时间
+	timeout := config.GlobalConfig.SubUrlsTimeout
+	if timeout == 0 {
+		timeout = 10
+	}
 	var lastErr error
 
 	client := &http.Client{
-		Timeout: time.Duration(10) * time.Second,
+		Timeout: time.Duration(timeout) * time.Second,
 	}
 
 	for i := 0; i < maxRetries; i++ {
 		if i > 0 {
-			time.Sleep(time.Second)
+			time.Sleep(time.Duration(retryInterval) * time.Second)
 		}
 
 		req, err := http.NewRequest("GET", subUrl, nil)
