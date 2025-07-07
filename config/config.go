@@ -62,6 +62,7 @@ var GlobalConfig = &Config{
 	NotifyTitle:        "🔔 节点状态更新",
 	MihomoOverwriteUrl: "http://127.0.0.1:8199/sub/ACL4SSR_Online_Full.yaml",
 	Platforms:          []string{"openai", "youtube", "netflix", "disney", "gemini", "iprisk"},
+	DownloadMB:         20,
 }
 
 //go:embed config.example.yaml
