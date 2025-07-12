@@ -15,7 +15,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var Version = "unknown"
+var Version = "dev"
 var CurrentCommit = "unknown"
 
 var TempLog string
