@@ -127,7 +127,7 @@ func GetIPLark(httpClient *http.Client) (loc string, ip string) {
 		slog.Debug(fmt.Sprintf("创建请求失败: %s", err))
 		return
 	}
-	req.Header.Set("User-Agent", convert.RandUserAgent())
+	req.Header.Set("User-Agent", "curl/8.7.1")
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("iplark获取节点位置失败: %s", err))
