@@ -286,12 +286,12 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 	var tags []string
 	// 获取速度
 	if config.GlobalConfig.SpeedTestUrl != "" {
-		name = regexp.MustCompile(`\s*\|(?:\s*⬇️\s*[\d.]+[KM]B/s)`).ReplaceAllString(name, "")
+		name = regexp.MustCompile(`\s*\|(?:\s*[\d.]+[KM]B/s)`).ReplaceAllString(name, "")
 		var speedStr string
 		if speed < 1024 {
-			speedStr = fmt.Sprintf(" ⬇️ %dKB/s", speed)
+			speedStr = fmt.Sprintf("%dKB/s", speed)
 		} else {
-			speedStr = fmt.Sprintf(" ⬇️ %.1fMB/s", float64(speed)/1024)
+			speedStr = fmt.Sprintf("%.1fMB/s", float64(speed)/1024)
 		}
 		tags = append(tags, speedStr)
 	}
@@ -300,27 +300,39 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 		// 移除已有的标记（IPRisk和平台标记）
 		name = regexp.MustCompile(`\s*\|(?:NF|D\+|GPT|GM|YT-[^|]+|TK-[^|]+|\d+%)`).ReplaceAllString(name, "")
 	}
-	// 添加其他标记
-	if res.IPRisk != "" {
-		tags = append(tags, res.IPRisk)
-	}
-	if res.Netflix {
-		tags = append(tags, "NF")
-	}
-	if res.Disney {
-		tags = append(tags, "D+")
-	}
-	if res.Openai {
-		tags = append(tags, "GPT")
-	}
-	if res.Gemini {
-		tags = append(tags, "GM")
-	}
-	if res.Youtube != "" {
-		tags = append(tags, fmt.Sprintf("YT-%s", res.Youtube))
-	}
-	if res.TikTok != "" {
-		tags = append(tags, fmt.Sprintf("TK-%s", res.TikTok))
+
+	// 按用户输入顺序定义
+	for _, plat := range config.GlobalConfig.Platforms {
+		switch plat {
+		case "openai":
+			if res.Openai {
+				tags = append(tags, "GPT")
+			}
+		case "netflix":
+			if res.Netflix {
+				tags = append(tags, "NF")
+			}
+		case "disney":
+			if res.Disney {
+				tags = append(tags, "D+")
+			}
+		case "gemini":
+			if res.Gemini {
+				tags = append(tags, "GM")
+			}
+		case "iprisk":
+			if res.IPRisk != "" {
+				tags = append(tags, res.IPRisk)
+			}
+		case "youtube":
+			if res.Youtube != "" {
+				tags = append(tags, fmt.Sprintf("YT-%s", res.Youtube))
+			}
+		case "tiktok":
+			if res.TikTok != "" {
+				tags = append(tags, fmt.Sprintf("TK-%s", res.TikTok))
+			}
+		}
 	}
 
 	// 将所有标记添加到名称中
