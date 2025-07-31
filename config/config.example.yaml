@@ -71,7 +71,7 @@ output-dir: ""
 enable-web-ui: true
 # 填写Web控制面板的api-key，如果为空，则自动生成
 # 配置文件为空时，支持使用环境变量设置 API_KEY
-api-key: ""
+api-key: "subs-check"
 
 # 检测完成后执行的回调脚本路径
 # 脚本将在检测完成后执行，可用于自定义通知或其他操作
@@ -163,6 +163,7 @@ success-rate: 0
 # 订阅地址 支持 clash/mihomo/v2ray/base64 格式的订阅链接
 # 如果用户想明确使用clash类型，那可以在支持的订阅链接结尾加上 &flag=clash.meta
 # github 链接可自己添加ghproxy使用；订阅链接支持 HTTP_PROXY HTTPS_PROXY 环境变量加速拉取
+# 如果用户想区分节点来源，可在订阅链接结尾加上 #备注 ，备注字段会自动加到节点命名结尾
 sub-urls:
   # - https://example.com/sub.txt
   # - https://example.com/sub2.txt
@@ -170,6 +171,7 @@ sub-urls:
   # - https://example.com/sub?token=43fa8f0dc9bb00dcfec2afb21b14378a?flag=clash.meta
   # - https://raw.githubusercontent.com/example/repo/main/config/{Ymd}.yaml
   # - https://raw.githubusercontent.com/example/repo/main/daily/daily-{Y}-{m}-{d}.yaml
+  # - https://example.com/sub.txt#我是备注我是备注
   - "https://raw.githubusercontent.com/firefoxmmx2/v2rayshare_subcription/main/subscription/clash_sub.yaml"
   - "https://raw.githubusercontent.com/Q3dlaXpoaQ/V2rayN_Clash_Node_Getter/refs/heads/main/APIs/sc0.yaml"
   - "https://raw.githubusercontent.com/xiaoji235/airport-free/refs/heads/main/clash/naidounode.txt"

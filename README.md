@@ -125,7 +125,7 @@ services:
       - TZ=Asia/Shanghai
       # - HTTP_PROXY=http://192.168.1.1:7890
       # - HTTPS_PROXY=http://192.168.1.1:7890
-      # - API_KEY=password
+      # - API_KEY=subs-check
     restart: always
     network_mode: bridge
 ```
