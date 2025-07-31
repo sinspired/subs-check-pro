@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -14,8 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"log/slog"
 
 	"github.com/beck-8/subs-check/check/platform"
 	"github.com/beck-8/subs-check/config"
@@ -29,6 +28,7 @@ import (
 type Result struct {
 	Proxy      map[string]any
 	Openai     bool
+	OpenaiWeb  bool
 	Youtube    string
 	Netflix    bool
 	Google     bool
@@ -222,8 +222,11 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 		for _, plat := range config.GlobalConfig.Platforms {
 			switch plat {
 			case "openai":
-				if ok, _ := platform.CheckOpenai(httpClient.Client); ok {
+				cookiesOK, clientOK := platform.CheckOpenAI(httpClient.Client)
+				if clientOK && cookiesOK {
 					res.Openai = true
+				} else if cookiesOK || clientOK {
+					res.OpenaiWeb = true
 				}
 			case "youtube":
 				if region, _ := platform.CheckYoutube(httpClient.Client); region != "" {
@@ -306,6 +309,8 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 		switch plat {
 		case "openai":
 			if res.Openai {
+				tags = append(tags, "GPT⁺")
+			} else if res.OpenaiWeb {
 				tags = append(tags, "GPT")
 			}
 		case "netflix":
