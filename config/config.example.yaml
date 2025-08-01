@@ -71,7 +71,7 @@ output-dir: ""
 enable-web-ui: true
 # 填写Web控制面板的api-key，如果为空，则自动生成
 # 配置文件为空时，支持使用环境变量设置 API_KEY
-api-key: "subs-check"
+api-key: ""
 
 # 检测完成后执行的回调脚本路径
 # 脚本将在检测完成后执行，可用于自定义通知或其他操作
