@@ -116,8 +116,6 @@ func (app *App) Run() {
 		}
 	}()
 
-	slog.Info(fmt.Sprintf("进度展示: %v", config.GlobalConfig.PrintProgress))
-
 	// 设置初始定时器模式
 	app.setTimer()
 
@@ -233,7 +231,7 @@ func (app *App) triggerCheck() {
 
 // checkProxies 执行代理检测
 func (app *App) checkProxies() error {
-	slog.Info("开始检测代理")
+	slog.Info("开始准备检测代理", "进度展示", config.GlobalConfig.PrintProgress)
 
 	results, err := check.Check()
 	if err != nil {
