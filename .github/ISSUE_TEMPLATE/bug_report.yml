@@ -81,6 +81,5 @@ body:
     attributes:
       label: 截图
       description: 提供错误截图。
-      render: shell
     validations:
       required: true
