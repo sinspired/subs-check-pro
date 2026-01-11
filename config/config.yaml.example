@@ -30,11 +30,14 @@ check-interval: 720
 # 测活-测速-媒体检测并行,缓冲通道占满后会成为瓶颈
 
 # 测活阶段，建议：10-1000
-alive-concurrent: 200
+alive-concurrent: 0
 # 测速阶段，建议：4-32
-speed-concurrent: 8
+speed-concurrent: 0
 # 媒体解锁检测，建议：10-200
-media-concurrent: 100
+media-concurrent: 0
+
+# 是否禁用 IPv6 测试
+ipv6: true
 
 # 超时时间(毫秒)(节点的最大延迟)，主要影响测活任务
 timeout: 6000

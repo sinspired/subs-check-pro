@@ -21,6 +21,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/juju/ratelimit"
 	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/oschwald/maxminddb-golang/v2"
 	"github.com/sinspired/subs-check/assets"
@@ -1057,6 +1058,7 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 	pc := &ProxyClient{}
 
 	var err error
+	resolver.DisableIPv6 = config.GlobalConfig.DisableIPv6
 
 	// 解析代理
 	pc.mProxy, err = adapter.ParseProxy(mapping)

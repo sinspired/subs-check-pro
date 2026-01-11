@@ -18,6 +18,7 @@ type Config struct {
 	AliveConcurrent      int      `yaml:"alive-concurrent"`
 	SpeedConcurrent      int      `yaml:"speed-concurrent"`
 	MediaConcurrent      int      `yaml:"media-concurrent"`
+	DisableIPv6          bool     `yaml:"ipv6"`
 	CheckInterval        int      `yaml:"check-interval"`
 	CronExpression       string   `yaml:"cron-expression"`
 	SpeedTestURL         string   `yaml:"speed-test-url"`
@@ -65,7 +66,7 @@ type Config struct {
 	SubStorePushService  string   `yaml:"sub-store-push-service"`
 	SubStoreProduceCron  string   `yaml:"sub-store-produce-cron"`
 	MihomoOverwriteURL   string   `yaml:"mihomo-overwrite-url"`
-	ISPCheck			 bool     `yaml:"isp-check"`
+	ISPCheck             bool     `yaml:"isp-check"`
 	MediaCheck           bool     `yaml:"media-check"`
 	Platforms            []string `yaml:"platforms"`
 	MaxMindDBPath        string   `yaml:"maxmind-db-path"`
@@ -105,10 +106,11 @@ var OriginDefaultConfig = &Config{
 		// "netflix",
 		// "disney",
 	},
-	DownloadMB: 20,
-	EnableSelfUpdate:true,
-	CronCheckUpdate: "0 0,9,21 * * *",
+	DownloadMB:       20,
+	EnableSelfUpdate: true,
+	CronCheckUpdate:  "0 0,9,21 * * *",
 	// ISPCheck:    true,
+	DisableIPv6: true,
 }
 
 // GlobalConfig 指向当前生效配置
