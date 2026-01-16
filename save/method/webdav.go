@@ -10,8 +10,8 @@ import (
 
 	"log/slog"
 
-	"github.com/sinspired/subs-check/config"
-	"github.com/sinspired/subs-check/utils"
+	"github.com/sinspired/subs-check-pro/config"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 var (

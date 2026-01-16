@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sinspired/subs-check/config"
-	"github.com/sinspired/subs-check/utils"
+	"github.com/sinspired/subs-check-pro/config"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 // StatsSaver 处理本地文件保存的结构体

@@ -15,7 +15,7 @@ import (
 
 	"github.com/lmittmann/tint"
 	mihomoLog "github.com/metacubex/mihomo/log"
-	"github.com/sinspired/subs-check/app"
+	"github.com/sinspired/subs-check-pro/app"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 

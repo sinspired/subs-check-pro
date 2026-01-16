@@ -24,9 +24,9 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/metacubex/mihomo/common/convert"
 	"github.com/samber/lo"
-	"github.com/sinspired/subs-check/config"
-	"github.com/sinspired/subs-check/save/method"
-	"github.com/sinspired/subs-check/utils"
+	"github.com/sinspired/subs-check-pro/config"
+	"github.com/sinspired/subs-check-pro/save/method"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 var (
