@@ -1,5 +1,5 @@
 name: 功能请求
-description: 提出一个新功能的建议，帮助改进 subs-check
+description: 提出一个新功能的建议，帮助改进 subs-check 性能版
 title: "[FEATURE] "
 labels: ["enhancement"]
 body:

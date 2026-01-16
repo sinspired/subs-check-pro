@@ -110,9 +110,9 @@ jobs:
           TAG_NAME="${{ github.ref_name }}"
           # 使用正则匹配常见的预发布后缀 (忽略大小写)
           if [[ "$TAG_NAME" =~ (beta|alpha|rc|dev|snapshot|dev|test) ]]; then
-            echo "title=🚧 *subs-check 预发布*" >> $GITHUB_OUTPUT
+            echo "title=🚧 *subs-check-pro 预发布*" >> $GITHUB_OUTPUT
           else
-            echo "title=🚀 *subs-check 更新*" >> $GITHUB_OUTPUT
+            echo "title=🚀 *subs-check-pro 更新*" >> $GITHUB_OUTPUT
           fi
 
       - name: Send Telegram message on push

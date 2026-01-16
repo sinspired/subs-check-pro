@@ -1,5 +1,5 @@
 name: BUG 报告
-description: 报告一个问题，帮助我们修复 subs-check
+description: 报告一个问题，帮助我们修复 subs-check 性能版
 title: "[BUG] "
 labels: ["bug"]
 body:
@@ -50,10 +50,10 @@ body:
     validations:
       required: true
   - type: textarea
-    id: subs-check-version
+    id: subs-check-pro-version
     attributes:
-      label: subs-check 版本
-      description: 提供 subs-check 版本。
+      label: subs-check-pro 版本
+      description: 提供 subs-check-pro 版本。
       placeholder: "例如：v1.0.0或日志中当前版本字段"
       render: shell
     validations:
