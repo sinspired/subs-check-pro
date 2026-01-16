@@ -8,7 +8,7 @@ import (
 
 	"log/slog"
 
-	"github.com/sinspired/subs-check/config"
+	"github.com/sinspired/subs-check-pro/config"
 )
 
 // 定义通用的 HTTP 客户端接口

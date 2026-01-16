@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sinspired/subs-check/config"
+	"github.com/sinspired/subs-check-pro/config"
 )
 
 // NotifyKind 表示通知类型

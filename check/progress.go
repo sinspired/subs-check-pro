@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sinspired/subs-check/config"
+	"github.com/sinspired/subs-check-pro/config"
 )
 
 // 用于 UI 显示当前阶段名称

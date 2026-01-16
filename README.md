@@ -7,7 +7,7 @@
 High-performance proxy subscription checker.
 </p>
 <p align="center">
-<a href="https://github.com/sinspired/subs-check/releases"><img src="https://img.shields.io/github/v/release/sinspired/subs-check?logo=github&include_prereleases"/></a>
+<a href="https://github.com/sinspired/subs-check-pro/releases"><img src="https://img.shields.io/github/v/release/sinspired/subs-check?logo=github&include_prereleases"/></a>
 <a href="https://hub.docker.com/r/sinspired/subs-check"><img src="https://img.shields.io/docker/pulls/sinspired/subs-check?logo=docker" /></a>
 <a href="https://ghcr.io/sinspired/subs-check"><img src="https://img.shields.io/badge/ghcr.io-available-blue?logo=github"/></a>
 <img alt="GitHub Release" src="https://img.shields.io/github/v/release/sinspired/SubsCheck-Win-GUI?display_name=release&style=social&logo=github&label=Windows%E5%9B%BE%E5%BD%A2%E7%95%8C%E9%9D%A2">
@@ -69,7 +69,7 @@ High-performance proxy subscription checker.
 
 > [!TIP]
 >
-> 功能更新频繁，请务必查看最新的 [配置文件示例](https://github.com/sinspired/subs-check/blob/main/config/config.yaml.example) 以获取最新功能支持。  
+> 功能更新频繁，请务必查看最新的 [配置文件示例](https://github.com/sinspired/subs-check-pro/blob/main/config/config.yaml.example) 以获取最新功能支持。  
 
 > [!NOTE]
 > 查看新增功能及设置方法： [新增功能和性能优化详情](#-新增功能和性能优化详情)
@@ -100,7 +100,7 @@ High-performance proxy subscription checker.
 
 ### 📦 二进制文件运行
 
-下载 [Releases](https://github.com/sinspired/subs-check/releases) 中适合的版本，解压后直接运行即可。
+下载 [Releases](https://github.com/sinspired/subs-check-pro/releases) 中适合的版本，解压后直接运行即可。
 
 ```powershell
 .\subs-check.exe -f ./config/config.yaml
@@ -466,7 +466,7 @@ http://127.0.0.1:8299/path/api/file/mihomo
 
 ![singbox-shareMenu](./doc/images/share-menu.png)
 
-请查阅最新 [配置文件示例](https://github.com/sinspired/subs-check/blob/main/config/config.yaml.example)
+请查阅最新 [配置文件示例](https://github.com/sinspired/subs-check-pro/blob/main/config/config.yaml.example)
 
 ```yaml
 # singbox规则配置

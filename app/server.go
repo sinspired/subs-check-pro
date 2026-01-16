@@ -17,10 +17,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-yaml"
-	"github.com/sinspired/subs-check/check"
-	"github.com/sinspired/subs-check/config"
-	"github.com/sinspired/subs-check/save/method"
-	"github.com/sinspired/subs-check/utils"
+	"github.com/sinspired/subs-check-pro/check"
+	"github.com/sinspired/subs-check-pro/config"
+	"github.com/sinspired/subs-check-pro/save/method"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 const (

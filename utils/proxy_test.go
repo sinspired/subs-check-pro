@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sinspired/subs-check/config"
+	"github.com/sinspired/subs-check-pro/config"
 )
 
 func TestFindGhProxy(t *testing.T) {

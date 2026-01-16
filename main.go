@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/sinspired/subs-check/app"
+	"github.com/sinspired/subs-check-pro/app"
 )
 
 // 命令行参数

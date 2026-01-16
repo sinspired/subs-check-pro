@@ -13,8 +13,8 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/sinspired/go-selfupdate"
-	"github.com/sinspired/subs-check/config"
-	"github.com/sinspired/subs-check/utils"
+	"github.com/sinspired/subs-check-pro/config"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 var (

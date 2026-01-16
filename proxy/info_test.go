@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sinspired/checkip/pkg/ipinfo"
-	"github.com/sinspired/subs-check/assets"
+	"github.com/sinspired/subs-check-pro/assets"
 )
 
 func TestGetAnalyzed(t *testing.T) {

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/sinspired/subs-check/assets"
-	"github.com/sinspired/subs-check/config"
-	"github.com/sinspired/subs-check/utils"
-	 "github.com/goccy/go-yaml" 
+	"github.com/goccy/go-yaml"
+	"github.com/sinspired/subs-check-pro/assets"
+	"github.com/sinspired/subs-check-pro/config"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 // initConfigPath 初始化配置文件路径
