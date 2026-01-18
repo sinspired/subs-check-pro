@@ -18,7 +18,7 @@ type Config struct {
 	AliveConcurrent      int      `yaml:"alive-concurrent"`
 	SpeedConcurrent      int      `yaml:"speed-concurrent"`
 	MediaConcurrent      int      `yaml:"media-concurrent"`
-	DisableIPv6          bool     `yaml:"ipv6"`
+	EnableIPv6           bool     `yaml:"ipv6"`
 	CheckInterval        int      `yaml:"check-interval"`
 	CronExpression       string   `yaml:"cron-expression"`
 	SpeedTestURL         string   `yaml:"speed-test-url"`
@@ -110,7 +110,6 @@ var OriginDefaultConfig = &Config{
 	EnableSelfUpdate: true,
 	CronCheckUpdate:  "0 0,9,21 * * *",
 	// ISPCheck:    true,
-	DisableIPv6: true,
 }
 
 // GlobalConfig 指向当前生效配置
