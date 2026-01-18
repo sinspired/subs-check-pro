@@ -110,7 +110,7 @@ func migrateOldFiles(srcDir, fileName, targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("读取源文件失败: %w", err)
 	}
-	if err := os.WriteFile(dst, data, 0644); err != nil {
+	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		return fmt.Errorf("写入目标文件失败: %w", err)
 	}
 	return nil
@@ -133,10 +133,10 @@ func startSubStore(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(paths.substoreDir), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(paths.substoreDir), 0o755); err != nil {
 		return fmt.Errorf("创建输出目录失败: %w", err)
 	}
-	if err := os.MkdirAll(paths.substoreDir, 0755); err != nil {
+	if err := os.MkdirAll(paths.substoreDir, 0o755); err != nil {
 		return fmt.Errorf("创建sub-store目录失败: %w", err)
 	}
 
@@ -343,7 +343,7 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 	defer zstdDecoder.Close()
 
 	// 解压 node 二进制文件
-	nodeFile, err := os.OpenFile(nodePath, os.O_CREATE|os.O_WRONLY, 0755)
+	nodeFile, err := os.OpenFile(nodePath, os.O_CREATE|os.O_WRONLY, 0o755)
 	if err != nil {
 		return fmt.Errorf("创建 node 文件失败: %w", err)
 	}
@@ -355,7 +355,7 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 	}
 
 	// 解压 sub-store 后端脚本
-	jsFile, err := os.OpenFile(jsPath, os.O_CREATE|os.O_WRONLY, 0644)
+	jsFile, err := os.OpenFile(jsPath, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("创建 sub-store 脚本文件失败: %w", err)
 	}
@@ -395,7 +395,7 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 				return fmt.Errorf("创建目录失败: %w", err)
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return fmt.Errorf("创建父目录失败: %w", err)
 			}
 			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
@@ -411,7 +411,7 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 	}
 
 	// 解压 覆写文件
-	overYamlFile, err := os.OpenFile(overYamlPath, os.O_CREATE|os.O_WRONLY, 0644)
+	overYamlFile, err := os.OpenFile(overYamlPath, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("创建 ACL4SSR_Online_Full.yaml 文件失败: %w", err)
 	}

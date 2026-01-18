@@ -149,7 +149,6 @@ func newSingboxFile(name, jsURL, jsonURL string) file {
 	remark := "默认 Sing-Box 订阅 (带分流规则)"
 	if version != "" {
 		remark = fmt.Sprintf("默认 Sing-Box-%s 订阅 (带分流规则)", version)
-
 	}
 
 	// icon := "https://singbox.app/wp-content/uploads/2025/06/cropped-logo-278x300.webp"

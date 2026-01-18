@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
-
-	"log/slog"
 
 	"github.com/sinspired/subs-check-pro/config"
 	"github.com/sinspired/subs-check-pro/utils"

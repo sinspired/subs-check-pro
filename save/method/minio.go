@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/sinspired/subs-check-pro/config"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/sinspired/subs-check-pro/config"
 )
 
 // ValiS3Config checks if the MinIO configuration is complete.

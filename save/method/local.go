@@ -12,8 +12,8 @@ import (
 
 const (
 	outputDirName = "output"
-	fileMode      = 0644
-	dirMode       = 0755
+	fileMode      = 0o644
+	dirMode       = 0o755
 )
 
 // LocalSaver 处理本地文件保存的结构体

@@ -1,6 +1,7 @@
 openipdb.ipdb
 config.yaml
 mihomo.yaml
+.golangci-lint.yml
 test
 
 output/*

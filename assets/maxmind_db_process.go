@@ -3,6 +3,7 @@ package assets
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,8 +13,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
-
-	"encoding/json"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/oschwald/maxminddb-golang/v2"
@@ -64,7 +63,7 @@ func openDBWithArch(path string) (*maxminddb.Reader, error) {
 
 // 解压内置的 MaxMind 数据库到指定路径
 func decompressEmbeddedMMDB(targetPath string) error {
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return fmt.Errorf("创建数据库目录失败: %w", err)
 	}
 
@@ -74,7 +73,7 @@ func decompressEmbeddedMMDB(targetPath string) error {
 	}
 	defer zstdDecoder.Close()
 
-	file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("maxmind数据库文件创建失败: %w", err)
 	}
@@ -99,20 +98,20 @@ func resolveDBPath() (string, error) {
 		saver.OutputPath = filepath.Join(saver.BasePath, saver.OutputPath)
 	}
 
-	if err := os.MkdirAll(saver.OutputPath, 0755); err != nil {
+	if err := os.MkdirAll(saver.OutputPath, 0o755); err != nil {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return "", fmt.Errorf("无法获取当前工作目录: %w", err)
 		}
 		saver.OutputPath = filepath.Join(cwd, "output")
-		if err := os.MkdirAll(saver.OutputPath, 0755); err != nil {
+		if err := os.MkdirAll(saver.OutputPath, 0o755); err != nil {
 			return "", fmt.Errorf("无法创建输出目录: %w", err)
 		}
 	}
 
 	maxminddbDir := filepath.Join(saver.OutputPath, "MaxMindData")
 
-	if err := os.MkdirAll(maxminddbDir, 0755); err != nil {
+	if err := os.MkdirAll(maxminddbDir, 0o755); err != nil {
 		return "", fmt.Errorf("无法创建 MaxMind 输出目录: %w", err)
 	}
 	return filepath.Join(maxminddbDir, "GeoLite2-Country.mmdb"), nil
@@ -220,7 +219,7 @@ func downloadFile(url, path string) error {
 		return fmt.Errorf("HTTP 状态码 %d", resp.StatusCode)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 

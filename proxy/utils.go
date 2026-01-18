@@ -112,7 +112,7 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []ProxyNode {
 								if len(links) >= 100000 {
 									batchLinks = append(batchLinks, "https://"+host+":"+port)
 								} else {
-									//TODO: 使用配置文件控制
+									// TODO: 使用配置文件控制
 									// (无协议 或 http/https)
 									// 同时生成 3 种最常见的标准代理协议，交给后续连通性测试去筛选
 									// 1. 尝试 HTTPS (type: http, tls: true)
@@ -146,7 +146,7 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []ProxyNode {
 			finalNodes = append(finalNodes, ToProxyNodes(nodes)...)
 		} else {
 			slog.Debug("转换失败", "错误", err)
-			//TODO: 有些格式V2ray不支持,应直接传输
+			// TODO: 有些格式V2ray不支持,应直接传输
 		}
 	}
 
@@ -275,7 +275,7 @@ func NormalizeNode(m map[string]any) {
 		case "http":
 			// 标准 HTTP 代理，不做强制 TLS 设置
 			// 除非端口是 443 且未指定 TLS，否则保持原样或默认 false
-			if _, hasTls := m["tls"]; !hasTls {
+			if _, hasTLS := m["tls"]; !hasTLS {
 				// 启发式：如果是 443 端口，大概率是 HTTPS
 				if p, ok := m["port"].(int); ok && p == 443 {
 					m["tls"] = true
@@ -695,10 +695,10 @@ func ConvertSingBoxOutbounds(outbounds []any) []ProxyNode {
 	return res
 }
 
-// ConvertGeneralJsonArray 处理通用对象数组 (主要是 Shadowsocks 导出的配置文件)
+// ConvertGeneralJSONArray 处理通用对象数组 (主要是 Shadowsocks 导出的配置文件)
 // 兼容标准 Clash 节点对象 和 旧式 Shadowsocks (SIP008) 导出格式
 // 输入: [{"server": "...","server_port": 1234, ...}, {"type": "vmess", ...}]
-func ConvertGeneralJsonArray(list []any) []ProxyNode {
+func ConvertGeneralJSONArray(list []any) []ProxyNode {
 	var nodes []ProxyNode
 	// convertListToNodes(list) // 删除：返回值未接收，且后续逻辑需要手动映射字段
 
@@ -1032,9 +1032,9 @@ func ExtractAndParseProxies(data []byte) []ProxyNode {
 	return nodes
 }
 
-// ParseV2RayJsonLines 解析 xray-json
+// ParseV2RayJSONLines 解析 xray-json
 // 这是一个简化的实现，提取核心字段
-func ParseV2RayJsonLines(data []byte) []ProxyNode {
+func ParseV2RayJSONLines(data []byte) []ProxyNode {
 	var nodes []ProxyNode
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 
@@ -1122,10 +1122,10 @@ func ParseV2RayJsonLines(data []byte) []ProxyNode {
 				if tlsSet, ok := stream["tlsSettings"].(map[string]any); ok {
 					node["servername"] = tlsSet["serverName"]
 					// 处理 ALPN
-					if _, ok := tlsSet["alpn"].([]any); ok {
-						// 需要将 []any 转为 string 用于指纹，或 Clash 需要 []string
-						// 这里暂时忽略，Mihomo 通常能自动协商，或者手动提取
-					}
+					// if _, ok := tlsSet["alpn"].([]any); ok {
+					// 	// 需要将 []any 转为 string 用于指纹，或 Clash 需要 []string
+					// 	// 这里暂时忽略，Mihomo 通常能自动协商，或者手动提取
+					// }
 					// 处理指纹
 					if fp, ok := tlsSet["fingerprint"].(string); ok {
 						node["client-fingerprint"] = fp
@@ -1182,10 +1182,10 @@ func ParseV2RayJsonLines(data []byte) []ProxyNode {
 								// V2Ray JSON 中 Host 通常是数组 ["xxx.com"]，Mihomo 兼容数组或字符串
 								tcpOpts["header"].(map[string]any)["headers"] = headers
 							}
-							// 提取 Path (通常不需要，但为了完整性)
-							if paths, ok := req["path"].([]any); ok && len(paths) > 0 {
-								// 这里简化处理，Mihomo 这里的 path 好像主要用于 HTTP 验证，通常留空或默认
-							}
+							// // 提取 Path (通常不需要，但为了完整性)
+							// if paths, ok := req["path"].([]any); ok && len(paths) > 0 {
+							// 	// 这里简化处理，Mihomo 这里的 path 好像主要用于 HTTP 验证，通常留空或默认
+							// }
 						}
 						node["tcp-opts"] = tcpOpts
 					}
@@ -1261,9 +1261,10 @@ func ParseYamlFlowList(data []byte) []ProxyNode {
 					nodes = append(nodes, ProxyNode(m))
 				}
 			}
-		} else {
-			// TODO: 如果标准解析失败（例如引号嵌套错误），尝试简单的正则提取修复
-		}
+		} 
+		// else {
+		// 	// TODO: 如果标准解析失败（例如引号嵌套错误），尝试简单的正则提取修复
+		// }
 	}
 
 	if len(nodes) > 0 {

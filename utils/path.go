@@ -2,10 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
-
-	"log/slog"
 )
 
 func GetExecutablePath() string {

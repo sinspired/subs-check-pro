@@ -123,7 +123,7 @@ var SpeedTestURLs = []string{
 	"https://mirror.rackspace.com/archlinux/iso/2025.11.01/archlinux-2025.11.01-x86_64.iso",                // ~950MB ISO
 	"https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-DVD-x86_64-Current.iso",              // ~4GB ISO
 	"https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/iso/CentOS-Stream-10-latest-x86_64-dvd1.iso", // ~8GB ISO
-	"https://repo.almalinux.org/almalinux/10.0/isos/aarch64/AlmaLinux-10-latest-aarch64-boot.iso",          //800mb
+	"https://repo.almalinux.org/almalinux/10.0/isos/aarch64/AlmaLinux-10-latest-aarch64-boot.iso",          // 800mb
 
 	// === 7. 大型开源软件 & 驱动 ===
 	"https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz", // ~320MB TAR.XZ (Linux)

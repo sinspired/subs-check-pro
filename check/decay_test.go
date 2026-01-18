@@ -9,7 +9,7 @@ import (
 func TestDecayComparison(t *testing.T) {
 	// 参数（可按需调整）
 	amp := 500.0
-	base := 100.0 //最低限值
+	base := 100.0 // 最低限值
 
 	// 各算法参数选取：目标是让不同算法在 0..1000 范围内有可比形状
 	expB := 0.001      // 指数衰减速率

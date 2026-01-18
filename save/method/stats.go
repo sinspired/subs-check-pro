@@ -12,7 +12,7 @@ import (
 
 // StatsSaver 处理本地文件保存的结构体
 type StatsSaver struct {
-	BasePath   string
+	BasePath  string
 	StatsPath string
 }
 
@@ -32,7 +32,7 @@ func NewStatsSaver() (*StatsSaver, error) {
 
 	statsPath := filepath.Join(outputPath, "stats")
 	return &StatsSaver{
-		BasePath:   basePath,
+		BasePath:  basePath,
 		StatsPath: statsPath,
 	}, nil
 }

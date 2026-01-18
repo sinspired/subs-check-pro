@@ -22,7 +22,7 @@ func (app *App) initConfigPath() error {
 		execPath := utils.GetExecutablePath()
 		configDir := filepath.Join(execPath, "config")
 
-		if err := os.MkdirAll(configDir, 0755); err != nil {
+		if err := os.MkdirAll(configDir, 0o755); err != nil {
 			return fmt.Errorf("创建配置目录失败: %w", err)
 		}
 
@@ -114,7 +114,7 @@ func (app *App) createDefaultConfig() error {
 
 	tpl = strings.Join(lines, "\n")
 
-	if err := os.WriteFile(app.configPath, []byte(tpl), 0644); err != nil {
+	if err := os.WriteFile(app.configPath, []byte(tpl), 0o644); err != nil {
 		return fmt.Errorf("写入默认配置文件失败: %w", err)
 	}
 
