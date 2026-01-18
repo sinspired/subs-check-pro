@@ -18,10 +18,10 @@ import (
 )
 
 var (
-	originExePath string                                                    // exe路径,避免linux syscall路径错误
+	originExePath string                                                        // exe路径,避免linux syscall路径错误
 	repo          = selfupdate.NewRepositorySlug("sinspired", "subs-check-pro") // 更新仓库
-	arch          = getArch()                                               // 架构映射
-	isSysProxy    bool                                                      // 系统代理是否可用
+	arch          = getArch()                                                   // 架构映射
+	isSysProxy    bool                                                          // 系统代理是否可用
 )
 
 // 获取当前架构映射,和GitHub release对应
@@ -189,15 +189,16 @@ func clearProxyEnv() {
 		"HTTP_PROXY", "http_proxy",
 		"HTTPS_PROXY", "https_proxy",
 		"ALL_PROXY", "all_proxy",
-		"NO_PROXY", "no_proxy"} {
+		"NO_PROXY", "no_proxy",
+	} {
 		os.Unsetenv(key)
 	}
 }
 
 // 单次尝试更新（带超时）
 func tryUpdateOnce(parentCtx context.Context, updater *selfupdate.Updater, latest *selfupdate.Release,
-	exe string, assetURL, validationURL string, clearProxy bool, label string) error {
-
+	exe string, assetURL, validationURL string, clearProxy bool, label string,
+) error {
 	if clearProxy {
 		slog.Info("清理系统代理", slog.String("strategy", label))
 		clearProxyEnv()

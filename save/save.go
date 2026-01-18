@@ -3,12 +3,13 @@ package save
 
 import (
 	"fmt"
-	proxyutils "github.com/sinspired/subs-check-pro/proxy"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	proxyutils "github.com/sinspired/subs-check-pro/proxy"
 
 	"github.com/goccy/go-yaml"
 	"github.com/sinspired/subs-check-pro/check"

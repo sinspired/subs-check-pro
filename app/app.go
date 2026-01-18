@@ -134,7 +134,6 @@ func (app *App) Initialize() error {
 		} else {
 			os.Exit(0)
 		}
-
 	}
 
 	// 设置信号处理器
@@ -298,7 +297,7 @@ func (app *App) triggerCheck() {
 func (app *App) checkProxies() error {
 	if config.GlobalConfig.PrintProgress {
 		slog.Info("启动检测任务", "进度", "显示")
-	}else{
+	} else {
 		slog.Info("启动检测任务", "进度", "隐藏")
 	}
 

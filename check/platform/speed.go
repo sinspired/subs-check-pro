@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand/v2" 
+	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"strings"
 	"time"
-
-	"log/slog"
 
 	"github.com/juju/ratelimit"
 	"github.com/metacubex/mihomo/common/convert"

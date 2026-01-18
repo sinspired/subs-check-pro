@@ -22,7 +22,7 @@ var (
 )
 
 // IsLocalURL 判断给定的 URL 是否指向本地/局域网地址
-func IsLocalURL(URL string) (bool) {
+func IsLocalURL(URL string) bool {
 	// 解析 URL（支持 http://、https://、ws:// 等，也支持不带 scheme 的如 localhost:8080）
 	u, err := url.Parse(strings.ToLower(URL))
 	if err != nil {
@@ -112,7 +112,8 @@ func UnsetAllProxyEnvVars() {
 		"HTTP_PROXY", "http_proxy",
 		"HTTPS_PROXY", "https_proxy",
 		"ALL_PROXY", "all_proxy",
-		"NO_PROXY", "no_proxy"} {
+		"NO_PROXY", "no_proxy",
+	} {
 		os.Unsetenv(key)
 	}
 }
@@ -281,7 +282,7 @@ func isSysProxyAvailable(proxy string) bool {
 				return
 			}
 			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) // 确保读完
+			_, _ = io.Copy(io.Discard, resp.Body) // 确保读完
 			results <- (resp.StatusCode == expect)
 		}(t.url, t.expectCode)
 	}

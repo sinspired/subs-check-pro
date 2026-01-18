@@ -4,7 +4,6 @@ package check
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"net"
@@ -225,7 +224,6 @@ func Check() ([]Result, error) {
 
 	// 获取订阅节点和之前成功的节点数量(已前置)
 	proxies, rawCount, subWasSuccedLength, historyLength, err := proxyutils.GetProxies()
-
 	if err != nil {
 		return nil, fmt.Errorf("获取节点失败: %w", err)
 	}
@@ -287,7 +285,6 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 
 	// 如果 MaxMindDBPath 为空会自动使用 subs-check 内置数据库
 	geoDB, err := assets.OpenMaxMindDB(config.GlobalConfig.MaxMindDBPath)
-
 	if err != nil {
 		slog.Debug(fmt.Sprintf("打开 MaxMind 数据库失败: %v", err))
 		geoDB = nil
@@ -1179,21 +1176,6 @@ func (pc *ProxyClient) Close() {
 			pc.Transport.Base.CloseIdleConnections()
 		}
 	}
-}
-
-// countingReadCloser 封装了 io.ReadCloser，用于统计读取的字节数。
-type countingReadCloser struct {
-	io.ReadCloser
-	counter *atomic.Uint64
-}
-
-// Read 为 countingReadCloser 实现 io.Reader 接口。
-func (c *countingReadCloser) Read(p []byte) (int, error) {
-	n, err := c.ReadCloser.Read(p)
-	if n > 0 {
-		c.counter.Add(uint64(n))
-	}
-	return n, err
 }
 
 // StatsTransport 是一个 http.RoundTripper 的封装，用于统计从响应体中读取的字节数。

@@ -12,8 +12,10 @@ import (
 var ctrlCOccurred atomic.Bool
 
 // BeforeExitHook 在 os.Exit 前调用的清理函数
-var BeforeExitHook func()
-var ShutdownHook func()
+var (
+	BeforeExitHook func()
+	ShutdownHook   func()
+)
 
 func SetupSignalHandler(forceClose *atomic.Bool, checking *atomic.Bool) <-chan struct{} {
 	slog.Debug("设置信号处理器")

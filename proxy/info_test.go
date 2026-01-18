@@ -14,7 +14,6 @@ import (
 func TestGetAnalyzed(t *testing.T) {
 	// 使用 subs-check 自己的 assets 包
 	db, err := assets.OpenMaxMindDB("")
-
 	if err != nil {
 		t.Errorf("打开 MaxMind 数据库失败: %v", err)
 		// 数据库打开失败时，设置为 nil，后续代码会处理这种情况
@@ -70,7 +69,6 @@ func TestGetAnalyzed(t *testing.T) {
 func TestLookupGeoIPDataWithMMDB(t *testing.T) {
 	// 使用 subs-check 自己的 assets 包
 	db, err := assets.OpenMaxMindDB("")
-
 	if err != nil {
 		t.Errorf("打开 MaxMind 数据库失败: %v", err)
 		// 数据库打开失败时，设置为 nil，后续代码会处理这种情况
