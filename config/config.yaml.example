@@ -36,8 +36,8 @@ speed-concurrent: 0
 # 媒体解锁检测，建议：10-200
 media-concurrent: 0
 
-# 是否禁用 IPv6 测试
-ipv6: true
+# 是否启用IPv6，默认禁用
+ipv6: false
 
 # 超时时间(毫秒)(节点的最大延迟)，主要影响测活任务
 timeout: 6000
@@ -437,4 +437,3 @@ sub-urls:
   - "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge_yaml.yml"
   - "https://raw.githubusercontent.com/Misaka-blog/chromego_merge/main/sub/merged_proxies_new.yaml"
   - "https://raw.githubusercontent.com/MrMohebi/xray-proxy-grabber-telegram/master/collected-proxies/clash-meta/all.yaml"
-  

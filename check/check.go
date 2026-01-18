@@ -1058,7 +1058,7 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 	pc := &ProxyClient{}
 
 	var err error
-	resolver.DisableIPv6 = config.GlobalConfig.DisableIPv6
+	resolver.DisableIPv6 = !config.GlobalConfig.EnableIPv6
 
 	// 解析代理
 	pc.mProxy, err = adapter.ParseProxy(mapping)
