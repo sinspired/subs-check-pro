@@ -359,6 +359,7 @@ sub-urls-stats: false
 # 1) 纯文本：按行分隔，支持 # 注释与空行
 # 2) YAML/JSON：字符串数组 ["https://...", "https://..."]
 # 支持时间占位符与 github-proxy，例如包含 {Ymd}、{Y}-{m}-{d}
+# {mm}/{dd} 指定日期格式 "01/02"，{m}/{d} 指定日期格式 "1/2"
 # 支持mihomo proxy-providers格式
 sub-urls-remote:
   # - "https://example.com/sub-list.txt"
