@@ -101,7 +101,7 @@ func (app *App) handleFileShare(basePath string, isSecret bool) gin.HandlerFunc 
 			renderSharePage(c, http.StatusNotFound, SharePageData{
 				Title:       "文件不存在 - Subs-Check-PRO",
 				HeaderColor: "#d40000ff", // 橙色，表示警告/错误
-				HeaderIcon:  "👻",       // 幽灵图标，表示这里空空如也
+				HeaderIcon:  "👻",         // 幽灵图标，表示这里空空如也
 				HeaderTitle: "错误！",
 				Description: template.HTML(fmt.Sprintf("未找到文件 <code>%s</code>", relPath)),
 				PathExample: examplePath, // 显示正确的格式给用户参考

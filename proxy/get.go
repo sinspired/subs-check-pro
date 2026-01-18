@@ -29,10 +29,8 @@ import (
 	"github.com/sinspired/subs-check-pro/utils"
 )
 
-var (
-	// ErrIgnore 标记无需记录日志的非致命错误
-	ErrIgnore = errors.New("error-ignore")
-)
+// ErrIgnore 标记无需记录日志的非致命错误
+var ErrIgnore = errors.New("error-ignore")
 
 // ProxyNode 定义通用节点结构类型
 type ProxyNode map[string]any
@@ -347,7 +345,7 @@ func parseSubscriptionData(data []byte, subURL string) ([]ProxyNode, error) {
 			}
 			if _, ok := val[0].(map[string]any); ok {
 				slog.Debug("解析成功", "订阅", subURL, "格式", "General JSON List")
-				return ConvertGeneralJsonArray(val), nil
+				return ConvertGeneralJSONArray(val), nil
 			}
 		}
 	}
@@ -379,7 +377,7 @@ func parseSubscriptionData(data []byte, subURL string) ([]ProxyNode, error) {
 	}
 
 	// 尝试 xray JSON
-	if nodes := ParseV2RayJsonLines(data); len(nodes) > 0 {
+	if nodes := ParseV2RayJSONLines(data); len(nodes) > 0 {
 		slog.Debug("解析成功", "订阅", subURL, "格式", "V2Ray JSON Lines", "数量", len(nodes))
 		return nodes, nil
 	}
@@ -487,7 +485,7 @@ func FetchSubsData(rawURL string) ([]byte, error) {
 	}
 
 	// UA 列表池
-	var uaList = []string{
+	uaList := []string{
 		convert.RandUserAgent(),
 		"mihomo/1.18.3",
 		"clash.meta",
@@ -534,14 +532,12 @@ func FetchSubsData(rawURL string) ([]byte, error) {
 	return nil, fmt.Errorf("%d次重试后失败: %v", maxRetries, lastErr)
 }
 
-var (
-	// clientMap 用于缓存不同代理策略的 HTTP Client
-	// key: "direct" 或 proxyUrl (e.g. "http://127.0.0.1:7890")
-	// clientMapCache 使用 sync.Map 存储复用的 http.Client
-	// Key: proxyAddr (string), Value: *http.Client
+// clientMap 用于缓存不同代理策略的 HTTP Client
+// key: "direct" 或 proxyUrl (e.g. "http://127.0.0.1:7890")
+// clientMapCache 使用 sync.Map 存储复用的 http.Client
+// Key: proxyAddr (string), Value: *http.Client
 
-	clientMapCache sync.Map
-)
+var clientMapCache sync.Map
 
 // getClient 根据代理地址获取复用的 Client
 func getClient(proxyAddr string) *http.Client {
@@ -551,7 +547,7 @@ func getClient(proxyAddr string) *http.Client {
 
 	// 创建新的 Transport
 	transport := &http.Transport{
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: false},
 		MaxIdleConns:        100,              // 全局最大空闲连接
 		MaxIdleConnsPerHost: 20,               // 每个 Host 最大空闲连接
 		IdleConnTimeout:     90 * time.Second, // 空闲超时
@@ -626,7 +622,7 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 
 	if resp.StatusCode >= 400 {
 		// 读取并丢弃 Body，有助于复用 TCP 连接（Keep-Alive）
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		slog.Debug("错误", "url", req.URL, "代理", useProxy, "状态码", resp.StatusCode, "UA", req.UserAgent())
 		fatal := resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 || resp.StatusCode == 410
 		return nil, fmt.Errorf("%d", resp.StatusCode), fatal
@@ -1018,7 +1014,7 @@ func CleanURL(raw string) string {
 	// ]  : 右方括号
 	// }  : 右大括号
 	// >  : 大于号 (Email/引用常用)
-	cutset := "\"'`,;.)]}>" + "`"
+	cutset := "\"'`,;.)]}>"
 
 	// 3. 循环移除尾部所有属于 cutset 的字符，直到遇到非 cutset 字符为止
 	return strings.TrimRight(s, cutset)

@@ -28,7 +28,7 @@ const (
 const (
 	notifyTimeout = 10 * time.Second // 通知请求超时时间
 
-	FallbackProxy = "socks5://test:test@51.75.126.18:1080"                                                     // 兜底代理
+	FallbackProxy = "socks5://test:test@51.75.126.18:1080"                                                         // 兜底代理
 	RepoURL       = "https://github.com/sinspired/subs-check-pro"                                                  // 仓库地址
 	ClickURL      = "https://github.com/sinspired/subs-check-pro/releases/latest"                                  // 点击跳转链接
 	IconURL       = "https://raw.githubusercontent.com/sinspired/subs-check-pro/main/app/static/icon/icon-512.png" // 通用图标 URL
@@ -179,10 +179,10 @@ func decorateURL(raw string, kind NotifyKind) string {
 
 // broadcastNotify 广播通知到所有接收者
 func broadcastNotify(kind NotifyKind, title, body string) {
-    apiServer := config.GlobalConfig.AppriseAPIServer
-    if apiServer == "" {
-        return
-    }
+	apiServer := config.GlobalConfig.AppriseAPIServer
+	if apiServer == "" {
+		return
+	}
 	if len(config.GlobalConfig.RecipientURL) == 0 {
 		slog.Error("请配置通知目标: recipient-url")
 		return

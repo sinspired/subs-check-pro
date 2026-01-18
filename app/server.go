@@ -157,7 +157,7 @@ func (app *App) registerShareRoutes(router *gin.Engine, outputPath string) error
 	// 公开分享
 	moreDirPath := filepath.Join(outputPath, ShareDirName)
 	if _, err := os.Stat(moreDirPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(moreDirPath, 0755); err != nil {
+		if err := os.MkdirAll(moreDirPath, 0o755); err != nil {
 			return err
 		}
 	}
@@ -259,7 +259,7 @@ func (app *App) updateConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("YAML格式错误: %v", err)})
 		return
 	}
-	if err := os.WriteFile(app.configPath, []byte(req.Content), 0644); err != nil {
+	if err := os.WriteFile(app.configPath, []byte(req.Content), 0o644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("保存配置文件失败: %v", err)})
 		return
 	}
@@ -284,14 +284,14 @@ func (app *App) getStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"checking":   app.checking.Load(),
-		"proxyCount": check.ProxyCount.Load(),
-		"available":  check.Available.Load(),
-		"progress":   check.Progress.Load(),
-		"forceClose": check.ForceClose.Load(),
+		"checking":       app.checking.Load(),
+		"proxyCount":     check.ProxyCount.Load(),
+		"available":      check.Available.Load(),
+		"progress":       check.Progress.Load(),
+		"forceClose":     check.ForceClose.Load(),
 		"successlimited": check.Successlimited.Load(),
 		"processResults": check.ProcessResults.Load(),
-		"lastCheck":  lastCheck,
+		"lastCheck":      lastCheck,
 	})
 }
 
