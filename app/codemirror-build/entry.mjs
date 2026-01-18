@@ -31,6 +31,7 @@ const configCompletions = [
   { label: "alive-concurrent", type: "property", detail: "测活并发数，建议：10-1000", section: "检测参数", isArray: false },
   { label: "speed-concurrent", type: "property", detail: "测速并发数，建议：4-32", section: "检测参数", isArray: false },
   { label: "media-concurrent", type: "property", detail: "媒体解锁并发数，建议：4-200", section: "检测参数", isArray: false },
+  { label: "ipv6", type: "property", detail: "是否启用IPv6", section: "检测参数", isArray: false }, 
   { label: "check-interval", type: "property", detail: "检查间隔(分钟)", section: "检测参数", isArray: false },
   { label: "cron-expression", type: "property", detail: "定时检测", section: "检测参数", isArray: false },
   { label: "success-limit", type: "property", detail: "成功节点数量限制", section: "检测参数", isArray: false },
@@ -469,7 +470,7 @@ const placeholderMatcher = new MatchDecorator({
   regexp: new RegExp(
     [
       // 匹配所有 configCompletions 中的 label
-      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls)(?=\s*:\s*)',
+      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|ipv6|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls)(?=\s*:\s*)',
 
       // 列表项：- openai / - "openai"
       '(?<=^[ \\t]*-\\s*["\']?)(openai|iprisk|gemini|tiktok|youtube|disney|netflix|x|ss|trojan|vless|vmess|shadowsocks)(?=["\']?\\b)',
@@ -478,7 +479,7 @@ const placeholderMatcher = new MatchDecorator({
       '(?<=^[ \\t]*-\\s*[^#]*)(#.*$)',
 
       // 列表项中匹配 {Ymd} 或 {Y}-{m}-{d}
-      '(?<=^[ \\t]*-\\s*[^#]*)({Ymd}|{Y}-{m}-{d}|{Y}|{m}|{d})(?=[^#]*(?:#.*)?$)',
+      '(?<=^[ \\t]*-\\s*[^#]*)({Ymd}|{Y}-{m}-{d}|{Y}|{m}|{mm}|{d}|{dd})(?=[^#]*(?:#.*)?$)',
 
       // threshold 1 0.75 0.50 0.25
       '(?<=^[ \\t]*threshold:\\s*["\']?)(1.00|0.75|0.50|0.25|1|0.5)(?=["\']?)',
