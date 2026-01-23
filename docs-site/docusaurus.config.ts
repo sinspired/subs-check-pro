@@ -40,7 +40,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/og-image.png',
+    image: 'img/Subs-Check-PRO_OG.png',
     colorMode: { respectPrefersColorScheme: true },
     navbar: {
       title: 'Subs-Check⁺ PRO',
