@@ -1,0 +1,24 @@
+{
+  "name": "Subs-Check-Pro",
+  "short_name": "SubsCheckPro",
+  "description": "Subs-Check 性能版.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5a0",
+  "icons": [
+    {
+      "src": "/static/icon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
