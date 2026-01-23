@@ -14,7 +14,7 @@ const config: Config = {
   organizationName: 'sinspired',
   projectName: 'subs-check-pro',
 
-  trailingSlash: false, 
+  trailingSlash: false,
 
   onBrokenLinks: 'throw',
 
@@ -53,9 +53,15 @@ const config: Config = {
           label: 'Wiki',
         },
         {
+          href: 'https://t.me/subs_check_pro',
+          position: 'right',
+          className: 'header-telegram-link header-link',
+          'aria-label': 'Telegram group',
+        },
+        {
           href: 'https://github.com/sinspired/subs-check-pro',
           position: 'right',
-          className: 'header-github-link',
+          className: 'header-github-link header-link',
           'aria-label': 'GitHub repository',
         },
       ],

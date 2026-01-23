@@ -43,7 +43,7 @@ html[data-theme='dark'] {
   mask-size: contain;
 
   background-color: currentColor; /* 跟随文字颜色，深浅模式自动适配 */
-  opacity: 0.7;                   /* 不太显眼 */
+  opacity: 0.7; /* 不太显眼 */
 }
 
 /* 针对不同文档/分组指定图标 */
@@ -139,11 +139,29 @@ html[data-theme='dark'] {
   mask-size: cover;
 }
 
+.header-telegram-link::before {
+  content: '';
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  margin-top: 4px;
+  vertical-align: bottom;
+
+  /* 使用 mask 技术，让图标跟随文字颜色 */
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.9 6.1l-1.7 8.2c-.1.6-.5.7-.9.4l-2.6-2c-.6.6-1.2 1.1-1.3 1.3-.2.1-.3.3-.5.3-.3 0-.3-.2-.4-.4l-.9-3-2.7-.9c-.6-.2-.6-.6.1-.9l10.2-3.9c.4-.1.9.1.7.9zm-2.4.9l-5.7 3.6.9 3 .2-2 4.9-4.4c.3-.3.1-.3-.3-.2z'/><path fill='none' d='M0 0h24v24H0z'/></svg>")
+    no-repeat center;
+  -webkit-mask-size: cover;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.9 6.1l-1.7 8.2c-.1.6-.5.7-.9.4l-2.6-2c-.6.6-1.2 1.1-1.3 1.3-.2.1-.3.3-.5.3-.3 0-.3-.2-.4-.4l-.9-3-2.7-.9c-.6-.2-.6-.6.1-.9l10.2-3.9c.4-.1.9.1.7.9zm-2.4.9l-5.7 3.6.9 3 .2-2 4.9-4.4c.3-.3.1-.3-.3-.2z'/><path fill='none' d='M0 0h24v24H0z'/></svg>")
+    no-repeat center;
+  mask-size: cover;
+}
+
 /* hover 效果：根据主题变色 */
-html[data-theme='light'] .header-github-link:hover::before {
+html[data-theme='light'] .header-link:hover::before {
   background-color: #000; /* 浅色主题下变深 */
 }
 
-html[data-theme='dark'] .header-github-link:hover::before {
+html[data-theme='dark'] .header-link:hover::before {
   background-color: #fff; /* 深色主题下变亮 */
 }
