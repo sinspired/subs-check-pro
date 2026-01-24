@@ -20,6 +20,8 @@ High-performance proxy subscription checker.
 
 **测活、测速、媒体解锁**，代理检测工具，支持 `100-1000` 高并发低占用运行，检测结果更准确。全新设计，适配 PC 和手机设备的现代 WebUI 配置管理界面，自动生成 `mihomo` 和 `singbox` 订阅，集成 `sub-store` 前端和后端，支持一键复制分享；支持自动无缝版本更新。
 
+![preview](https://sinspired.github.io/subs-check-pro/img/Subs-Check-PRO_OG.png)
+
 ## ✨ 特性
 
 - [x] ⚡ [自适应流水线高并发模式](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
