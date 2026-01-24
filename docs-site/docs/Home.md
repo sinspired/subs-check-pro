@@ -4,15 +4,15 @@
 
 ## ⚡️ 快速入口
 
-- 🧭 入门与部署: [[Deployment]]
-- 📘 Cloudflare Tunnel 外网访问: [[Cloudflare-Tunnel]]
-- 🚀 自建测速地址: [[Speedtest]]
-- ✨ 新增功能与性能优化: [[Features-Details]]
-- 📙 订阅使用方法: [[Subscriptions]]
-- 📕 内置文件服务: [[File-Service]]
-- 📗 通知渠道（Apprise）: [[Notifications]]
-- 🚦 系统与 GitHub 代理: [[System-Proxy]]
-- 💾 保存方法: [[Storage]]
+- 🧭 [入门与部署](Deployment)
+- 📘 [Cloudflare Tunnel 外网访问](Cloudflare-Tunnel)
+- 🚀 [自建测速地址](Speedtest)
+- ✨ [新增功能与性能优化](Features-Details)
+- 📙 [订阅使用方法](Subscriptions)
+- 📕 [内置文件服务](File-Service)
+- 📗 [通知渠道（Apprise）](Notifications)
+- 🚦 [系统与 GitHub 代理](System-Proxy)
+- 💾 [保存方法](Storage)
 
 ## 🚀 快速开始
 
