@@ -1065,13 +1065,29 @@
         const prettyTime = (() => {
           try {
             const dt = info.lastCheckTime ? new Date(String(info.lastCheckTime).replace(' ', 'T')) : null;
-            return dt && !isNaN(dt) ? dt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : (info.lastCheckTime || '-');
-          } catch (e) { return info.lastCheckTime || '未知'; }
+            return dt && !isNaN(dt)
+              ? dt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+              : (info.lastCheckTime || '-');
+          } catch (e) {
+            return info.lastCheckTime || '未知';
+          }
         })();
+
         const prettyDuration = (typeof info.duration === 'number')
-          ? (info.duration >= 60 ? Math.floor(info.duration / 60) + '分' + (info.duration % 60) + '秒' : info.duration + '秒')
+          ? (info.duration >= 3600 // 超过 60 分钟（3600 秒）
+            ? Math.floor(info.duration / 60) + '分'
+            : (info.duration >= 60
+              ? Math.floor(info.duration / 60) + '分' + (info.duration % 60) + '秒'
+              : info.duration + '秒'))
           : (info.duration || '0');
-        const prettyTotal = info.total >= 10000 ? (info.total / 10000).toFixed(1) + '万' : info.total;
+
+        const prettyTotal = (typeof info.total === 'number')
+          ? (info.total >= 1000000
+            ? (info.total / 10000).toFixed(0) + '万'
+            : (info.total >= 10000
+              ? (info.total / 10000).toFixed(1) + '万'
+              : info.total))
+          : (info.total || '0');
 
         const histTimeEl = document.getElementById('historyLastTime');
         const histDurationEl = document.getElementById('historyLastDuration');
