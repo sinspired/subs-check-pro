@@ -17,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/juju/ratelimit"
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -42,6 +41,12 @@ var (
 	ProcessResults atomic.Bool
 
 	Bucket *ratelimit.Bucket
+
+	// 统计每个订阅的节点总数和成功数
+	subStats = make(map[string]struct {
+		total   int
+		success int
+	})
 )
 
 // 存储测速和流媒体检测开关状态
@@ -392,6 +397,15 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		}()
 	}
 
+	// 先统计每个订阅链接的总数量
+	for _, proxy := range proxies {
+		if subURL, ok := proxy["sub_url"].(string); ok {
+			stats := subStats[subURL]
+			stats.total++
+			subStats[subURL] = stats
+		}
+	}
+
 	// 启动流水线阶段
 	go pc.distributeJobs(proxies, ctx)
 	go pc.runAliveStage(ctx)
@@ -416,7 +430,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	ProcessResults.Store(true)
 
 	// 检查订阅成功率并发出警告
-	pc.checkSubscriptionSuccessRate(proxies)
+	pc.checkSubscriptionSuccessRate()
 
 	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
 	slog.Info(fmt.Sprintf("测试总消耗流量: %.3fGB", float64(TotalBytes.Load())/1024/1024/1024))
@@ -932,22 +946,7 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 }
 
 // checkSubscriptionSuccessRate 检查订阅成功率并发出警告
-func (pc *ProxyChecker) checkSubscriptionSuccessRate(allProxies []map[string]any) {
-	// 统计每个订阅的节点总数和成功数
-	subStats := make(map[string]struct {
-		total   int
-		success int
-	})
-
-	// 统计所有节点的订阅来源
-	for _, proxy := range allProxies {
-		if subURL, ok := proxy["sub_url"].(string); ok {
-			stats := subStats[subURL]
-			stats.total++
-			subStats[subURL] = stats
-		}
-	}
-
+func (pc *ProxyChecker) checkSubscriptionSuccessRate() {
 	// 统计成功节点的订阅来源
 	for _, result := range pc.results {
 		if result.Proxy != nil {
@@ -991,7 +990,6 @@ func (pc *ProxyChecker) checkSubscriptionSuccessRate(allProxies []map[string]any
 			Total   int
 			Success int
 		}
-		filtered := make([]string, 0, len(subStats))
 		pairs := make([]pair, 0, len(subStats))
 
 		for u, st := range subStats {
@@ -999,7 +997,6 @@ func (pc *ProxyChecker) checkSubscriptionSuccessRate(allProxies []map[string]any
 				continue
 			}
 			r := float64(st.success) / float64(st.total)
-			filtered = append(filtered, u)
 			pairs = append(pairs, pair{URL: u, Rate: r, Total: st.total, Success: st.success})
 		}
 
@@ -1013,20 +1010,18 @@ func (pc *ProxyChecker) checkSubscriptionSuccessRate(allProxies []map[string]any
 			return strings.Compare(a.URL, b.URL)
 		})
 
-		// URL 列表保存为标准 YAML 数组
-		if data, err := yaml.Marshal(filtered); err != nil {
-			slog.Warn("序列化过滤后的订阅链接失败", "err", err)
-		} else if err := method.SaveToStats(data, "subs-filtered.yaml"); err != nil {
-			slog.Warn("保存过滤后的订阅链接失败", "err", err)
-		}
-
 		// 统计文件：每行一个条目，列表中为单键映射：- "<url>": <rate>
 		// rate 保留4位小数，便于人眼阅读与程序解析
-		var sb strings.Builder
+		var filteredSB strings.Builder
+		var filteredStatsSB strings.Builder
 		for _, p := range pairs {
-			fmt.Fprintf(&sb, "- %q: %d/%d (%.3f%%)\n", p.URL, p.Success, p.Total, p.Rate*100)
+			fmt.Fprintf(&filteredSB, "- %s\n", p.URL)
+			fmt.Fprintf(&filteredStatsSB, "- %q: %d/%d (%.3f%%)\n", p.URL, p.Success, p.Total, p.Rate*100)
 		}
-		if err := method.SaveToStats([]byte(sb.String()), "subs-filtered-stats.yaml"); err != nil {
+		if err := method.SaveToStats([]byte(filteredSB.String()), "subs-filtered.yaml"); err != nil {
+			slog.Warn("保存过滤后的订阅链接失败", "err", err)
+		}
+		if err := method.SaveToStats([]byte(filteredStatsSB.String()), "subs-filtered-stats.yaml"); err != nil {
 			slog.Warn("保存过滤后的订阅统计失败", "err", err)
 		}
 	}
