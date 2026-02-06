@@ -1767,31 +1767,98 @@
 
   async function getVersion() {
     if (!sessionKey) return;
-    els.versionInline.onclick = () => window.open("https://github.com/sinspired/subs-check-pro/releases/latest", "_blank");
+
+    // 点击事件：跳转到 Release 页面
+    els.versionInline.onclick = () => window.open("https://github.com/sinspired/subs-check-pro/releases", "_blank");
+
     try {
       const r = await sfetch(API.publicVersion);
       const p = r.payload;
-      if (p?.version && els.versionInline) els.versionInline.textContent = p.version;
-      if (p?.latest_version && p.version != p.latest_version) {
-        els.versionInline.textContent = `有新版本 v${p.latest_version}`;
+      if (!p?.version || !els.versionInline) return;
+
+      const currentV = p.version;
+      const latestV = p.latest_version;
+      const isPre = (v) => v && v.includes("-");
+
+      // 1. 设置当前版本显示内容
+      els.versionInline.textContent = currentV;
+
+      // 2. 如果当前是预览版，添加样式
+      if (isPre(currentV)) {
+        els.versionInline.classList.add("is-pre");
+      }
+
+      // 3. 检查更新
+      if (latestV && currentV != latestV) {
         els.versionInline.classList.add("new-version");
+
+        if (isPre(latestV)) {
+          // 新版本是预览版
+          els.versionInline.classList.add("pre-release");
+          els.versionInline.textContent = `v${latestV}`;
+          els.versionInline.title = `发现新预览版，建议谨慎更新`;
+        } else {
+          // 新版本是稳定版
+          els.versionInline.textContent = `v${latestV} `;
+          els.versionInline.title = `点击前往 GitHub 更新稳定版`;
+        }
+
+        // 有更新时点击最新的 Release
+        els.versionInline.onclick = () => window.open("https://github.com/sinspired/subs-check-pro/releases/latest", "_blank");
       } else {
         els.versionInline.title = `当前已是最新版本`;
       }
-    } catch (e) { }
+    } catch (e) {
+      console.error("Version check failed", e);
+    }
   }
 
   async function getPublicVersion() {
     try {
       const r = await fetch(API.publicVersion);
       const d = await r.json();
-      if (els.versionLogin) els.versionLogin.textContent = d.version;
-      if (d?.latest_version && d.version != d.latest_version) {
-        els.versionBadge.classList.add("new-version");
-        els.versionBadge.title = `有新版本 v${d.latest_version}`;
-        els.versionBadge.onclick = () => window.open("https://github.com/sinspired/subs-check-pro/releases/latest", "_blank");
+      if (!d) return;
+
+      const currentV = d.version;
+      const latestV = d.latest_version;
+
+      // 工具函数：判断是否为预览版
+      const isPre = (v) => v && v.includes("-");
+
+      // 设置当前版本显示
+      if (els.versionLogin) {
+        els.versionLogin.textContent = currentV;
+        // 如果当前是预览版，标记样式
+        if (isPre(currentV)) {
+          els.versionBadge.classList.add("is-pre");
+          els.versionLogin.classList.add("is-pre");
+        }
       }
-    } catch (e) { }
+
+      // 检查是否有新版本
+      if (latestV && currentV != latestV) {
+        els.versionBadge.classList.add("new-version");
+
+        if (isPre(latestV)) {
+          // 新版本是预览版
+          els.versionBadge.classList.add("pre-release");
+          els.versionBadge.title = `发现新预览版 v${latestV}，建议谨慎更新`;
+          els.versionLogin.textContent = `v${latestV}`;
+        } else {
+          // 新版本是正式版
+          els.versionBadge.title = `有新版本 v${latestV}`;
+          els.versionLogin.textContent = `v${latestV}`;
+        }
+
+        // 点击跳转
+        els.versionBadge.onclick = (e) => {
+          e.preventDefault(); // 阻止默认 anchor 跳转，统一由 window.open 处理或按需保留
+          window.open("https://github.com/sinspired/subs-check-pro/releases/latest", "_blank");
+        };
+      }
+    } catch (e) {
+      console.error("Version check failed", e);
+    }
   }
 
   // ==================== 初始化 ====================

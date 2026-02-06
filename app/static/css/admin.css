@@ -177,10 +177,11 @@ header {
   /* 保证内部宽度自适应 */
 }
 
+/* 标题行布局 */
 .title-row {
   display: flex;
-  align-items: flex-end;
-  /* 底部对齐 */
+  align-items: baseline; /* 让版本号对齐标题文字基线 */
+  gap: 8px;
 }
 
 .project-name {
@@ -200,29 +201,50 @@ header {
   /* 与 project-name 保持一致宽度 */
 }
 
+/* 基础版本号样式 */
 .version {
-  font-weight: normal;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
-  margin-left: 4px;
-  line-height: 1.2;
-  position: relative;
-  top: -2px;
-  /* 上移 2px */
+  padding: 1px 6px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
 }
 
-.version.btn {
-  padding: 0px 6px 1px 6px;
-  border-radius: 8px;
-  border: none;
-  transition: none;
+/* 当前是预览版时的样式 */
+.version.is-pre {
+  font-style: italic;
+  opacity: 0.8;
 }
 
-.version.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 3px var(--badge-shadow-hover);
-  /* padding: 2px 6px; */
-  background: transparent;
+/* 发现新版本 (稳定版) */
+.version.new-version {
+  background: rgba(0, 200, 210, 0.1); /* 青色透明背景 */
+  color: var(--accent);
+  border: 1px solid rgba(0, 200, 210, 0.2);
+  font-weight: 500;
+}
+
+/* 发现新版本 (预览版) */
+.version.new-version.pre-release {
+  background: rgba(255, 152, 0, 0.1); /* 橙色背景 */
+  color: #ff9800;
+  border: 1px dashed rgba(255, 152, 0, 0.4);
+}
+
+/* 悬停反馈 */
+.version:hover {
+  background: var(--bg-soft);
+  transform: translateY(-1px);
+}
+
+.version.new-version:hover {
+  background: rgba(0, 200, 210, 0.2);
+}
+
+.version.new-version.pre-release:hover {
+  background: rgba(255, 152, 0, 0.2);
 }
 
 .hdr-right {
@@ -1356,6 +1378,7 @@ main {
   gap: 1em;
   position: relative;
   overflow: visible;
+  align-items: center;
 }
 
 /* 添加背景烟雾 */
@@ -1431,6 +1454,7 @@ main {
 .login-title {
   position: relative;
   display: inline-block;
+  width: fit-content; /* 容器宽度收缩到文字 */
 }
 
 .login-card h3 {
@@ -1442,27 +1466,101 @@ main {
 }
 
 /* 版本号 */
+/* 基础样式 */
 .version-badge {
   position: absolute;
   bottom: 2.2em;
-  left: 80%;
+  left: 100%;       /* 起点在文字末尾 */
+  margin-left: 0px; /* 固定间距 */
   color: var(--muted);
   font-size: 13px;
   font-weight: normal;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
   white-space: nowrap;
   text-decoration: none;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
 }
 
+.version-badge.is-pre {
+  right: -3.5em;
+  margin-left: -3em; /* 固定间距 */
+}
+/* 当前版本是预览版时的表现 */
+#version-login.is-pre {
+  font-style: italic;
+}
+
+/* 发现新版本时的通用样式 (有动效提醒) */
 .new-version {
-  background: rgba(0, 200, 210, 0.07);
-  /* color: var(--fg); */
-  box-shadow: 0 0 3px var(--accent);
+  background: rgba(0, 200, 210, 0.1);
+  box-shadow: 0 0 4px rgba(0, 200, 210, 0.4);
+  color: var(--accent) !important;
+  animation: version-pulse 2s infinite;
+}
+
+/* 发现更新时的通用角标（NEW/PRE） */
+.new-version::after {
+  position: absolute;
+  top: -1.2em;
+  right: 0;
+  color: #fff;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 4px; /* 稍微方一点更有标签感 */
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* 状态 1：正式版更新 - 红色 NEW */
+.new-version::after {
+  content: 'NEW';
+  background: #e53935;
+}
+
+/* 状态 2：预览版更新 - 橙色 PRE (覆盖正式版样式) */
+.new-version.pre-release::after {
+  content: 'PRE'; /* 建议使用 PRE */
+  background: #ff9800; 
+}
+
+/* 当新版本是预览版 (Beta/RC) 时的特殊样式 */
+.new-version.pre-release {
+  background: rgba(255, 152, 0, 0.1); /* 橙色背景 */
+  box-shadow: 0 0 4px rgba(255, 152, 0, 0.4);
+  color: #ff9800 !important; /* 橙色文字 */
+  border: 1px dashed rgba(255, 152, 0, 0.5); /* 虚线边框暗示不稳定 */
+}
+
+/* 悬停效果 */
+.new-version:hover {
+  background: rgba(0, 200, 210, 0.2);
+  transform: scale(1.05);
+}
+
+.new-version.pre-release:hover {
+  background: rgba(255, 152, 0, 0.2);
+}
+
+/* 呼吸灯动画 */
+@keyframes version-pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 /* apikey输入框 */
 .input-wrapper {
+  min-width: 100%;
   display: flex;
   align-items: center;
   /* 垂直居中 */
@@ -1509,6 +1607,7 @@ main {
 
 /* 记住密钥块 */
 .remember-wrapper {
+  min-width: 100%;
   margin-top: -6px;
   display: flex;
   justify-content: space-between;
