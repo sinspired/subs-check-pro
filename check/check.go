@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"runtime/debug"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +25,6 @@ import (
 	"github.com/sinspired/subs-check-pro/check/platform"
 	"github.com/sinspired/subs-check-pro/config"
 	proxyutils "github.com/sinspired/subs-check-pro/proxy"
-	"github.com/sinspired/subs-check-pro/save/method"
 )
 
 // 对外暴露变量，兼容GUI调用
@@ -359,6 +357,11 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		args = append(args, "sub-urls-stats", config.GlobalConfig.SubURLsStats)
 	}
 
+	if config.GlobalConfig.SuccessRate > 0 {
+		r := fmt.Sprintf("%.1f%%", config.GlobalConfig.SuccessRate*100)
+		args = append(args, "success-rate", r)
+	}
+
 	// 最终日志调用
 	slog.Info("当前参数", args...)
 
@@ -414,8 +417,11 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	// 标记检测完成，开始处理结果，保存，上传等
 	ProcessResults.Store(true)
 
-	// 检查订阅成功率并发出警告
-	pc.checkSubscriptionSuccessRate()
+	// 1. 深度分析 (利用上一步的成功率进行排序，生成 analysis yaml)
+	pc.GenerateAnalysisReport()
+
+	// 2. 清理元数据 (删除 sub_url 等字段，防止污染最终配置)
+	pc.CleanupMetadata()
 
 	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
 	slog.Info(fmt.Sprintf("测试总消耗流量: %.3fGB", float64(TotalBytes.Load())/1024/1024/1024))
@@ -928,144 +934,6 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 	}
 
 	res.Proxy["name"] = name
-}
-
-// buildHeader 构建保存时的文件头注释
-func buildHeader(isGood bool, threshold float64) string {
-	var status string
-	if config.GlobalConfig.SuccessRate > 0 {
-		if isGood {
-			status = fmt.Sprintf("成功率达标 (阈值: %.2f%%)", threshold)
-		} else {
-			status = fmt.Sprintf("成功率未达标 (阈值: %.2f%%)", threshold)
-		}
-	} else {
-		if isGood {
-			status = "成功率大于 0"
-		} else {
-			status = "成功率为 0"
-		}
-	}
-	return fmt.Sprintf("# 订阅筛选结果：%s\n# 可直接替换 config.yaml 中的 subs-urls 字段\nsub-urls:\n", status)
-}
-
-// buildMessage 构建保存时的命令行消息
-func buildMessage(isGood bool, threshold float64) string {
-	if config.GlobalConfig.SuccessRate > 0 {
-		if isGood {
-			return fmt.Sprintf("保存成功率 ≥ %.2f%% 的订阅", threshold)
-		}
-		return fmt.Sprintf("备份成功率 < %.2f%% 的订阅", threshold)
-	} else {
-		if isGood {
-			return "保存成功率 > 0 的订阅"
-		}
-		return "无达标订阅"
-	}
-}
-
-// checkSubscriptionSuccessRate 检查订阅成功率并发出警告
-func (pc *ProxyChecker) checkSubscriptionSuccessRate() {
-	// 统计成功节点的订阅来源
-	for _, result := range pc.results {
-		if result.Proxy != nil {
-			if subURL, ok := result.Proxy["sub_url"].(string); ok {
-				stats := proxyutils.SubStats[subURL]
-				stats.Success++
-				proxyutils.SubStats[subURL] = stats
-			}
-			delete(result.Proxy, "sub_url")
-			delete(result.Proxy, "sub_tag")
-		}
-	}
-
-	// 根据用户配置，过滤出成功率>0的订阅并保存两个文件：
-	// 1) 仅包含URL列表：subs-filtered.yaml
-	// 2) 包含URL与成功率的统计：subs-filtered-stats.yaml（按成功率降序）
-	if config.GlobalConfig.SubURLsStats {
-		type pair struct {
-			URL     string
-			Rate    float64
-			Total   int
-			Success int
-		}
-		pairs := make([]pair, 0, len(proxyutils.SubStats))
-
-		for u, st := range proxyutils.SubStats {
-			if st.Total <= 0 || st.Success <= 0 {
-				continue
-			}
-			successRate := float64(st.Success) / float64(st.Total)
-
-			pairs = append(pairs, pair{URL: u, Rate: successRate, Total: st.Total, Success: st.Success})
-		}
-
-		// 排序：按成功率降序，再按URL升序
-		slices.SortFunc(pairs, func(a, b pair) int {
-			// 先按成功率降序 (b - a)
-			if n := cmpFloat(b.Rate, a.Rate); n != 0 {
-				return n
-			}
-			// 再按URL升序 (a - b)
-			return strings.Compare(a.URL, b.URL)
-		})
-
-		var goodSubs, badSubs strings.Builder
-
-		// 统一生成 yaml 注释
-		threshold := config.GlobalConfig.SuccessRate * 100
-
-		goodHeader := buildHeader(true, threshold)
-		badHeader := buildHeader(false, threshold)
-
-		// 分类写入
-		for _, p := range pairs {
-			if p.Rate < config.GlobalConfig.SuccessRate {
-				slog.Warn(fmt.Sprintf("订阅成功率过低: %s", p.URL),
-					"总节点数", p.Total,
-					"成功节点数", p.Success,
-					"成功占比", fmt.Sprintf("%.2f%%", p.Rate*100))
-				fmt.Fprintf(&badSubs, "  - %s # %.3f%% (%d/%d)\n", p.URL, p.Rate*100, p.Success, p.Total)
-			} else {
-				fmt.Fprintf(&goodSubs, "  - %s # %.3f%% (%d/%d)\n", p.URL, p.Rate*100, p.Success, p.Total)
-			}
-		}
-
-		// 保存 good 文件
-		if goodSubs.Len() > 0 {
-			content := goodHeader + goodSubs.String() // header 在最前面
-			message := buildMessage(true, threshold)
-			if err := method.SaveToStats([]byte(content), "subs-good.yaml", message); err != nil {
-				slog.Warn("保存 subs-good.yaml 失败", "err", err)
-			}
-		} else {
-			slog.Warn("没有订阅达到成功率要求，未生成 subs-good.yaml",
-				"阈值", fmt.Sprintf("%.2f%%", config.GlobalConfig.SuccessRate*100))
-		}
-
-		// 保存 bad 文件
-		if badSubs.Len() > 0 {
-			content := badHeader + badSubs.String() // header 在最前面
-			message := buildMessage(false, threshold)
-			if err := method.SaveToStats([]byte(content), "subs-bad.yaml", message); err != nil {
-				slog.Warn("保存 subs-bad.yaml 失败", "err", err)
-			} else {
-				slog.Warn("部分订阅未达到成功率要求，已保存到 subs-bad.yaml",
-					"阈值", fmt.Sprintf("%.2f%%", config.GlobalConfig.SuccessRate*100))
-			}
-		}
-
-	}
-}
-
-func cmpFloat(a, b float64) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
 }
 
 type ProxyClient struct {
