@@ -141,7 +141,10 @@ func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
 		"/mihomo.yaml":  "mihomo.yaml",  // Mihomo 格式
 	}
 	for routePath, fileName := range protectedFiles {
-		authGroup.StaticFile(routePath, filepath.Join(outputPath, fileName))
+		// 映射到 outputPath/sub 下的文件
+		authGroup.StaticFile(routePath, filepath.Join(outputPath, "sub", fileName))
+		// 同时提供 /sub 路径访问
+		authGroup.StaticFile("/sub"+routePath, filepath.Join(outputPath, "sub", fileName))
 	}
 }
 

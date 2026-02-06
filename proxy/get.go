@@ -52,6 +52,30 @@ type SubUrls struct {
 
 // initEnvironment 初始化代理环境变量
 func initEnvironment() {
+	saver, err := method.NewLocalSaver()
+	if err == nil {
+		srcDir := saver.OutputPath
+		targetDir := filepath.Join(saver.OutputPath, "sub")
+		saver.OutputPath = targetDir
+		if err := os.MkdirAll(targetDir, 0o755); err != nil {
+			slog.Error("创建 sub 目录失败", "error", err)
+		}
+		if err := migrateOldFiles(srcDir, "history.yaml", targetDir); err == nil {
+			os.Remove(filepath.Join(srcDir, "history.yaml"))
+		} else {
+			slog.Info("迁移出错", "error", err, "srcDir", srcDir, "targetDir", targetDir)
+		}
+		if err := migrateOldFiles(srcDir, "all.yaml", targetDir); err == nil {
+			os.Remove(filepath.Join(srcDir, "all.yaml"))
+		}
+		if err := migrateOldFiles(srcDir, "mihomo.yaml", targetDir); err == nil {
+			os.Remove(filepath.Join(srcDir, "mihomo.yaml"))
+		}
+		if err := migrateOldFiles(srcDir, "base64.txt", targetDir); err == nil {
+			os.Remove(filepath.Join(srcDir, "base64.txt"))
+		}
+	}
+
 	slog.Info("获取系统代理和Github代理状态")
 	utils.IsSysProxyAvailable = utils.GetSysProxy()
 	utils.IsGhProxyAvailable = utils.GetGhProxy()

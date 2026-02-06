@@ -122,6 +122,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 	}
 	if category.Name == "history.yaml" {
 		saver, err := method.NewLocalSaver()
+		saver.OutputPath = filepath.Join(saver.OutputPath, "sub")
 		if err != nil {
 			return fmt.Errorf("本地存储初始化失败，无法启用历史记录功能: %w", err)
 		}
@@ -249,7 +250,13 @@ func chooseSaveMethod() func([]byte, string) error {
 			return uploader.Upload(yamlData, filename)
 		}
 	case "local":
-		return method.SaveToLocal
+		saver, err := method.NewLocalSaver()
+		if err != nil {
+			return func(b []byte, s string) error { return fmt.Errorf("本地保存器创建失败: %v", err) }
+		}
+		newSubDir := filepath.Join(saver.OutputPath, "sub")
+		saver.OutputPath = newSubDir
+		return saver.Save
 	case "s3": // New case for MinIO
 		if err := method.ValiS3Config(); err != nil {
 			return func(b []byte, s string) error { return fmt.Errorf("S3配置不完整: %v", err) }

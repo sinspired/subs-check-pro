@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -1314,5 +1315,35 @@ func ParseSingBoxWithMetadata(data []byte) []ProxyNode {
 		return ConvertSingBoxOutbounds(outbounds)
 	}
 
+	return nil
+}
+
+// migrateOldFiles 迁移旧文件
+func migrateOldFiles(srcDir, fileName, targetDir string) error {
+	src := filepath.Join(srcDir, fileName)
+	dst := filepath.Join(targetDir, fileName)
+
+	// 目标已存在 -> 不做任何操作
+	if _, err := os.Stat(dst); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("检查目标文件失败: %w", err)
+	}
+
+	// 源不存在 -> 不做任何操作
+	if _, err := os.Stat(src); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("检查源文件失败: %w", err)
+	}
+
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("读取源文件失败: %w", err)
+	}
+	if err := os.WriteFile(dst, data, 0o644); err != nil {
+		return fmt.Errorf("写入目标文件失败: %w", err)
+	}
 	return nil
 }
