@@ -37,6 +37,9 @@ type SubStat struct {
 	Success int
 }
 
+// 去重后的订阅数量
+var uniqueSubsCount int = 0
+
 // SubStats 存储订阅总数和成功数
 var SubStats = make(map[string]SubStat)
 
@@ -77,6 +80,8 @@ func logSubscriptionStats(total, local, remote, history int) {
 	} else {
 		args = append(args, "总计", total)
 	}
+
+	uniqueSubsCount = total
 
 	slog.Info("订阅数量", args...)
 
@@ -245,13 +250,13 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	uniqueNodes = nil
 	nodeKeepLevels = nil
 
-	saveStats(SubStats)
 	// 打印去重统计日志
 	slog.Info("节点解析",
 		"原始", rawCount,
 		"去重", len(finalProxies),
 		"丢弃", rawCount-len(finalProxies),
 	)
+	saveStats(SubStats)
 	return finalProxies, rawCount, finalSuccCount, finalHistCount, nil
 }
 
@@ -357,7 +362,7 @@ func parseSubscriptionData(data []byte, subURL string) ([]ProxyNode, error) {
 
 	// 尝试 Base64/V2Ray 标准转换
 	if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
-		slog.Info("解析成功", "订阅", subURL, "格式", "Base64/V2Ray", "数量", len(nodes))
+		slog.Debug("解析成功", "订阅", subURL, "格式", "Base64/V2Ray", "数量", len(nodes))
 		return ToProxyNodes(nodes), nil
 	}
 
@@ -827,10 +832,6 @@ func cleanMetadata(p ProxyNode) {
 
 // saveStats 保存统计信息
 func saveStats(subStats map[string]SubStat) {
-	if !config.GlobalConfig.SubURLsStats {
-		return
-	}
-
 	// 构造 pair 列表
 	type pair struct {
 		URL     string
@@ -851,13 +852,25 @@ func saveStats(subStats map[string]SubStat) {
 	})
 
 	var validSB strings.Builder
-	validSB.WriteString("# 已剔除失效订阅链接\n")
 	validSB.WriteString("# 可直接替换 config.yaml 中的 subs-urls 字段\n")
 	validSB.WriteString("sub-urls:\n")
 	for _, p := range pairs {
 		fmt.Fprintf(&validSB, "  - %q # nodes: %d\n", p.URL, p.Total)
 	}
-	_ = method.SaveToStats([]byte(validSB.String()), "subs-valid.yaml","剔除失效订阅")
+
+	if len(subStats) < uniqueSubsCount {
+		validSB.WriteString("\n# 已剔除以下失效订阅链接：\n")
+		for _, u := range config.GlobalConfig.SubUrls {
+			if _, ok := subStats[u]; !ok {
+				fmt.Fprintf(&validSB, "# - %q\n", u)
+			}
+		}
+		_ = method.SaveToStats([]byte(validSB.String()), "sub-urls.yaml", "订阅净化")
+	} else {
+		validSB.WriteString("\n# 所有订阅链接均可用，已按照节点数量排序\n")
+		_ = method.SaveToStats([]byte(validSB.String()), "sub-urls.yaml", "订阅排序")
+	}
+
 }
 
 // buildCandidateURLs 生成候选链接

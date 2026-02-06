@@ -68,7 +68,7 @@ func (ls *StatsSaver) Save(yamlData []byte, filename, message string) error {
 	if message == "" {
 		message = "保存订阅统计成功"
 	}
-	slog.Info(message, "filepath", filepath)
+	slog.Info(message, "路径", filepath)
 
 	return nil
 }

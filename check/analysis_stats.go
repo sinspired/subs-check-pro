@@ -64,10 +64,6 @@ func newAnalysisStats() *AnalysisStats {
 
 // GenerateAnalysisReport 生成节点质量分析报告
 func (pc *ProxyChecker) GenerateAnalysisReport() {
-	if !config.GlobalConfig.SubURLsStats && config.GlobalConfig.SuccessRate <= 0 {
-		return
-	}
-
 	// 统计可用节点数量
 	for _, result := range pc.results {
 		if result.Proxy != nil {
@@ -204,9 +200,15 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	summary := generateSummary(global)
 	sb.WriteString("  " + summary + "\n\n")
 
+	sb.WriteString("check_info:\n")
+	sb.WriteString("  check_time: " + prettyTime(CheckStartTime) + "\n")
+	sb.WriteString("  check_duration: " + prettyDuration(CheckDuration) + "\n")
+	sb.WriteString("  check_count: " + prettyTotal(int(Progress.Load())) + "\n")
+	sb.WriteString("\n")
+
 	// 2. 全局统计 (可视化友好结构)
 	sb.WriteString("global_analysis:\n")
-	sb.WriteString(fmt.Sprintf("  node_count: %d\n", global.Total))
+	sb.WriteString(fmt.Sprintf("  alive_count: %d\n", global.Total))
 	sb.WriteString("  geography_distribution:" + formatMap(global.Countries, "    ") + "\n")
 	sb.WriteString("  protocol_distribution:" + formatMap(global.Types, "    ") + "\n")
 
@@ -239,7 +241,7 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 		}
 	}
 
-	_ = method.SaveToStats([]byte(sb.String()+sbBad.String()), "subs-analysis.yaml", "分析检测结果")
+	_ = method.SaveToStats([]byte(sb.String()+sbBad.String()), "subs-analysis.yaml", "分析结果")
 }
 
 // generateSummary 生成单段落详细摘要
@@ -275,14 +277,17 @@ func generateSummary(s *AnalysisStats) string {
 	}
 
 	return fmt.Sprintf(
-		"共检测到 %d 个可用节点%s。覆盖 %d 个国家/地区[Top: %s]。"+
-			"%s[CF 中转占比 %.1f%%, VPS 占比 %.1f%%]。"+
-			"流媒体解锁[%s], AI 解锁[%s]。"+
-			"主要代理协议[%s]。",
-		s.Total, speedText, len(s.Countries), topCountry,
+		"用时%s, 检测到 %s 个可用节点%s。"+
+			"覆盖 %d 个国家/地区 [Top: %s]; "+
+			"%s [CF 中转 %.1f%%, VPS %.1f%%]; "+
+			"流媒体解锁: [%s]; AI 解锁[%s]; "+
+			"代理协议: %s。",
+		prettyDuration(CheckDuration),
+		prettyTotal(s.Total),
+		speedText, len(s.Countries), topCountry,
 		lineFeature, cfRatio, vpsRatio,
 		topMedia, topAI,
-		getTopKeys(s.Types, 3),
+		getTopKeys(s.Types, 10),
 	)
 }
 
@@ -296,18 +301,42 @@ func logSummary(s *AnalysisStats) {
 	cfRatio := float64(getSum(s.CFCon)) / float64(max(1, s.Total)) * 100
 	vpsRatio := float64(getSum(s.NonCF)) / float64(max(1, s.Total)) * 100
 
-	// 终端输出保留核心维度
-	slog.Info("可用节点概况",
-		// "总数", s.Total,
-		"CF节点", fmt.Sprintf("%.0f%%", cfRatio),
-		"VPS节点", fmt.Sprintf("%.0f%%", vpsRatio),
+	slog.Info("检测摘要",
+		"耗时", prettyDuration(CheckDuration),
+		"CF", fmt.Sprintf("%.0f%%", cfRatio),
+		"VPS", fmt.Sprintf("%.0f%%", vpsRatio),
 		// "媒体解锁", getTopFiltered(s.Media, []string{"Netflix", "YouTube", "Disney+", "TikTok"}, 5),
 		// "AI解锁", getTopFiltered(s.Media, []string{"GPT", "GPT+", "Gemini"}, 3),
 		"协议", getTopKeys(s.Types, 10),
 	)
+
 }
 
 // 工具函数
+func prettyTime(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.Format("01-02 15:04") // 月-日 时:分
+}
+func prettyDuration(d time.Duration) string {
+	sec := int(d.Seconds())
+	if sec >= 3600 {
+		return fmt.Sprintf("%d分", sec/60) // 超过 60 分钟只显示分钟
+	} else if sec >= 60 {
+		return fmt.Sprintf("%d分%d秒", sec/60, sec%60)
+	} else {
+		return fmt.Sprintf("%d秒", sec)
+	}
+}
+func prettyTotal(n int) string {
+	if n >= 1000000 {
+		return fmt.Sprintf("%d万", n/10000)
+	} else if n >= 10000 {
+		return fmt.Sprintf("%.1f万", float64(n)/10000.0)
+	}
+	return fmt.Sprintf("%d", n)
+}
 
 // getTopFiltered 根据白名单过滤并返回前 N 个统计项
 func getTopFiltered(m map[string]int, filter []string, limit int) string {
@@ -401,7 +430,7 @@ func getTopKeys(m map[string]int, limit int) string {
 	for i := 0; i < len(res) && i < limit; i++ {
 		keys = append(keys, res[i].K)
 	}
-	return strings.Join(keys, ", ")
+	return strings.Join(keys, "|")
 }
 
 func getSum(m map[string]int) int {
@@ -410,13 +439,6 @@ func getSum(m map[string]int) int {
 		s += v
 	}
 	return s
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // checkSubsSuccessRate 将成功率筛选与协议统计整合输出
@@ -493,7 +515,7 @@ func checkSubsSuccessRate(subs map[string]*AnalysisStats, sortedURLs []string) {
 	}
 
 	// 3. 保存文件
-	_ = method.SaveToStats([]byte(finalSB.String()), "subs-filter.yaml", "统计订阅质量")
+	_ = method.SaveToStats([]byte(finalSB.String()), "subs-filter.yaml", "订阅统计")
 }
 
 // flagToCode 将 Emoji 国旗转换为两位 ISO 国家代码 (例如 🇯🇵 -> JP)

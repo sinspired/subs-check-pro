@@ -98,9 +98,9 @@ prerelease: false
 ```bash
 output/
 └── stats/
-    ├── subs-valid.yaml            # 有效订阅链接
-    ├── subs-filter.yaml           # 订阅质量统计
-    └── subs-analysis.yaml         # 订阅节点质量分析报告
+    ├── sub-urls.yaml       # 剔除失效链接并排序后的订阅列表
+    ├── subs-filter.yaml    # 订阅质量统计
+    └── subs-analysis.yaml  # 订阅节点质量分析报告
 ```
 
 设置项：

@@ -39,6 +39,9 @@ var (
 	ProcessResults atomic.Bool
 
 	Bucket *ratelimit.Bucket
+
+	CheckStartTime time.Time
+	CheckDuration  time.Duration
 )
 
 // 存储测速和流媒体检测开关状态
@@ -298,6 +301,9 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 
 	slog.Info("开始检测节点")
 
+	// 记录开始检测时间
+	CheckStartTime = time.Now()
+
 	// 组装参数
 	args := []any{
 		"enable-speedtest", speedON,
@@ -353,9 +359,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		args = append(args, "keep-success-proxies", config.GlobalConfig.KeepSuccessProxies)
 	}
 
-	if config.GlobalConfig.SubURLsStats {
-		args = append(args, "sub-urls-stats", config.GlobalConfig.SubURLsStats)
-	}
+	args = append(args, "analysis", "true")
 
 	if config.GlobalConfig.SuccessRate > 0 {
 		r := fmt.Sprintf("%.1f%%", config.GlobalConfig.SuccessRate*100)
@@ -417,14 +421,17 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	// 标记检测完成，开始处理结果，保存，上传等
 	ProcessResults.Store(true)
 
+	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
+	slog.Info(fmt.Sprintf("检测消耗流量: %.3fGB", float64(TotalBytes.Load())/1024/1024/1024))
+
+	// 计算检测用时
+	CheckDuration = time.Since(CheckStartTime)
+
 	// 1. 深度分析 (利用上一步的成功率进行排序，生成 analysis yaml)
 	pc.GenerateAnalysisReport()
 
 	// 2. 清理元数据 (删除 sub_url 等字段，防止污染最终配置)
 	pc.CleanupMetadata()
-
-	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
-	slog.Info(fmt.Sprintf("测试总消耗流量: %.3fGB", float64(TotalBytes.Load())/1024/1024/1024))
 
 	// 手动解除引用
 	for i := range proxies {

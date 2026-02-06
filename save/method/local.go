@@ -70,7 +70,7 @@ func (ls *LocalSaver) Save(yamlData []byte, filename string) error {
 	if err := os.WriteFile(filepath, yamlData, fileMode); err != nil {
 		return fmt.Errorf("写入文件失败 [%s]: %w", filename, err)
 	}
-	slog.Info("保存本地成功", "filepath", filepath)
+	slog.Info("保存本地成功", "路径", filepath)
 
 	return nil
 }
