@@ -5,7 +5,7 @@ mihomo.yaml
 test
 
 output/*
-subs-check*
+subs-check-pro*
 mihomo-check*
 
 .idea

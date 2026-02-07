@@ -8,8 +8,8 @@ High-performance proxy subscription checker.
 </p>
 <p align="center">
 <a href="https://github.com/sinspired/subs-check-pro/releases"><img src="https://img.shields.io/github/v/release/sinspired/subs-check-pro?logo=github&include_prereleases"/></a>
-<a href="https://hub.docker.com/r/sinspired/subs-check"><img src="https://img.shields.io/docker/pulls/sinspired/subs-check?logo=docker" /></a>
-<a href="https://ghcr.io/sinspired/subs-check"><img src="https://img.shields.io/badge/ghcr.io-available-blue?logo=github"/></a>
+<a href="https://hub.docker.com/r/sinspired/subs-check-pro"><img src="https://img.shields.io/docker/pulls/sinspired/subs-check?logo=docker" /></a>
+<a href="https://ghcr.io/sinspired/subs-check-pro"><img src="https://img.shields.io/badge/ghcr.io-available-blue?logo=github"/></a>
 <a href="https://github.com/sinspired/subs-check-pro/wiki"><img src="https://img.shields.io/badge/Wiki-Docs-blue?logo=github"/></a>
 <img alt="GitHub Release" src="https://img.shields.io/github/v/release/sinspired/SubsCheck-Win-GUI?display_name=release&style=social&logo=github&label=Windows%E5%9B%BE%E5%BD%A2%E7%95%8C%E9%9D%A2">
 </p>
@@ -98,20 +98,20 @@ High-performance proxy subscription checker.
 下载 Releases 中适合的版本，解压后直接运行：
 
 ```powershell
-./subs-check.exe -f ./config/config.yaml
+./subs-check-pro.exe -f ./config/config.yaml
 ```
 
 ### Docker 运行（最简）
 
 ```bash
 docker run -d \
-  --name subs-check \
+  --name subs-check-pro \
   -p 8299:8299 \
   -p 8199:8199 \
   -v ./config:/app/config \
   -v ./output:/app/output \
   --restart always \
-  ghcr.io/sinspired/subs-check:latest
+  ghcr.io/sinspired/subs-check-pro:latest
 ```
 
 > 代理设置见 Wiki：[系统与 GitHub 代理](https://github.com/sinspired/subs-check-pro/wiki/System-Proxy)

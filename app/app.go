@@ -331,7 +331,7 @@ func (app *App) checkProxies() error {
 
 // TempLog 返回临时日志路径
 func TempLog() string {
-	return filepath.Join(os.TempDir(), "subs-check.log")
+	return filepath.Join(os.TempDir(), "subs-check-pro.log")
 }
 
 // Shutdown 尝试优雅关闭所有子服务与资源

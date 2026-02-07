@@ -32,8 +32,8 @@ const (
 	StaticPrefix    = "/static"
 	AdminPath       = "/admin"
 	APIAuthHeader   = "X-API-Key"
-	HeaderFromCheck = "X-From-Subs-Check"
-	QueryFromCheck  = "from_subs_check"
+	HeaderFromCheck = "X-From-Subs-Check-pro"
+	QueryFromCheck  = "from_subs_check_pro"
 )
 
 var (

@@ -49,7 +49,7 @@ changelog:
 
 # 构建配置
 builds:
-  - id: subs-check
+  - id: subs-check-pro
     env:
       - CGO_ENABLED=0
       - GOEXPERIMENT=greenteagc,jsonv2
@@ -80,7 +80,7 @@ builds:
 # 归档配置
 archives:
   - ids:
-      - subs-check
+      - subs-check-pro
     formats:
       - tar.gz
     name_template: >-

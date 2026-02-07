@@ -15,5 +15,5 @@ bin/*
 test_*.*
 
 output/*
-subs-check*
+subs-check-pro*
 mihomo-check*

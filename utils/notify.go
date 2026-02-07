@@ -281,14 +281,14 @@ func SendNotifyGeoDBUpdate(version string) {
 
 // SendNotifySelfUpdate 发送程序自更新通知
 func SendNotifySelfUpdate(current, latest string) {
-	title := "🔔 subs-check 自动更新"
+	title := "🔔 subs-check-pro 自动更新"
 	body := fmt.Sprintf("✅ %s -> %s\n🕒 %s", current, latest, GetCurrentTime())
 	broadcastNotify(NotifySelfUpdate, title, body, "")
 }
 
 // SendNotifyDetectLatestRelease 发送新版本通知
 func SendNotifyDetectLatestRelease(current, latest string, isDocker, isGUI bool, downloadURL string) {
-	title := "📦 subs-check 发现新版本"
+	title := "📦 subs-check-pro 发现新版本"
 	var body string
 	if isDocker {
 		body = fmt.Sprintf("🏷 %s  \n🐳 Docker 镜像\n🔗 ghcr.io/sinspired/subs-check-pro:%s  \n🕒 %s", latest, latest, GetCurrentTime())
