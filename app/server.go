@@ -126,8 +126,10 @@ func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
 	// 公共静态文件映射（无需鉴权）
 	publicFiles := map[string]string{
 		"/ACL4SSR_Online_Full.yaml":     "ACL4SSR_Online_Full.yaml",
+		"/Sinspired_Rules_CDN.yaml":   "Sinspired_Rules_CDN.yaml",
 		"/bdg.yaml":                     "bdg.yaml",
 		"/sub/ACL4SSR_Online_Full.yaml": "ACL4SSR_Online_Full.yaml",
+		"/sub/Sinspired_Rules_CDN.yaml": "Sinspired_Rules_CDN.yaml",
 		"/sub/bdg.yaml":                 "bdg.yaml",
 	}
 

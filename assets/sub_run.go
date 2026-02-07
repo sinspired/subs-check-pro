@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,12 +27,13 @@ import (
 var InitSubStorePath = ""
 
 type subStorePaths struct {
-	substoreDir  string
-	nodePath     string
-	jsPath       string
-	frontDir     string
-	overYamlPath string
-	logPath      string
+	substoreDir                   string
+	nodePath                      string
+	jsPath                        string
+	frontDir                      string
+	overYamlACL4SSRPath           string
+	overYamlSinspiredRulesCDNPath string
+	logPath                       string
 }
 
 // getSubStorePaths 获取 sub-store 相关路径
@@ -53,12 +55,13 @@ func getSubStorePaths() (*subStorePaths, error) {
 	substoreDir := filepath.Join(saver.OutputPath, "sub-store")
 
 	return &subStorePaths{
-		substoreDir:  substoreDir,
-		nodePath:     filepath.Join(substoreDir, nodeName),
-		jsPath:       filepath.Join(substoreDir, "sub-store.bundle.js"),
-		frontDir:     filepath.Join(substoreDir, "frontend"),
-		overYamlPath: filepath.Join(saver.OutputPath, "ACL4SSR_Online_Full.yaml"),
-		logPath:      filepath.Join(substoreDir, "sub-store.log"),
+		substoreDir:                   substoreDir,
+		nodePath:                      filepath.Join(substoreDir, nodeName),
+		jsPath:                        filepath.Join(substoreDir, "sub-store.bundle.js"),
+		frontDir:                      filepath.Join(substoreDir, "frontend"),
+		overYamlACL4SSRPath:           filepath.Join(saver.OutputPath, "ACL4SSR_Online_Full.yaml"),
+		overYamlSinspiredRulesCDNPath: filepath.Join(saver.OutputPath, "Sinspired_Rules_CDN.yaml"),
+		logPath:                       filepath.Join(substoreDir, "sub-store.log"),
 	}, nil
 }
 
@@ -133,6 +136,7 @@ func startSubStore(ctx context.Context) error {
 		return err
 	}
 
+	// 确保上层目录存在
 	if err := os.MkdirAll(filepath.Dir(paths.substoreDir), 0o755); err != nil {
 		return fmt.Errorf("创建输出目录失败: %w", err)
 	}
@@ -151,9 +155,11 @@ func startSubStore(ctx context.Context) error {
 	// 如果subs-check内存问题退出，会导致node二进制损坏，启动的node变成僵尸，所以删一遍
 	_ = os.Remove(paths.nodePath)
 	_ = os.Remove(paths.jsPath)
-	_ = os.Remove(paths.overYamlPath)
+	_ = os.Remove(paths.overYamlACL4SSRPath)
+	_ = os.Remove(paths.overYamlSinspiredRulesCDNPath)
 	_ = os.RemoveAll(paths.frontDir)
-	if err := decodeZstd(paths.nodePath, paths.jsPath, paths.overYamlPath, paths.frontDir); err != nil {
+	// 解压 sub-store 相关文件
+	if err := decodeZstd(paths); err != nil {
 		return err
 	}
 
@@ -330,45 +336,32 @@ func normalizeSubstorePort(s string) string {
 	if s == "" {
 		return def
 	}
-
+	// 如果是数字且在 1-65535，则返回原始输入
+	if p, err := strconv.Atoi(s); err == nil && p > 0 && p <= 65535 {
+		return s
+	}
 	return def
 }
 
-func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
-	// 创建 zstd 解码器
-	zstdDecoder, err := zstd.NewReader(nil)
+// decodeZstdToFile 将嵌入的 zstd 压缩数据解压写入文件
+func decodeZstdToFile(decoder *zstd.Decoder, data []byte, targetPath string, perm os.FileMode, desc string) error {
+	file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
-		return fmt.Errorf("创建zstd解码器失败: %w", err)
+		return fmt.Errorf("创建 %s 文件失败: %w", desc, err)
 	}
-	defer zstdDecoder.Close()
+	defer file.Close()
 
-	// 解压 node 二进制文件
-	nodeFile, err := os.OpenFile(nodePath, os.O_CREATE|os.O_WRONLY, 0o755)
-	if err != nil {
-		return fmt.Errorf("创建 node 文件失败: %w", err)
+	decoder.Reset(bytes.NewReader(data))
+	if _, err := io.Copy(file, decoder); err != nil {
+		return fmt.Errorf("解压 %s 失败: %w", desc, err)
 	}
-	defer nodeFile.Close()
+	return nil
+}
 
-	zstdDecoder.Reset(bytes.NewReader(EmbeddedNode))
-	if _, err := io.Copy(nodeFile, zstdDecoder); err != nil {
-		return fmt.Errorf("解压 node 二进制文件失败: %w", err)
-	}
-
-	// 解压 sub-store 后端脚本
-	jsFile, err := os.OpenFile(jsPath, os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("创建 sub-store 脚本文件失败: %w", err)
-	}
-	defer jsFile.Close()
-
-	zstdDecoder.Reset(bytes.NewReader(EmbeddedSubStoreBackend))
-	if _, err := io.Copy(jsFile, zstdDecoder); err != nil {
-		return fmt.Errorf("解压 sub-store 脚本失败: %w", err)
-	}
-
-	// 解压 sub-store 前端文件夹
-	zstdDecoder.Reset(bytes.NewReader(EmbeddedSubStoreFrotend))
-	tarReader := tar.NewReader(zstdDecoder)
+// extractTarFromZstd 解压嵌入的 zstd(tar) 到目标目录（用于前端资源）
+func extractTarFromZstd(decoder *zstd.Decoder, data []byte, targetDir string) error {
+	decoder.Reset(bytes.NewReader(data))
+	tarReader := tar.NewReader(decoder)
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -378,16 +371,16 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 			return fmt.Errorf("读取tar头失败: %w", err)
 		}
 
-		// 移除 tar 文件中的顶层目录
+		// 忽略第一层目录名
 		parts := strings.Split(header.Name, "/")
 		if len(parts) <= 1 {
-			continue // 跳过顶层目录本身或空条目
+			continue
 		}
 		relativePath := strings.Join(parts[1:], "/")
 		if relativePath == "" {
 			continue
 		}
-		target := filepath.Join(frontDir, relativePath)
+		target := filepath.Join(targetDir, relativePath)
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -398,7 +391,7 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return fmt.Errorf("创建父目录失败: %w", err)
 			}
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
 				return fmt.Errorf("创建文件失败: %w", err)
 			}
@@ -409,18 +402,43 @@ func decodeZstd(nodePath, jsPath, overYamlPath, frontDir string) error {
 			outFile.Close()
 		}
 	}
+	return nil
+}
 
-	// 解压 覆写文件
-	overYamlFile, err := os.OpenFile(overYamlPath, os.O_CREATE|os.O_WRONLY, 0o644)
+// decodeZstd 解压 sub-store 相关文件
+func decodeZstd(paths *subStorePaths) error {
+	// 创建 zstd 解码器
+	zstdDecoder, err := zstd.NewReader(nil)
 	if err != nil {
-		return fmt.Errorf("创建 ACL4SSR_Online_Full.yaml 文件失败: %w", err)
+		return fmt.Errorf("创建zstd解码器失败: %w", err)
 	}
-	defer overYamlFile.Close()
+	defer zstdDecoder.Close()
 
-	zstdDecoder.Reset(bytes.NewReader(EmbeddedOverrideYaml))
-	if _, err := io.Copy(overYamlFile, zstdDecoder); err != nil {
-		return fmt.Errorf("解压 ACL4SSR_Online_Full.yaml 失败: %w", err)
+	// 解压 node 二进制文件
+	if err := decodeZstdToFile(zstdDecoder, EmbeddedNode, paths.nodePath, 0o755, "node 二进制文件"); err != nil {
+		return err
 	}
+
+	// 解压 sub-store 后端脚本
+	if err := decodeZstdToFile(zstdDecoder, EmbeddedSubStoreBackend, paths.jsPath, 0o644, "sub-store 脚本"); err != nil {
+		return err
+	}
+
+	// 解压 sub-store 前端文件夹（tar）
+	if err := extractTarFromZstd(zstdDecoder, EmbeddedSubStoreFrotend, paths.frontDir); err != nil {
+		return err
+	}
+
+	// 解压 ACL4SSR_Online_Full.yaml
+	if err := decodeZstdToFile(zstdDecoder, EmbeddedOverrideYamlACL4SSR, paths.overYamlACL4SSRPath, 0o644, "ACL4SSR_Online_Full.yaml"); err != nil {
+		return err
+	}
+
+	// 解压 Sinspired_Rules_CDN.yaml
+	if err := decodeZstdToFile(zstdDecoder, EmbeddedOverrideYamlSinspiredRulesCDN, paths.overYamlSinspiredRulesCDNPath, 0o644, "Sinspired_Rules_CDN.yaml"); err != nil {
+		return err
+	}
+
 	return nil
 }
 

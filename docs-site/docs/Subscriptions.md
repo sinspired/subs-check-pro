@@ -40,7 +40,7 @@ http://127.0.0.1:8299/{sub-store-path}/download/sub?target=Surfboard
 
 默认使用：
 
-[mihomo 覆写文档](https://raw.githubusercontent.com/sinspired/override-hub/refs/heads/main/yaml/ACL4SSR_Online_Full.yaml)
+[mihomo 覆写文档](https://raw.githubusercontent.com/sinspired/proxy-rules/main/Sinspired_Rules_CDN.yaml)
 
 可在配置中更改 `mihomo-overwrite-url`。
 

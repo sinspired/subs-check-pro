@@ -11,4 +11,7 @@ var EmbeddedSubStoreBackend []byte
 var EmbeddedSubStoreFrotend []byte
 
 //go:embed ACL4SSR_Online_Full.yaml.zst
-var EmbeddedOverrideYaml []byte
+var EmbeddedOverrideYamlACL4SSR []byte
+
+//go:embed Sinspired_Rules_CDN.yaml.zst
+var EmbeddedOverrideYamlSinspiredRulesCDN []byte
