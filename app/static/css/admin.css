@@ -593,7 +593,7 @@ main {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding-bottom: 12px;
+  /* padding-bottom: 12px; */
 }
 
 .progress-actions {
@@ -879,6 +879,7 @@ main {
   margin-left: -12px;
   margin-right: -12px;
   margin-bottom: -12px;
+  margin-top: 12px;
   font-size: 12px;
   display: flex;
   flex-direction: column;
