@@ -1,12 +1,12 @@
 # 🌐 内置文件服务
 
-subs-check 会在测试完后保存三个文件到 `output` 目录中；`output` 目录中的所有文件会由 8199 端口提供文件服务。
+subs-check 会在测试完后保存三个文件到 `output/sub` 目录中；`output/sub` 目录中的所有文件会由 8199 端口提供文件服务。
 
 ⚠️ 为方便使用 Cloudflare 隧道映射等方案在公网访问，本项目取消了对 `output` 文件夹的无限制访问。
 
 ## 🔐 使用分享码分享（推荐）
 
-设置 `share-password`，使用分享码进行分享。可分享 `/output` 目录的文件，比如 `all.yaml`、`mihomo.yaml`：
+设置 `share-password`，使用分享码进行分享。可分享 `/output/sub` 目录的文件，比如 `all.yaml`、`mihomo.yaml`：
 
 ```yaml
 # 如果你要分享订阅，请设置订阅分享密码

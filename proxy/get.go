@@ -716,6 +716,7 @@ func resolveSubUrls() ([]string, int, int, int) {
 	// 如果用户设置了保留成功节点，则把本地的 all.yaml 和 history.yaml 放到最前面
 	if config.GlobalConfig.KeepSuccessProxies {
 		saver, err := method.NewLocalSaver()
+		saver.OutputPath = filepath.Join(saver.OutputPath, "sub")
 		if err == nil {
 			if !filepath.IsAbs(saver.OutputPath) {
 				saver.OutputPath = filepath.Join(saver.BasePath, saver.OutputPath)

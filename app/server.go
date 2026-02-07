@@ -49,6 +49,7 @@ func (app *App) initHTTPServer() error {
 	router.Use(gin.Recovery())
 	router.Use(app.silentLoggerMiddleware())
 
+	// 使用 output/sub 目录保存订阅文件，避免整个 output 目录被暴露
 	saver, err := method.NewLocalSaver()
 	if err != nil {
 		return fmt.Errorf("获取http监听目录失败: %w", err)
@@ -120,6 +121,8 @@ func (app *App) silentLoggerMiddleware() gin.HandlerFunc {
 //
 // - 受保护文件：需要鉴权中间件
 func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
+	rulesDir := outputPath
+	subDir := filepath.Join(outputPath, "sub")
 	// 公共静态文件映射（无需鉴权）
 	publicFiles := map[string]string{
 		"/ACL4SSR_Online_Full.yaml":     "ACL4SSR_Online_Full.yaml",
@@ -127,8 +130,9 @@ func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
 		"/sub/ACL4SSR_Online_Full.yaml": "ACL4SSR_Online_Full.yaml",
 		"/sub/bdg.yaml":                 "bdg.yaml",
 	}
+
 	for routePath, fileName := range publicFiles {
-		router.StaticFile(routePath, filepath.Join(outputPath, fileName))
+		router.StaticFile(routePath, filepath.Join(rulesDir, fileName))
 	}
 
 	// 受保护静态文件映射（需鉴权）
@@ -142,23 +146,25 @@ func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
 	}
 	for routePath, fileName := range protectedFiles {
 		// 映射到 outputPath/sub 下的文件
-		authGroup.StaticFile(routePath, filepath.Join(outputPath, "sub", fileName))
+		authGroup.StaticFile(routePath, filepath.Join(subDir, fileName))
 		// 同时提供 /sub 路径访问
-		authGroup.StaticFile("/sub"+routePath, filepath.Join(outputPath, "sub", fileName))
+		authGroup.StaticFile("/sub"+routePath, filepath.Join(subDir, fileName))
 	}
 }
 
 // registerShareRoutes 注册分享路由
 func (app *App) registerShareRoutes(router *gin.Engine, outputPath string) error {
+	publicShareDir := outputPath
+	EncryptedShareDir := filepath.Join(outputPath, "sub")
 	// 加密分享
 	if config.GlobalConfig.SharePassword != "" {
 		slog.Info("订阅分享 已启用", "code", config.GlobalConfig.SharePassword)
 		sharePath := "/sub/" + config.GlobalConfig.SharePassword + "/*filepath"
-		router.GET(sharePath, app.handleFileShare(outputPath, true))
+		router.GET(sharePath, app.handleFileShare(EncryptedShareDir, true))
 	}
 
 	// 公开分享
-	moreDirPath := filepath.Join(outputPath, ShareDirName)
+	moreDirPath := filepath.Join(publicShareDir, ShareDirName)
 	if _, err := os.Stat(moreDirPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(moreDirPath, 0o755); err != nil {
 			return err
