@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"strings"
 
@@ -61,3 +62,28 @@ func GenerateRandomString(length int) string {
 	}
 	return string(b)
 }
+
+func FormatTraffic(bytes uint64) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+		TB = 1024 * GB
+	)
+
+	b := float64(bytes)
+
+	switch {
+	case bytes >= TB:
+		return fmt.Sprintf("%.2f TB", b/float64(TB))
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", b/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", b/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", b/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+

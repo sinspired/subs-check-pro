@@ -204,6 +204,7 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	sb.WriteString("  check_time: " + prettyTime(CheckStartTime) + "\n")
 	sb.WriteString("  check_duration: " + prettyDuration(CheckDuration) + "\n")
 	sb.WriteString("  check_count: " + prettyTotal(int(Progress.Load())) + "\n")
+	sb.WriteString("  check_traffic: " + CheckTriffic + "\n")
 	sb.WriteString("\n")
 
 	// 2. 全局统计 (可视化友好结构)
@@ -277,12 +278,13 @@ func generateSummary(s *AnalysisStats) string {
 	}
 
 	return fmt.Sprintf(
-		"用时%s, 检测到 %s 个可用节点%s。"+
+		"用时 %s,消耗流量 %s, 检测到 %s 个可用节点%s。"+
 			"覆盖 %d 个国家/地区 [Top: %s]; "+
 			"%s [CF 中转 %.1f%%, VPS %.1f%%]; "+
 			"流媒体解锁: [%s]; AI 解锁[%s]; "+
 			"代理协议: %s。",
 		prettyDuration(CheckDuration),
+		CheckTriffic,
 		prettyTotal(s.Total),
 		speedText, len(s.Countries), topCountry,
 		lineFeature, cfRatio, vpsRatio,
@@ -322,11 +324,11 @@ func prettyTime(t time.Time) string {
 func prettyDuration(d time.Duration) string {
 	sec := int(d.Seconds())
 	if sec >= 3600 {
-		return fmt.Sprintf("%d分", sec/60) // 超过 60 分钟只显示分钟
+		return fmt.Sprintf("%d 分", sec/60) // 超过 60 分钟只显示分钟
 	} else if sec >= 60 {
-		return fmt.Sprintf("%d分%d秒", sec/60, sec%60)
+		return fmt.Sprintf("%d 分 %d 秒", sec/60, sec%60)
 	} else {
-		return fmt.Sprintf("%d秒", sec)
+		return fmt.Sprintf("%d 秒", sec)
 	}
 }
 func prettyTotal(n int) string {

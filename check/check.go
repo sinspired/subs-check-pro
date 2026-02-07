@@ -25,6 +25,7 @@ import (
 	"github.com/sinspired/subs-check-pro/check/platform"
 	"github.com/sinspired/subs-check-pro/config"
 	proxyutils "github.com/sinspired/subs-check-pro/proxy"
+	"github.com/sinspired/subs-check-pro/utils"
 )
 
 // 对外暴露变量，兼容GUI调用
@@ -42,6 +43,7 @@ var (
 
 	CheckStartTime time.Time
 	CheckDuration  time.Duration
+	CheckTriffic   string
 )
 
 // 存储测速和流媒体检测开关状态
@@ -422,7 +424,8 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	ProcessResults.Store(true)
 
 	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
-	slog.Info(fmt.Sprintf("检测消耗流量: %.3fGB", float64(TotalBytes.Load())/1024/1024/1024))
+	CheckTriffic = utils.FormatTraffic(uint64(TotalBytes.Load()))
+	slog.Info(fmt.Sprintf("检测消耗流量: %s", CheckTriffic))
 
 	// 计算检测用时
 	CheckDuration = time.Since(CheckStartTime)
@@ -1064,12 +1067,16 @@ func (pc *ProxyClient) Close() {
 		pc.Client.CloseIdleConnections()
 	}
 
-	// 统计数据
+	// 统计数据：同时累加 BytesRead 和 BytesWritten（避免漏计上行）
 	if pc.Transport != nil {
 		bytesRead := pc.Transport.BytesRead.Load()
+		bytesWritten := pc.Transport.BytesWritten.Load()
 
 		if bytesRead > 0 {
 			TotalBytes.Add(bytesRead)
+		}
+		if bytesWritten > 0 {
+			TotalBytes.Add(bytesWritten)
 		}
 
 		if pc.Transport.Base != nil {
