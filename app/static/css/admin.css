@@ -128,9 +128,11 @@ body {
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: var(--glass-shadow);
-  background: linear-gradient(180deg,
-      var(--glass-bg),
-      rgba(250, 250, 250, 0.02));
+  background: linear-gradient(
+    180deg,
+    var(--glass-bg),
+    rgba(250, 250, 250, 0.02)
+  );
   border-color: var(--glass-border);
   color: var(--fg);
 }
@@ -322,8 +324,10 @@ main {
   gap: var(--gap);
   min-height: 0;
   height: 100%;
-  grid-template-columns: minmax(200px, max-content) minmax(300px, 1fr) minmax(300px,
-      1fr);
+  grid-template-columns: minmax(200px, max-content) minmax(300px, 1fr) minmax(
+      300px,
+      1fr
+    );
 }
 
 /* 父容器必须有min-height:0 否则日志会撑破容器 */
@@ -413,9 +417,11 @@ main {
 }
 
 .list-item:hover {
-  background: linear-gradient(180deg,
-      var(--glass-bg),
-      rgba(255, 255, 255, 0.02));
+  background: linear-gradient(
+    180deg,
+    var(--glass-bg),
+    rgba(255, 255, 255, 0.02)
+  );
   box-shadow: var(--glass-shadow);
 }
 
@@ -677,9 +683,11 @@ main {
 
 .toggle-btn.state-starting,
 .toggle-btn.state-stopping {
-  background: linear-gradient(90deg,
-      rgba(255, 255, 255, 0.04),
-      rgba(255, 255, 255, 0.02));
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.02)
+  );
   color: var(--muted);
   border-color: rgba(255, 255, 255, 0.06);
 }
@@ -798,7 +806,6 @@ main {
 }
 
 @keyframes progressShimmer {
-
   0%,
   100% {
     opacity: 1;
@@ -947,6 +954,8 @@ main {
   align-items: left;
   flex-wrap: wrap;
   color: var(--fg);
+  /* white-space: nowrap; */
+  display: inline-block;
 }
 
 /* 分隔符：| 样式 */
@@ -979,8 +988,7 @@ main {
 
 /* 列表详情：弱化 */
 .muted-list {
-  display: inline-flex;
-  align-items: center;
+  display: inline;
   color: var(--muted);
   font-size: 11px;
   margin-left: 4px;
@@ -988,6 +996,7 @@ main {
 }
 
 .tag-list {
+  white-space: nowrap;
   padding: 0 4px;
 }
 
@@ -1303,7 +1312,7 @@ main {
 
 /* 自动完成提示 */
 .cm-tooltip-autocomplete {
-  &>ul>li[aria-selected] {
+  & > ul > li[aria-selected] {
     background: rgba(0, 197, 201, 0.7) !important;
     color: var(--fg) !important;
     font-weight: 600;
@@ -1555,9 +1564,11 @@ main {
   border-radius: 50%;
   pointer-events: none;
   z-index: -1;
-  background: radial-gradient(circle at 40% 40%,
-      var(--accent),
-      transparent 40%);
+  background: radial-gradient(
+    circle at 40% 40%,
+    var(--accent),
+    transparent 40%
+  );
   filter: blur(60px);
   opacity: 0.5;
   /* will-change: transform, opacity, filter; */
@@ -1577,25 +1588,30 @@ main {
   }
 
   50% {
-    transform: translate(-50%, -50%) rotate(180deg) translate(20px, -10px) scale(1.13);
+    transform: translate(-50%, -50%) rotate(180deg) translate(20px, -10px)
+      scale(1.13);
   }
 
   100% {
-    transform: translate(-50%, -50%) rotate(360deg) translate(0px, 0px) scale(1.05);
+    transform: translate(-50%, -50%) rotate(360deg) translate(0px, 0px)
+      scale(1.05);
   }
 }
 
 @keyframes swirlB {
   0% {
-    transform: translate(-50%, -50%) rotate(0deg) translate(30px, 10px) scale(1.1);
+    transform: translate(-50%, -50%) rotate(0deg) translate(30px, 10px)
+      scale(1.1);
   }
 
   50% {
-    transform: translate(-50%, -50%) rotate(180deg) translate(-10px, 20px) scale(1.13);
+    transform: translate(-50%, -50%) rotate(180deg) translate(-10px, 20px)
+      scale(1.13);
   }
 
   100% {
-    transform: translate(-50%, -50%) rotate(360deg) translate(50px, -80px) scale(1.05);
+    transform: translate(-50%, -50%) rotate(360deg) translate(50px, -80px)
+      scale(1.05);
   }
 }
 
@@ -1615,7 +1631,7 @@ main {
 /* Pro 会员金色样式 */
 .pro-plus-golden {
   display: inline-block;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.1em;
   margin-left: 2px;
@@ -1623,16 +1639,13 @@ main {
   /* 确保它是上标 */
 
   /* 金属渐变色 */
-  background: linear-gradient(135deg,
-      #fff5c3 0%,
-      /* 高光 */
-      #ffd700 25%,
-      /* 标准金 */
-      #fdb931 50%,
-      /* 暖金 */
-      #b8860b 100%
-      /* 深金/古铜 */
-    );
+  background: linear-gradient(
+    135deg,
+    #fff5c3 0%,
+    /* 高光 */ #ffd700 25%,
+    /* 标准金 */ #fdb931 50%,
+    /* 暖金 */ #b8860b 100% /* 深金/古铜 */
+  );
 
   /* 将背景裁剪到文字 */
   -webkit-background-clip: text;
@@ -1649,10 +1662,7 @@ main {
   animation: gold-shimmer 3s infinite ease-in-out;
 }
 
-
-
 @keyframes gold-shimmer {
-
   0%,
   100% {
     filter: drop-shadow(0 0 1px rgba(253, 185, 49, 0.4));
@@ -1674,23 +1684,28 @@ main {
   font-weight: 600;
   vertical-align: super;
   margin-left: 2px;
-  
+
   /* 使用比主题色更亮、更通透的青蓝色 */
-  color: #00fff2; 
-  
+  color: #00fff2;
+
   /* 核心：多层青色外发光，营造一种“能量充盈”的 Pro 感 */
-  text-shadow: 
-    0 0 5px rgba(14, 165, 160, 0.8),
-    0 0 10px rgba(14, 165, 160, 0.4);
-  
+  text-shadow: 0 0 5px rgba(14, 165, 160, 0.8), 0 0 10px rgba(14, 165, 160, 0.4);
+
   /* 稍微倾斜，增加动感 */
   transform: skewX(-10deg);
   animation: neon-glow 2s infinite alternate;
 }
 
 @keyframes neon-glow {
-  from { opacity: 0.8; filter: brightness(1); }
-  to { opacity: 1; filter: brightness(1.3); text-shadow: 0 0 12px rgba(0, 255, 242, 0.8); }
+  from {
+    opacity: 0.8;
+    filter: brightness(1);
+  }
+  to {
+    opacity: 1;
+    filter: brightness(1.3);
+    text-shadow: 0 0 12px rgba(0, 255, 242, 0.8);
+  }
 }
 
 .login-card h3 {
@@ -2056,7 +2071,6 @@ main {
 }
 
 @media (max-width: 899px) {
-
   /* 编辑器 */
   #configEditor,
   .cm-editor {

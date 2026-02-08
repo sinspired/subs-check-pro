@@ -683,19 +683,16 @@
         // 恢复标题
         restoreHistoryTitle()
 
-        // --- 【核心优化点】限制分析报告的刷新频率 ---
+        // 限制分析报告的刷新频率
         const now = Date.now()
         // 定义一个静态变量记录上次强制刷新的时间
         if (!loadStatus.lastReportFetchTime) loadStatus.lastReportFetchTime = 0
 
-        // 逻辑：如果任务刚结束 (checkStartTime还存在) 或者 距离上次抓取超过 30 秒，才去拉取
-        if (checkStartTime || now - loadStatus.lastReportFetchTime > 30000) {
+        // 如果任务刚结束 (checkStartTime还存在) 或者 距离上次抓取超过 3 秒，才去拉取
+        if (checkStartTime || now - loadStatus.lastReportFetchTime > 3000) {
           await syncHistoryFromYaml()
           loadStatus.lastReportFetchTime = now
         }
-
-        // // 核心：每次空闲（包括初始化）都去拉取最新的 YAML 报告
-        // await syncHistoryFromYaml();
 
         updateProgress(
           d.proxyCount || 0,
@@ -1125,32 +1122,36 @@
   }
 
   /**
-   * 从 YAML 同步历史数据
-   */
+     * 从 YAML 同步历史数据
+     */
   async function syncHistoryFromYaml() {
     if (!sessionKey) return
     try {
       const r = await sfetch(API.analysis)
 
-      // 如果 API 返回失败，或者 report 内容为空（初次运行）
+      // 如果 API 返回失败，或者 report 内容为空
       if (
         !r.ok ||
         !r.payload ||
         !r.payload.report ||
         r.payload.report.trim() === ''
       ) {
-        showLastCheckResult(null) // 触发“未发现记录”逻辑
+        showLastCheckResult(null)
         const summaryCard = $('#analysisSummaryCard')
-        if (summaryCard) summaryCard.style.display = 'none' // 隐藏摘要卡片
-        cachedHistoryData = null // 清除缓存
+        if (summaryCard) {
+          summaryCard.style.display = 'none'
+          summaryCard.innerHTML = "" // 彻底清空
+        }
+        cachedHistoryData = null
+        cachedSummaryText = null // 清除内容缓存字符串
         return
       }
 
-      // 2. 【核心优化】内容比对：如果原始文本未改变，直接退出，避免重复解析和渲染
+      // 1. 原始文本比对：如果 YAML 字符串未改变，直接退出
       if (cachedHistoryData === r.payload.report) {
         return
       }
-      cachedHistoryData = r.payload.report // 更新缓存
+      cachedHistoryData = r.payload.report
 
       const data = window.YAML.parse(r.payload.report)
       if (!data) {
@@ -1161,26 +1162,30 @@
       const info = data.check_info || {}
       const global = data.global_analysis || {}
 
-      // 构造给 showLastCheckResult 使用的对象
-      lastCheckInfo = {
+      // 构造新的基础信息对象
+      const newInfo = {
         lastCheckTime: info.check_time,
         duration: info.check_duration,
         total: info.check_count,
         available: global.alive_count
       }
 
-      // 1. 显示历史基础信息
-      showLastCheckResult(lastCheckInfo)
+      // 2. 深度内容比对：将对象转为字符串判断内容是否变化
+      const newSummaryString = JSON.stringify(newInfo);
+      if (cachedSummaryText !== newSummaryString) {
+        showLastCheckResult(newInfo)
+        cachedSummaryText = newSummaryString // 更新内容缓存
+        lastCheckInfo = newInfo // 更新全局变量
+      }
 
-      // 2. 显示并渲染详细摘要
-      // 2. 【核心修改】传递整个 data 对象给渲染函数
+      // 3. 渲染详细摘要
       if (data && (data.global_analysis || data.summary)) {
         renderAnalysisSummary(data);
       } else {
         const summaryCard = $('#analysisSummaryCard');
         if (summaryCard) {
           summaryCard.style.display = 'none';
-          summaryCard.innerHTML = ""; // 清空，防止 switchUIState 误判
+          summaryCard.innerHTML = "";
         }
       }
 
@@ -1190,12 +1195,13 @@
     }
   }
 
+
   function switchUIState(state) {
     const uis = {
       idle: $('#idleUI'),
       preparing: $('#preparingUI'),
       checking: $('#runningUI'),
-      summary: $('#analysisSummaryCard') // 指向容器
+      summary: $('#analysisSummaryCard')
     };
 
     if (uis.idle) uis.idle.style.display = 'none';
@@ -1205,14 +1211,14 @@
     if (state === 'idle') {
       if (uis.idle) uis.idle.style.display = 'block';
 
-      // 修正：只要 summary 容器里有内容（渲染过），就显示它
-      if (uis.summary && uis.summary.innerHTML.trim() !== "") {
+      // 只有当 summary 内部确实有“非空白”的 HTML 内容时才显示
+      // 增加对 children 长度的判断，防止只有换行符
+      if (uis.summary && uis.summary.innerHTML.trim() !== "" && uis.summary.children.length > 0) {
         uis.summary.style.display = 'flex';
       } else {
-        uis.summary.style.display = 'none';
+        if (uis.summary) uis.summary.style.display = 'none';
       }
     } else {
-      // 准备或检测中，隐藏摘要
       if (uis.summary) uis.summary.style.display = 'none';
       if (state === 'preparing' && uis.preparing) uis.preparing.style.display = 'block';
       if (state === 'checking' && uis.checking) uis.checking.style.display = 'block';
@@ -1220,41 +1226,34 @@
   }
 
   /**
-   * 显示历史检测结果
-   */
+     * 显示历史检测结果
+     */
   function showLastCheckResult(info) {
     if (!els.historyPlaceholder) return
 
-    // 1. 处理“未发现记录”提示
     let notFoundEl = document.getElementById('historyNotFound')
     if (!notFoundEl) {
       notFoundEl = document.createElement('div')
       notFoundEl.id = 'historyNotFound'
       notFoundEl.className = 'muted'
-      notFoundEl.style.cssText =
-        'font-size: 12px; margin-top: 6px; text-align: left; width: 100%;'
+      notFoundEl.style.cssText = 'font-size: 12px; margin-top: 6px; text-align: left; width: 100%;'
       notFoundEl.textContent = '未发现检测记录'
-      // 插入到 history-summary 内部
-      const summaryContainer =
-        els.historyPlaceholder.querySelector('.history-summary')
+      const summaryContainer = els.historyPlaceholder.querySelector('.history-summary')
       if (summaryContainer) summaryContainer.appendChild(notFoundEl)
     }
 
     try {
-      // 只有在非运行状态下操作
       if (!actionInFlight && actionState !== 'checking') {
         els.historyPlaceholder.style.display = ''
 
-        // 情况 A: 没有数据 (初次运行)
         if (!info) {
-          if (els.historyLine) els.historyLine.style.display = 'none' // 隐藏数据行
-          notFoundEl.style.display = 'block' // 显示提示
+          if (els.historyLine) els.historyLine.style.display = 'none'
+          notFoundEl.style.display = 'block'
           return
         }
 
-        // 情况 B: 有数据
-        notFoundEl.style.display = 'none' // 隐藏提示
-        if (els.historyLine) els.historyLine.style.display = 'block' // 显示数据行
+        notFoundEl.style.display = 'none'
+        if (els.historyLine) els.historyLine.style.display = 'block'
 
         // 计算友好显示文本（时间格式化、时长格式化等）
         const prettyTime = (() => {
@@ -1284,7 +1283,6 @@
               : info.total))
           : (info.total || '0');
 
-        // 填充数据
         const mapping = {
           historyLastTime: prettyTime,
           historyLastDuration: prettyDuration,
@@ -1292,9 +1290,15 @@
           historyLastAvailable: info.available
         }
 
+        // 文本未变化时不操作 DOM，杜绝闪烁
         for (const [id, val] of Object.entries(mapping)) {
           const el = document.getElementById(id)
-          if (el) el.textContent = val || '-'
+          if (el) {
+            const stringVal = String(val || '0');
+            if (el.textContent !== stringVal) {
+              el.textContent = stringVal;
+            }
+          }
         }
       }
     } catch (e) {
@@ -1302,7 +1306,7 @@
     }
   }
 
-  /**
+/**
    * 结构化渲染分析摘要 - 层次化精炼版
    */
   function renderAnalysisSummary(data) {
@@ -1313,6 +1317,7 @@
     const global = data.global_analysis || {};
     const rawSummary = data.summary || "";
 
+    // 严格的显示判断：如果没有核心数据，直接销毁内容并隐藏
     if (!global.alive_count && !rawSummary) {
       summaryCard.style.display = 'none';
       summaryCard.innerHTML = "";
@@ -1325,37 +1330,78 @@
     const cfVal = parseFloat(global.quality_metrics?.cf_consistent_ratio || 0);
     const vpsVal = (100 - cfVal);
 
-    // 2. 线路特征逻辑 (基建总结)
-    let lineFeature = "线路分布多样";
-    if (cfVal > 70) {
-      lineFeature = "以 Cloudflare 中转为主";
-    } else if (vpsVal > 50) {
-      lineFeature = "以 VPS 直连为主";
-    }
+    let lineFeature = cfVal > 70 ? "以 Cloudflare 中转为主" : (vpsVal > 50 ? "以 VPS 直连为主" : "线路分布多样");
 
-    // 3. 解锁信息格式化 (采用更克制的标签)
+    // 2. 解锁信息格式化
     const mediaRaw = rawSummary.match(/流媒体解锁: \[(.*?)\]/)?.[1] || "";
     const aiRaw = rawSummary.match(/AI 解锁\[(.*?)\]/)?.[1] || "";
+
+    // --- 样式辅助函数 ---
+    
+    // 生成不换行的标签 [ 地区 ]
+    const tagWrap = (cls, text) => `<span style="white-space: nowrap; display: inline-block;">[ <span class="${cls} tag-list">${text}</span> ]</span>`;
+    
+    // 核心改进：锁定“标题”与“标签”作为一个不换行的整体，确保“覆盖：[ 地区 ]”永远在同一行
+    const labelTagBond = (label, tagHtml) => `
+      <span style="white-space: nowrap; display: inline-block; vertical-align: baseline;">
+        <span class="sub-label">${label}</span>${tagHtml}
+      </span>`;
+
+    // 列表内容处理：强制使用 display: inline 覆盖原有的 inline-flex，允许文字紧随标签并逐个单词换行
+    const listSpan = (text) => `<span class="muted-list" style="display: inline !important; white-space: normal; margin-left: 4px;">${text}</span>`;
+
+    // --- 覆盖行处理 (地区 & 协议) ---
+    let coverageRow = "";
+    const hasGeo = geoKeys.length > 0;
+    const hasProto = protoKeys.length > 0;
+
+    if (hasGeo || hasProto) {
+      let content = "";
+      
+      if (hasGeo) {
+        content += labelTagBond('覆盖：', tagWrap('tag-location', '地区'));
+        content += listSpan(geoKeys.join(', '));
+      }
+
+      if (hasGeo && hasProto) {
+        // 分隔符与下一个标签锁定，防止竖线孤零零留在行尾
+        content += ` <span style="white-space: nowrap;"><span class="sep-pipe">|</span> ${tagWrap('tag-type', '协议')}</span>`;
+        content += listSpan(protoKeys.join(', '));
+      } else if (hasProto) {
+        content += labelTagBond('覆盖：', tagWrap('tag-type', '协议'));
+        content += listSpan(protoKeys.join(', '));
+      }
+
+      coverageRow = `<div class="summary-line" style="display: block;">${content}</div>`;
+    }
+
+    // --- 解锁行处理 (媒体 & AI) ---
     let unlockDetailsRow = "";
+    const hasMedia = !!mediaRaw;
+    const hasAI = !!aiRaw;
 
-    if (mediaRaw || aiRaw) {
-      unlockDetailsRow = `
-      <div class="summary-line">
-        <span class="sub-label">解锁：</span>
-        ${mediaRaw ? `<span class="muted-list">[ <span class="tag-media tag-list">媒体</span> ] ${mediaRaw}</span>` : ''}
-        ${mediaRaw && aiRaw ? '<span class="sep-pipe">|</span>' : ''}
-        ${aiRaw ? `<span class="muted-list">[ <span class="tag-ai tag-list">AI</span> ] ${aiRaw}</span></div>` : ''}
-      </div>`;
+    if (hasMedia || hasAI) {
+      let content = "";
+
+      if (hasMedia) {
+        content += labelTagBond('解锁：', tagWrap('tag-media', '媒体'));
+        content += listSpan(mediaRaw);
+      }
+
+      if (hasMedia && hasAI) {
+        content += ` <span style="white-space: nowrap;"><span class="sep-pipe">|</span> ${tagWrap('tag-ai', 'AI')}</span>`;
+        content += listSpan(aiRaw);
+      } else if (hasAI) {
+        content += labelTagBond('解锁：', tagWrap('tag-ai', 'AI'));
+        content += listSpan(aiRaw);
+      }
+
+      unlockDetailsRow = `<div class="summary-features"><div class="summary-line" style="display: block; margin-top: 4px;">${content}</div></div>`;
     }
 
-    let speedtestConfigRow = "";
-    if (info.check_min_speed > 0) {
-      speedtestConfigRow = `
-        <span class="kv">测速下限 <b>${info.check_min_speed}</b> KB/s</span>`;
-    } else {
-      speedtestConfigRow = `
-        <span class="sub-label">仅测活</span>`;
-    }
+    let speedtestConfigRow = info.check_min_speed > 0
+      ? `<span class="kv">测速下限 <b>${info.check_min_speed}</b> KB/s</span>`
+      : `<span class="sub-label">仅测活</span>`;
 
     summaryCard.innerHTML = `
     <div class="summary-toggle-header" id="summaryToggleBtn">
@@ -1371,16 +1417,14 @@
     </div>
     <div class="summary-content-wrapper">
       <div class="tip-content">
-        <!-- 第一行：任务概览 - 核心数据强调 -->
         <div class="summary-line">
           <span class="sub-label">${info.check_time || '-'}</span>
           <span class="sep-pipe">|</span>
           ${speedtestConfigRow}
           <span class="sep-pipe">|</span>
-          <span class="kv">检测消耗流量 <b>${info.check_traffic || '-'}</b></span>
+          <span class="kv">消耗流量 <b>${info.check_traffic || '-'}</b></span>
         </div>
 
-        <!-- 第二行：基建分析 - 线路特征总结 -->
         <div class="summary-line">
           <span class="sub-label">${lineFeature}：</span>
           <span class="kv">CF <b>${cfVal.toFixed(1)}%</b></span>
@@ -1388,18 +1432,11 @@
           <span class="kv">VPS <b>${vpsVal.toFixed(1)}%</b></span>
         </div>
 
-        <!-- 第三行：分布详情 - 弱化细节 -->
-        <div class="summary-line">
-          <span class="sub-label">覆盖：</span>
-          <span class="muted-list">[ <span class="tag-location tag-list">地区</span> ] ${geoKeys.join(', ')}</span> 
-          <span class="sep-pipe">|</span>
-          <span class="muted-list">[ <span class="tag-type tag-list">协议</span> ] ${protoKeys.join(', ')}</span>
-        </div>
+        <!-- 覆盖行 -->
+        ${coverageRow}
 
         <!-- 功能行：解锁状态 -->
-        <div class="summary-features">
-          ${unlockDetailsRow}
-        </div>
+        ${unlockDetailsRow}
       </div>
     </div>
   `;
@@ -1419,8 +1456,6 @@
 
     summaryCard.style.display = (actionState === 'idle') ? 'flex' : 'none';
   }
-
-
   /**
    *隐藏上次检测结果
    *
