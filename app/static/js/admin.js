@@ -450,7 +450,7 @@
    * 恢复历史区域 UI (当离开 Prepare 阶段时调用)
    * 负责：恢复标题、隐藏准备数据行、显示正常历史数据行
    */
-function restoreHistoryTitle() {
+  function restoreHistoryTitle() {
     // 1. 恢复标题文字
     if (els.historyTitle) {
       els.historyTitle.textContent = '上次检测'
@@ -1105,7 +1105,7 @@ function restoreHistoryTitle() {
   /**
      * 从 YAML 同步历史数据
      */
-async function syncHistoryFromYaml() {
+  async function syncHistoryFromYaml() {
     if (!sessionKey) return
     try {
       const r = await sfetch(API.analysis)
@@ -1247,9 +1247,27 @@ async function syncHistoryFromYaml() {
         notFoundEl.style.display = 'none'
         if (els.historyLine) els.historyLine.style.display = 'block'
 
+        function parseDate(str) {
+          // 如果字符串里已经有年份 (例如 2025-03-06 14:33)，直接交给 Date 解析
+          if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            return new Date(str.replace(' ', 'T'))
+          }
+
+          // 如果是没有年份的格式 MM-DD HH:mm
+          const match = str.match(/^(\d{2})-(\d{2}) (\d{2}):(\d{2})$/)
+          if (match) {
+            const [, month, day, hour, minute] = match
+            const year = new Date().getFullYear()
+            return new Date(`${year}-${month}-${day}T${hour}:${minute}`)
+          }
+
+          // 其他情况尝试直接解析
+          return new Date(str.replace(' ', 'T'))
+        }
+
         const prettyTime = (() => {
           try {
-            const dt = info.lastCheckTime ? new Date(String(info.lastCheckTime).replace(' ', 'T')) : null
+            let dt = info.lastCheckTime ? parseDate(info.lastCheckTime) : null
             return dt && !isNaN(dt)
               ? dt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
               : (info.lastCheckTime || '-')
