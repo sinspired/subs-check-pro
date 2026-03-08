@@ -19,15 +19,22 @@
             overflow-x: hidden;
         }
 
+        /* 大屏报告区撑宽到 960px，登录/占位卡片限制为 480px */
         .card-wrapper {
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             width: 100%;
-            max-width: 720px;
+            max-width: 960px;
             padding: 24px 0 16px;
             box-sizing: border-box;
+        }
+
+        /* 占位/登录态：卡片居中且不超过 480px */
+        #placeholderState .inner-limit {
+            max-width: 480px;
+            margin: 0 auto;
         }
 
         .theme-wrapper {
@@ -41,11 +48,45 @@
             border-radius: 16px;
             padding: 28px 32px;
             width: 100%;
-            max-width: 720px;
             box-shadow: var(--glass-shadow);
             animation: slideIn 0.35s ease-out;
             box-sizing: border-box;
             flex-shrink: 0;
+        }
+
+        /* 报告顶栏：badge + 退出按钮横排 */
+        .report-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .report-topbar .status-badge {
+            margin-bottom: 0;
+        }
+
+        /* 退出按钮 */
+        .btn-logout {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .btn-logout svg { width: 12px; height: 12px; flex-shrink: 0; }
+        .btn-logout:hover {
+            color: var(--danger);
+            border-color: var(--danger);
+            background: color-mix(in srgb, var(--danger) 8%, transparent);
         }
 
         .status-badge {
@@ -89,6 +130,45 @@
             margin: 0 0 22px;
         }
 
+        /* 登录输入区 */
+        .auth-area {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            background: var(--input-bg);
+            color: var(--fg);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .auth-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+        }
+
+        .auth-input.error {
+            border-color: var(--danger);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 12%, transparent);
+        }
+
+        .auth-hint {
+            font-size: 12px;
+            color: var(--danger);
+            margin: -4px 0 0;
+            min-height: 16px;
+        }
+
         .btn-auth {
             width: 100%;
             padding: 11px 14px;
@@ -107,21 +187,12 @@
             gap: 6px;
         }
 
-        .btn-auth:hover {
-            opacity: 0.88;
-            transform: translateY(-1px);
-        }
+        .btn-auth:hover  { opacity: 0.88; transform: translateY(-1px); }
+        .btn-auth:active { opacity: 0.95; transform: translateY(0); }
+        .btn-auth:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-auth svg    { width: 15px; height: 15px; flex-shrink: 0; }
 
-        .btn-auth:active {
-            opacity: 0.95;
-            transform: translateY(0);
-        }
-
-        .btn-auth svg {
-            width: 15px;
-            height: 15px;
-        }
-
+        /* 区块标题 */
         .section-header {
             display: flex;
             align-items: center;
@@ -158,22 +229,9 @@
             user-select: none;
         }
 
-        .toggle-line {
-            flex: 1;
-            height: 1px;
-            background: var(--border);
-        }
-
-        .toggle-chevron {
-            width: 12px;
-            height: 12px;
-            flex-shrink: 0;
-            transition: transform 0.2s;
-        }
-
-        .toggle-chevron.open {
-            transform: rotate(180deg);
-        }
+        .toggle-line   { flex: 1; height: 1px; background: var(--border); }
+        .toggle-chevron { width: 12px; height: 12px; flex-shrink: 0; transition: transform 0.2s; }
+        .toggle-chevron.open { transform: rotate(180deg); }
 
         .summary-block {
             padding: 14px 16px;
@@ -188,6 +246,7 @@
             word-break: break-all;
         }
 
+        /* 统计芯片：大屏 4 列，小屏 2 列 */
         .info-chips {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -212,21 +271,23 @@
             text-overflow: ellipsis;
         }
 
-        .chip-label {
-            font-size: 10px;
-            color: var(--muted);
-            margin-top: 3px;
-        }
+        .chip-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+        .chip-accent .chip-value { color: var(--accent); }
 
-        .chip-accent .chip-value {
-            color: var(--accent);
-        }
-
-        .two-col {
+        /* 大屏三列布局：地区 | 协议+质量 | 订阅排名 */
+        .report-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
             margin-bottom: 4px;
+            align-items: start;
+        }
+
+        /* 大屏时订阅排名独占一列 */
+        @media (min-width: 800px) {
+            .report-grid {
+                grid-template-columns: 1fr 1fr;
+            }
         }
 
         .stat-panel {
@@ -245,420 +306,148 @@
             margin-bottom: 10px;
         }
 
-        .geo-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 5px;
-        }
+        .geo-row  { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        .geo-key  { font-size: 11px; font-weight: 600; width: 24px; flex-shrink: 0; color: var(--fg); }
+        .geo-bar-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+        .geo-bar  { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s ease; }
+        .geo-val  { font-size: 10px; color: var(--muted); width: 18px; text-align: right; flex-shrink: 0; }
 
-        .geo-key {
-            font-size: 11px;
-            font-weight: 600;
-            width: 24px;
-            flex-shrink: 0;
-            color: var(--fg);
-        }
+        .proto-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        .proto-key { font-size: 11px; font-weight: 600; width: 52px; flex-shrink: 0; }
+        .proto-bar-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+        .proto-bar { height: 100%; background: var(--warning); border-radius: 99px; transition: width 0.4s ease; }
+        .proto-val { font-size: 10px; color: var(--muted); width: 18px; text-align: right; flex-shrink: 0; }
 
-        .geo-bar-wrap {
-            flex: 1;
-            height: 5px;
-            background: var(--border);
-            border-radius: 99px;
-            overflow: hidden;
-        }
-
-        .geo-bar {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 99px;
-            transition: width 0.4s ease;
-        }
-
-        .geo-val {
-            font-size: 10px;
-            color: var(--muted);
-            width: 18px;
-            text-align: right;
-            flex-shrink: 0;
-        }
-
-        .proto-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 5px;
-        }
-
-        .proto-key {
-            font-size: 11px;
-            font-weight: 600;
-            width: 52px;
-            flex-shrink: 0;
-        }
-
-        .proto-bar-wrap {
-            flex: 1;
-            height: 5px;
-            background: var(--border);
-            border-radius: 99px;
-            overflow: hidden;
-        }
-
-        .proto-bar {
-            height: 100%;
-            background: var(--warning);
-            border-radius: 99px;
-            transition: width 0.4s ease;
-        }
-
-        .proto-val {
-            font-size: 10px;
-            color: var(--muted);
-            width: 18px;
-            text-align: right;
-            flex-shrink: 0;
-        }
-
-        .quality-row {
-            display: flex;
-            gap: 8px;
-            margin: 8px 0 10px;
-        }
-
+        .quality-row { display: flex; gap: 8px; margin: 8px 0 10px; }
         .quality-item {
-            flex: 1;
-            text-align: center;
-            padding: 8px 4px;
-            border-radius: 8px;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
+            flex: 1; text-align: center; padding: 8px 4px;
+            border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border);
         }
+        .quality-val   { font-size: 18px; font-weight: 700; }
+        .quality-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
-        .quality-val {
-            font-size: 18px;
-            font-weight: 700;
+        .cf-breakdown { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+        .cf-group { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; }
+        .cf-group-title { flex-shrink: 0; width: 72px; font-weight: 600; padding-top: 2px; font-size: 10px; }
+        .cf-tags  { display: flex; flex-wrap: wrap; gap: 3px; }
+        .cf-tag   {
+            display: inline-flex; align-items: center; gap: 2px;
+            padding: 1px 6px; border-radius: 99px;
+            border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg);
         }
+        .cf-tag em { font-style: normal; color: var(--muted); }
 
-        .quality-label {
-            font-size: 10px;
-            color: var(--muted);
-            margin-top: 2px;
-        }
-
-        .cf-breakdown {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            margin-top: 8px;
-        }
-
-        .cf-group {
-            display: flex;
-            align-items: flex-start;
-            gap: 6px;
-            font-size: 11px;
-        }
-
-        .cf-group-title {
-            flex-shrink: 0;
-            width: 72px;
-            font-weight: 600;
-            padding-top: 2px;
-            font-size: 10px;
-        }
-
-        .cf-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 3px;
-        }
-
-        .cf-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            padding: 1px 6px;
-            border-radius: 99px;
-            border: 1px solid var(--border);
-            font-size: 10px;
-            background: var(--glass-bg);
-        }
-
-        .cf-tag em {
-            font-style: normal;
-            color: var(--muted);
-        }
-
-        .sub-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-
+        .sub-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
         .sub-item {
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--glass-bg);
-            transition: background 0.15s;
+            padding: 10px 12px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--glass-bg); transition: background 0.15s;
         }
-
-        .sub-item:hover {
-            background: var(--input-bg);
-        }
-
-        .sub-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 6px;
-            min-width: 0;
-        }
-
+        .sub-item:hover { background: var(--input-bg); }
+        .sub-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
         .sub-url {
-            flex: 1;
-            font-size: 11px;
-            font-family: var(--font-mono, monospace);
-            color: var(--muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            min-width: 0;
+            flex: 1; font-size: 11px; font-family: var(--font-mono, monospace);
+            color: var(--muted); white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; min-width: 0;
         }
-
-        .sub-rate {
-            font-size: 13px;
-            font-weight: 700;
-            flex-shrink: 0;
-        }
-
-        .sub-bar-wrap {
-            height: 4px;
-            background: var(--border);
-            border-radius: 99px;
-            overflow: hidden;
-            margin-bottom: 6px;
-        }
-
-        .sub-bar {
-            height: 100%;
-            border-radius: 99px;
-            transition: width 0.5s ease;
-        }
-
-        .sub-meta {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 5px;
-            font-size: 11px;
-            color: var(--muted);
-        }
-
+        .sub-rate  { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+        .sub-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+        .sub-bar  { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
+        .sub-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--muted); }
         .tag-pill {
-            padding: 1px 6px;
-            border-radius: 4px;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            font-size: 10px;
-            white-space: nowrap;
+            padding: 1px 6px; border-radius: 4px;
+            background: var(--input-bg); border: 1px solid var(--border);
+            font-size: 10px; white-space: nowrap;
         }
 
         .bad-list {
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            overflow: hidden;
-            background: var(--glass-bg);
-            margin-bottom: 4px;
+            border-radius: 10px; border: 1px solid var(--border);
+            overflow: hidden; background: var(--glass-bg); margin-bottom: 4px;
         }
-
         .bad-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 7px 12px;
-            border-bottom: 1px solid var(--border);
-            gap: 8px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 7px 12px; border-bottom: 1px solid var(--border); gap: 8px;
         }
-
-        .bad-item:last-child {
-            border-bottom: none;
-        }
-
+        .bad-item:last-child { border-bottom: none; }
         .bad-url {
-            font-size: 11px;
-            font-family: var(--font-mono, monospace);
-            color: var(--muted);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1;
-            min-width: 0;
+            font-size: 11px; font-family: var(--font-mono, monospace);
+            color: var(--muted); overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; flex: 1; min-width: 0;
         }
+        .bad-count { font-size: 11px; color: var(--muted); flex-shrink: 0; }
 
-        .bad-count {
-            font-size: 11px;
-            color: var(--muted);
-            flex-shrink: 0;
-        }
-
+        /* 加载动画 */
         .loading-dots::after {
             content: '';
             animation: dots 1.2s steps(4, end) infinite;
         }
-
         @keyframes dots {
-            0% {
-                content: '';
-            }
-
-            25% {
-                content: '.';
-            }
-
-            50% {
-                content: '..';
-            }
-
-            75% {
-                content: '...';
-            }
+            0%  { content: ''; }   25% { content: '.'; }
+            50% { content: '..'; } 75% { content: '...'; }
         }
 
         .card-footer {
-            margin-top: 28px;
-            padding-top: 16px;
+            margin-top: 28px; padding-top: 16px;
             border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
         }
-
         .brand-info {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--muted);
+            display: flex; align-items: center; gap: 7px;
+            font-size: 12px; font-weight: 700; color: var(--muted);
         }
-
-        .brand-info img {
-            width: 16px;
-            height: 16px;
-        }
-
-        .footer-meta {
-            font-size: 10px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
+        .brand-info img { width: 16px; height: 16px; }
+        .footer-meta { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
         .footer-outsie {
-            width: 100%;
-            max-width: 720px;
-            padding: 12px 0 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            flex-shrink: 0;
+            width: 100%; max-width: 960px; padding: 12px 0 24px;
+            display: flex; flex-direction: column; align-items: center; gap: 10px; flex-shrink: 0;
         }
-
-        .footer-icons {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .footer-icon {
-            width: 18px;
-            height: 18px;
-            opacity: 0.45;
-            transition: opacity 0.15s;
-            display: block;
-        }
-
-        .footer-icons a:hover .footer-icon {
-            opacity: 0.85;
-        }
-
-        .footer-copy {
-            font-size: 11px;
-            color: var(--muted);
-            text-align: center;
-            line-height: 1.6;
-        }
-
-        .footer-copy a {
-            color: var(--muted);
-            text-decoration: none;
-        }
-
-        .footer-copy a:hover {
-            color: var(--accent);
-        }
+        .footer-icons  { display: flex; align-items: center; gap: 14px; }
+        .footer-icon   { width: 18px; height: 18px; opacity: 0.45; transition: opacity 0.15s; display: block; }
+        .footer-icons a:hover .footer-icon { opacity: 0.85; }
+        .footer-copy   { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.6; }
+        .footer-copy a { color: var(--muted); text-decoration: none; }
+        .footer-copy a:hover { color: var(--accent); }
 
         code {
             font-family: var(--font-mono, monospace);
-            background: var(--placehoder-bg, rgba(0, 0, 0, .06));
-            color: var(--danger);
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-size: 11px;
+            background: var(--placehoder-bg, rgba(0,0,0,.06));
+            color: var(--danger); padding: 1px 5px; border-radius: 4px; font-size: 11px;
         }
 
         @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         @media (max-width: 600px) {
-            .card {
-                padding: 22px 16px 16px;
-            }
-
-            .two-col {
-                grid-template-columns: 1fr;
-            }
-
-            .info-chips {
-                grid-template-columns: repeat(2, 1fr);
-            }
+            .card { padding: 22px 16px 16px; }
+            .report-grid  { grid-template-columns: 1fr; }
+            .info-chips   { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
 
 <body>
 
+    <!-- 主题切换按钮（fixed，始终右上角，切换逻辑由 admin.js 接管） -->
     <div class="theme-wrapper">
         <div class="theme-toggle" role="group" aria-label="主题切换" style="display:flex;align-items:center;">
             <button id="themeToggle" class="icon-btn" aria-pressed="false" aria-label="切换主题" title="切换主题">
-                <svg class="icon" id="iconMoon" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" style="display:none;">
-                    <circle cx="12" cy="12" r="5" />
-                    <line x1="12" y1="1" x2="12" y2="3" />
-                    <line x1="12" y1="21" x2="12" y2="23" />
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                    <line x1="1" y1="12" x2="3" y2="12" />
-                    <line x1="21" y1="12" x2="23" y2="12" />
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                <svg class="icon" id="iconMoon" width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1"  x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1"  y1="12" x2="3"  y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36"/>
+                    <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
                 </svg>
-                <svg class="icon" id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                <svg class="icon" id="iconSun" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                 </svg>
             </button>
         </div>
@@ -667,59 +456,112 @@
     <div class="card-wrapper">
         <div class="card">
 
-            <!-- 占位区：加载中 / 错误 / 暂无数据，初始可见 -->
+            <!-- ① 占位区：加载中 / 未登录 / 错误，初始可见 -->
             <div id="placeholderState">
-                <div class="status-badge" id="placeholderBadge">Analysis Report</div>
-                <h1>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <line x1="18" y1="20" x2="18" y2="10" />
-                        <line x1="12" y1="20" x2="12" y2="4" />
-                        <line x1="6" y1="20" x2="6" y2="14" />
-                        <line x1="2" y1="20" x2="22" y2="20" />
-                    </svg>
-                    检测结果分析
-                </h1>
-                <p class="desc" id="placeholderMsg">
-                    正在验证身份<span class="loading-dots"></span>
-                </p>
-                <div style="margin-top:16px; display:none" id="retryArea">
-                    <button class="btn-auth" onclick="initPage()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="1 4 1 10 7 10" />
-                            <path d="M3.51 15a9 9 0 1 0 .49-3.33" />
+                <div class="inner-limit">
+                    <div class="status-badge" id="placeholderBadge">Analysis Report</div>
+                    <h1>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="20" x2="18" y2="10"/>
+                            <line x1="12" y1="20" x2="12" y2="4"/>
+                            <line x1="6"  y1="20" x2="6"  y2="14"/>
+                            <line x1="2"  y1="20" x2="22" y2="20"/>
                         </svg>
-                        重试
-                    </button>
-                </div>
-                <div class="card-footer">
-                    <div class="brand-info">
-                        <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
+                        检测结果分析
+                    </h1>
+
+                    <!-- 加载中 -->
+                    <p class="desc" id="placeholderMsg" style="display:none">
+                        正在获取报告<span class="loading-dots"></span>
+                    </p>
+
+                    <!-- 未登录：内嵌登录框 -->
+                    <div id="inlineLoginArea" style="display:none">
+                        <p class="desc">请输入 API 密钥以查看检测分析报告。</p>
+                        <div class="auth-area">
+                            <input class="auth-input" type="password" id="inlineApiKey"
+                                   placeholder="输入 API 密钥..."
+                                   autocomplete="current-password"
+                                   onkeydown="if(event.keyCode===13)inlineLogin()">
+                            <p class="auth-hint" id="loginHint"></p>
+                            <button class="btn-auth" id="inlineLoginBtn" onclick="inlineLogin()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="5" y1="12" x2="19" y2="12"/>
+                                    <polyline points="12 5 19 12 12 19"/>
+                                </svg>
+                                验证并查看
+                            </button>
+                        </div>
                     </div>
-                    <div class="footer-meta">Analysis Report</div>
+
+                    <!-- 错误 / 无数据 -->
+                    <div id="retryArea" style="display:none">
+                        <p class="desc" id="retryMsg"></p>
+                        <button class="btn-auth" onclick="initPage()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="1 4 1 10 7 10"/>
+                                <path d="M3.51 15a9 9 0 1 0 .49-3.33"/>
+                            </svg>
+                            重试
+                        </button>
+                    </div>
+
+                    <div class="card-footer">
+                        <div class="brand-info">
+                            <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
+                        </div>
+                        <div class="footer-meta">Analysis Report</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- 报告内容区：由 JS 填充后显示 -->
+            <!-- ② 报告内容区：由 JS 填充后显示 -->
             <div id="reportState" style="display:none">
-                <div class="status-badge">Analysis Report</div>
+
+                <!-- 顶栏：badge + 退出按钮 -->
+                <div class="report-topbar">
+                    <div class="status-badge">Analysis Report</div>
+                    <button class="btn-logout" onclick="doLogout()" title="退出登录">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        退出
+                    </button>
+                </div>
+
                 <h1>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <line x1="18" y1="20" x2="18" y2="10" />
-                        <line x1="12" y1="20" x2="12" y2="4" />
-                        <line x1="6" y1="20" x2="6" y2="14" />
-                        <line x1="2" y1="20" x2="22" y2="20" />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"/>
+                        <line x1="12" y1="20" x2="12" y2="4"/>
+                        <line x1="6"  y1="20" x2="6"  y2="14"/>
+                        <line x1="2"  y1="20" x2="22" y2="20"/>
                     </svg>
                     检测结果分析
                 </h1>
                 <p class="desc" id="reportMeta"></p>
+
+                <!-- 摘要 -->
                 <div class="summary-block" id="summaryBlock"></div>
+
+                <!-- 统计芯片 -->
                 <div class="info-chips" id="infoChips"></div>
+
+                <!-- 全局统计（地区 + 协议/质量） -->
                 <div id="globalSection"></div>
+
+                <!-- 订阅排名 -->
                 <div id="rankingSection"></div>
+
+                <!-- 失效订阅 -->
                 <div id="badSection"></div>
+
                 <div class="card-footer">
                     <div class="brand-info">
                         <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
@@ -750,88 +592,153 @@
     </div>
 
     <script>
-        // ── 主题初始化（仅读取存储值应用样式，切换逻辑由 admin.js 接管） ──
+        // ── 主题初始化（读取存储值即时应用，切换逻辑由 admin.js 接管） ──
         (function () {
-            const saved = localStorage.getItem('theme');
+            const saved  = localStorage.getItem('theme');
             const prefer = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', saved || prefer);
         })();
 
-        // ── 与 admin.js 共享的 localStorage 键名 ─────────────────────
+        // ── 与 admin.js 共用的 localStorage 键名 ────────────────────
         const STORAGE_KEY = 'subscheck_api_key';
 
         function getKey() {
             try {
-                return localStorage.getItem('subscheck_api_key')
-                    || sessionStorage.getItem('subscheck_api_key')
+                return localStorage.getItem(STORAGE_KEY)
+                    || sessionStorage.getItem(STORAGE_KEY)
                     || null;
             } catch { return null; }
         }
 
-        // ── sfetch：admin.js 是 type="module"，其变量不挂载到 window ──
-        // 此处独立实现同签名版本，仅供本页使用
+        // ── sfetch（本页独立实现，admin.js 是 module 不挂载到 window）──
         async function sfetch(url, opts = {}) {
             const key = getKey();
             if (!key) return { ok: false, status: 401, error: '未认证' };
             opts.headers = { ...opts.headers, 'X-API-Key': key };
             try {
-                const r = await fetch(url, opts);
-                const ct = r.headers.get('content-type') || '';
-                const text = await r.text();
+                const r       = await fetch(url, opts);
+                const ct      = r.headers.get('content-type') || '';
+                const text    = await r.text();
                 const payload = ct.includes('application/json') ? JSON.parse(text) : text;
                 if (r.status === 401) {
-                    try { localStorage.removeItem(STORAGE_KEY); } catch { }
-                    window.location.href = '/admin';
+                    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+                    showLoginArea('API 密钥已失效，请重新输入。');
                     return { ok: false, status: 401, payload };
                 }
                 return r.ok
-                    ? { ok: true, status: r.status, payload }
+                    ? { ok: true,  status: r.status, payload }
                     : { ok: false, status: r.status, payload };
             } catch (e) {
                 return { ok: false, error: e.message };
             }
         }
 
-        // ── 占位状态辅助 ──────────────────────────────────────────────
-        function showPlaceholder(msg, { badge = '', showRetry = false } = {}) {
-            document.getElementById('placeholderState').style.display = '';
-            document.getElementById('reportState').style.display = 'none';
-            document.getElementById('placeholderMsg').textContent = msg;
-            if (badge) document.getElementById('placeholderBadge').textContent = badge;
-            document.getElementById('retryArea').style.display = showRetry ? '' : 'none';
+        // ── 占位区三种子状态 ─────────────────────────────────────────
+
+        /** 加载中 */
+        function showLoading() {
+            document.getElementById('placeholderState').style.display  = '';
+            document.getElementById('reportState').style.display       = 'none';
+            document.getElementById('placeholderBadge').textContent    = 'Analysis Report';
+            document.getElementById('placeholderMsg').style.display    = '';
+            document.getElementById('inlineLoginArea').style.display   = 'none';
+            document.getElementById('retryArea').style.display         = 'none';
         }
 
-        // ── 跨标签页监听退出：admin 页 doLogout 清除 key 后同步踢出 ──
-        window.addEventListener('storage', e => {
-            if (e.key === STORAGE_KEY && !e.newValue) {
-                window.location.href = '/admin';
-            }
-        });
+        /** 未登录 / key 失效，展示内嵌登录框 */
+        function showLoginArea(hint = '') {
+            document.getElementById('placeholderState').style.display  = '';
+            document.getElementById('reportState').style.display       = 'none';
+            document.getElementById('placeholderBadge').textContent    = 'Auth Required';
+            document.getElementById('placeholderMsg').style.display    = 'none';
+            document.getElementById('inlineLoginArea').style.display   = '';
+            document.getElementById('retryArea').style.display         = 'none';
 
-        // ── 主初始化流程 ──────────────────────────────────────────────
-        async function initPage() {
-            if (!getKey()) {
-                window.location.href = '/admin';
+            const input    = document.getElementById('inlineApiKey');
+            const hintEl   = document.getElementById('loginHint');
+            if (hint) {
+                input.classList.add('error');
+                hintEl.textContent = hint;
+            } else {
+                input.classList.remove('error');
+                hintEl.textContent = '';
+                input.placeholder  = '输入 API 密钥...';
+            }
+            input.focus();
+        }
+
+        /** 错误 / 暂无数据 */
+        function showRetryArea(msg, badge = 'Error') {
+            document.getElementById('placeholderState').style.display  = '';
+            document.getElementById('reportState').style.display       = 'none';
+            document.getElementById('placeholderBadge').textContent    = badge;
+            document.getElementById('placeholderMsg').style.display    = 'none';
+            document.getElementById('inlineLoginArea').style.display   = 'none';
+            document.getElementById('retryArea').style.display         = '';
+            document.getElementById('retryMsg').textContent            = msg;
+        }
+
+        // ── 内嵌登录 ──────────────────────────────────────────────────
+        async function inlineLogin() {
+            const input  = document.getElementById('inlineApiKey');
+            const btn    = document.getElementById('inlineLoginBtn');
+            const hintEl = document.getElementById('loginHint');
+            const k      = input?.value?.trim();
+
+            // 清空上次错误样式
+            input.classList.remove('error');
+            hintEl.textContent = '';
+
+            if (!k) {
+                input.classList.add('error');
+                hintEl.textContent = '请输入 API 密钥';
+                input.focus();
                 return;
             }
 
-            showPlaceholder('正在获取报告…');
+            btn.disabled = true;
 
+            try {
+                const resp = await fetch('/api/status', { headers: { 'X-API-Key': k } });
+
+                if (resp.status === 401) {
+                    input.classList.add('error');
+                    hintEl.textContent = 'API 密钥无效，请重试';
+                    input.value = '';
+                    input.focus();
+                    return;
+                }
+                if (!resp.ok) {
+                    showRetryArea(`验证失败（HTTP ${resp.status}），请检查服务状态。`);
+                    return;
+                }
+
+                // 验证通过，持久化 key 并加载报告
+                try { localStorage.setItem(STORAGE_KEY, k); } catch {}
+                await loadReport();
+
+            } catch (e) {
+                showRetryArea(`网络错误：${e.message}`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // ── 加载报告 ──────────────────────────────────────────────────
+        async function loadReport() {
+            showLoading();
             const r = await sfetch('/api/analysis-report');
 
             if (!r.ok) {
-                const msg = r.status === 401
-                    ? '身份验证失败，正在跳转…'
-                    : `加载失败（HTTP ${r.status}），请检查服务是否正常。`;
-                showPlaceholder(msg, { badge: 'Error', showRetry: r.status !== 401 });
+                // 401 已由 sfetch 内部回到登录框，其余显示重试
+                if (r.status !== 401) {
+                    showRetryArea(`加载失败（HTTP ${r.status}），请检查服务是否正常。`);
+                }
                 return;
             }
 
             if (!r.payload?.report) {
-                showPlaceholder(
-                    '尚未生成检测报告，请先在主界面运行一次节点检测。',
-                    { badge: 'No Data', showRetry: true }
-                );
+                showRetryArea('尚未生成检测报告，请先在主界面运行一次节点检测。', 'No Data');
                 return;
             }
 
@@ -839,17 +746,39 @@
                 const report = YAML.parse(r.payload.report);
                 renderReport(report);
                 document.getElementById('placeholderState').style.display = 'none';
-                document.getElementById('reportState').style.display = '';
+                document.getElementById('reportState').style.display      = '';
             } catch (e) {
-                showPlaceholder(`报告解析失败：${e.message}`, { badge: 'Error', showRetry: true });
+                showRetryArea(`报告解析失败：${e.message}`);
             }
         }
 
+        // ── 退出登录 ──────────────────────────────────────────────────
+        function doLogout() {
+            try { localStorage.removeItem(STORAGE_KEY); } catch {}
+            showLoginArea();
+        }
+
+        // ── 主初始化（重试按钮也调用此函数） ─────────────────────────
+        async function initPage() {
+            if (!getKey()) {
+                showLoginArea();
+                return;
+            }
+            await loadReport();
+        }
+
+        // ── 跨标签页退出：admin 页 doLogout 清除 key 后同步回到登录框 ──
+        window.addEventListener('storage', e => {
+            if (e.key === STORAGE_KEY && !e.newValue) {
+                showLoginArea('已在其他页面退出登录，请重新输入。');
+            }
+        });
+
         // ── 渲染主函数 ────────────────────────────────────────────────
         function renderReport(r) {
-            const ci = r.check_info || {};
-            const ga = r.global_analysis || {};
-            const sr = r.subs_ranking || [];
+            const ci = r.check_info       || {};
+            const ga = r.global_analysis  || {};
+            const sr = r.subs_ranking     || [];
             const sb = r.subs_ranking_bad || [];
 
             document.getElementById('summaryBlock').textContent =
@@ -872,103 +801,103 @@
                 ? minSpeedVal + ' KB/s' : '未开启';
 
             document.getElementById('infoChips').innerHTML = [
-                { label: '可用节点', value: ga.alive_count || 0, accent: true },
-                { label: '流量消耗', value: ci.check_traffic || '-' },
-                { label: '检测数量', value: ci.check_count || '-' },
+                { label: '可用节点', value: ga.alive_count    || 0,   accent: true },
+                { label: '流量消耗', value: ci.check_traffic  || '-' },
+                { label: '检测数量', value: ci.check_count    || '-' },
                 { label: '速度下限', value: minSpeedStr },
             ].map(c => `
-        <div class="info-chip${c.accent ? ' chip-accent' : ''}">
-            <div class="chip-value">${c.value}</div>
-            <div class="chip-label">${c.label}</div>
-        </div>
-    `).join('');
+                <div class="info-chip${c.accent ? ' chip-accent' : ''}">
+                    <div class="chip-value">${c.value}</div>
+                    <div class="chip-label">${c.label}</div>
+                </div>
+            `).join('');
         }
 
-        // ── 全局统计 ──────────────────────────────────────────────────
+        // ── 全局统计（地区 + 协议 + 线路质量） ──────────────────────
         function renderGlobal(ga) {
-            const geo = ga.geography_distribution || {};
-            const proto = ga.protocol_distribution || {};
-            const qm = ga.quality_metrics || {};
-            const cfd = qm.cf_details || {};
-            const total = ga.alive_count || 1;
+            const geo   = ga.geography_distribution || {};
+            const proto = ga.protocol_distribution  || {};
+            const qm    = ga.quality_metrics        || {};
+            const cfd   = qm.cf_details             || {};
+            const total = ga.alive_count            || 1;
 
-            const geoEntries = Object.entries(geo).sort((a, b) => b[1] - a[1]);
+            const geoEntries   = Object.entries(geo).sort((a, b) => b[1] - a[1]);
             const protoEntries = Object.entries(proto).sort((a, b) => b[1] - a[1]);
-            const maxGeo = geoEntries[0]?.[1] || 1;
+            const maxGeo       = geoEntries[0]?.[1] || 1;
 
-            const cfCon = cfd['consistent_¹⁺'] || {};
-            const cfIncon = cfd['inconsistent_⁰'] || {};
-            const cfBlock = cfd['blocked_⁻¹'] || {};
+            const cfCon   = cfd['consistent_¹⁺']  || {};
+            const cfIncon = cfd['inconsistent_⁰']  || {};
+            const cfBlock = cfd['blocked_⁻¹']      || {};
 
             let vps = {};
             for (const [k, v] of Object.entries(qm)) {
                 if (k.startsWith('vps_details') && typeof v === 'object') { vps = v; break; }
             }
 
-            const cfConTotal = Object.values(cfCon).reduce((a, b) => a + b, 0);
-            const vpsTotal = Object.values(vps).reduce((a, b) => a + b, 0);
-            const cfRatio = qm.cf_consistent_ratio || `${Math.round(cfConTotal / total * 100)}%`;
+            const cfConTotal  = Object.values(cfCon).reduce((a, b) => a + b, 0);
+            const vpsTotal    = Object.values(vps).reduce((a, b) => a + b, 0);
+            const cfRatio     = qm.cf_consistent_ratio || `${Math.round(cfConTotal / total * 100)}%`;
             const vpsRatioStr = `${Math.round(vpsTotal / total * 100)}%`;
 
             document.getElementById('globalSection').innerHTML = `
-        <div class="section-header">全局统计</div>
-        <div class="two-col">
-            <div class="stat-panel">
-                <div class="panel-title">地区分布（共 ${geoEntries.length} 个）</div>
-                ${geoEntries.map(([k, v]) => `
-                    <div class="geo-row">
-                        <span class="geo-key">${k}</span>
-                        <div class="geo-bar-wrap">
-                            <div class="geo-bar" style="width:${Math.round(v / maxGeo * 100)}%"></div>
+                <div class="section-header">全局统计</div>
+                <div class="report-grid">
+                    <div class="stat-panel">
+                        <div class="panel-title">地区分布（共 ${geoEntries.length} 个）</div>
+                        ${geoEntries.map(([k, v]) => `
+                            <div class="geo-row">
+                                <span class="geo-key">${k}</span>
+                                <div class="geo-bar-wrap">
+                                    <div class="geo-bar" style="width:${Math.round(v / maxGeo * 100)}%"></div>
+                                </div>
+                                <span class="geo-val">${v}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="stat-panel">
+                        <div class="panel-title">协议分布</div>
+                        ${protoEntries.map(([k, v]) => `
+                            <div class="proto-row">
+                                <span class="proto-key">${k}</span>
+                                <div class="proto-bar-wrap">
+                                    <div class="proto-bar" style="width:${Math.round(v / total * 100)}%"></div>
+                                </div>
+                                <span class="proto-val">${v}</span>
+                            </div>
+                        `).join('')}
+                        <div class="panel-title" style="margin-top:14px">线路质量</div>
+                        <div class="quality-row">
+                            <div class="quality-item">
+                                <div class="quality-val" style="color:var(--success)">${cfRatio}</div>
+                                <div class="quality-label">CF 中转 ¹⁺</div>
+                            </div>
+                            <div class="quality-item">
+                                <div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div>
+                                <div class="quality-label">独立 VPS ²</div>
+                            </div>
                         </div>
-                        <span class="geo-val">${v}</span>
-                    </div>
-                `).join('')}
-            </div>
-            <div class="stat-panel">
-                <div class="panel-title">协议分布</div>
-                ${protoEntries.map(([k, v]) => `
-                    <div class="proto-row">
-                        <span class="proto-key">${k}</span>
-                        <div class="proto-bar-wrap">
-                            <div class="proto-bar" style="width:${Math.round(v / total * 100)}%"></div>
+                        <div class="cf-breakdown">
+                            ${cfGroup('CF 一致 ¹⁺',  cfCon,   'var(--success)')}
+                            ${cfGroup('CF 不一致 ⁰', cfIncon, 'var(--warning)')}
+                            ${Object.keys(cfBlock).length ? cfGroup('CF 异常 ⁻¹', cfBlock, 'var(--danger)') : ''}
+                            ${cfGroup('独立 VPS ²',   vps,     'var(--idle)')}
                         </div>
-                        <span class="proto-val">${v}</span>
-                    </div>
-                `).join('')}
-                <div class="panel-title" style="margin-top:14px">线路质量</div>
-                <div class="quality-row">
-                    <div class="quality-item">
-                        <div class="quality-val" style="color:var(--success)">${cfRatio}</div>
-                        <div class="quality-label">CF 中转 ¹⁺</div>
-                    </div>
-                    <div class="quality-item">
-                        <div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div>
-                        <div class="quality-label">独立 VPS ²</div>
                     </div>
                 </div>
-                <div class="cf-breakdown">
-                    ${cfGroup('CF 一致 ¹⁺', cfCon, 'var(--success)')}
-                    ${cfGroup('CF 不一致 ⁰', cfIncon, 'var(--warning)')}
-                    ${Object.keys(cfBlock).length ? cfGroup('CF 异常 ⁻¹', cfBlock, 'var(--danger)') : ''}
-                    ${cfGroup('独立 VPS ²', vps, 'var(--idle)')}
-                </div>
-            </div>
-        </div>
-    `;
+            `;
         }
 
         function cfGroup(title, obj, color) {
             const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
             if (!entries.length) return '';
             return `
-        <div class="cf-group">
-            <span class="cf-group-title" style="color:${color}">${title}</span>
-            <span class="cf-tags">
-                ${entries.map(([k, v]) => `<span class="cf-tag">${k}<em>${v}</em></span>`).join('')}
-            </span>
-        </div>
-    `;
+                <div class="cf-group">
+                    <span class="cf-group-title" style="color:${color}">${title}</span>
+                    <span class="cf-tags">
+                        ${entries.map(([k, v]) => `<span class="cf-tag">${k}<em>${v}</em></span>`).join('')}
+                    </span>
+                </div>
+            `;
         }
 
         // ── 订阅排名 ──────────────────────────────────────────────────
@@ -978,38 +907,38 @@
                 return;
             }
             document.getElementById('rankingSection').innerHTML = `
-        <div class="section-header">订阅排名（${subs.length} 个有效）</div>
-        <div class="sub-list">
-            ${subs.map(s => {
-                const stats = s.stats || {};
-                const rateStr = String(stats.rate || '0%');
-                const rateNum = parseFloat(rateStr);
-                const barColor = rateNum >= 10 ? 'var(--success)'
-                    : rateNum > 0 ? 'var(--warning)'
-                        : 'var(--danger)';
-                const locs = Array.isArray(s.top_locations)
-                    ? s.top_locations.join('').split('|').filter(Boolean) : [];
-                const protos = s.protocols
-                    ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : [];
-                return `
-                    <div class="sub-item">
-                        <div class="sub-header">
-                            <span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span>
-                            <span class="sub-rate" style="color:${barColor}">${rateStr}</span>
-                        </div>
-                        <div class="sub-bar-wrap">
-                            <div class="sub-bar" style="width:${Math.min(rateNum, 100)}%;background:${barColor}"></div>
-                        </div>
-                        <div class="sub-meta">
-                            <span>${stats.success || 0} / ${stats.total || 0} 节点</span>
-                            ${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}
-                            ${protos.map(([k, v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}
-                        </div>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
+                <div class="section-header">订阅排名（${subs.length} 个有效）</div>
+                <div class="sub-list">
+                    ${subs.map(s => {
+                        const stats    = s.stats || {};
+                        const rateStr  = String(stats.rate || '0%');
+                        const rateNum  = parseFloat(rateStr);
+                        const barColor = rateNum >= 10 ? 'var(--success)'
+                                       : rateNum > 0   ? 'var(--warning)'
+                                       : 'var(--danger)';
+                        const locs = Array.isArray(s.top_locations)
+                            ? s.top_locations.join('').split('|').filter(Boolean) : [];
+                        const protos = s.protocols
+                            ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : [];
+                        return `
+                            <div class="sub-item">
+                                <div class="sub-header">
+                                    <span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span>
+                                    <span class="sub-rate" style="color:${barColor}">${rateStr}</span>
+                                </div>
+                                <div class="sub-bar-wrap">
+                                    <div class="sub-bar" style="width:${Math.min(rateNum,100)}%;background:${barColor}"></div>
+                                </div>
+                                <div class="sub-meta">
+                                    <span>${stats.success||0} / ${stats.total||0} 节点</span>
+                                    ${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}
+                                    ${protos.map(([k,v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
         }
 
         // ── 失效订阅 ──────────────────────────────────────────────────
@@ -1019,34 +948,34 @@
                 return;
             }
             document.getElementById('badSection').innerHTML = `
-        <div class="section-header-toggle" onclick="toggleBad()">
-            失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span>
-            <span class="toggle-line"></span>
-            <svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"/>
-            </svg>
-        </div>
-        <div id="badList" style="display:none">
-            <div class="bad-list">
-                ${subsBad.map(s => {
-                const stats = s.stats || {};
-                return `
-                        <div class="bad-item">
-                            <span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span>
-                            <span class="bad-count">${stats.success || 0}/${stats.total || 0}</span>
-                        </div>
-                    `;
-            }).join('')}
-            </div>
-        </div>
-    `;
+                <div class="section-header-toggle" onclick="toggleBad()">
+                    失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span>
+                    <span class="toggle-line"></span>
+                    <svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </div>
+                <div id="badList" style="display:none">
+                    <div class="bad-list">
+                        ${subsBad.map(s => {
+                            const stats = s.stats || {};
+                            return `
+                                <div class="bad-item">
+                                    <span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span>
+                                    <span class="bad-count">${stats.success||0}/${stats.total||0}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
         }
 
         function toggleBad() {
-            const list = document.getElementById('badList');
+            const list    = document.getElementById('badList');
             const chevron = document.getElementById('badChevron');
-            const open = list.style.display === 'none';
+            const open    = list.style.display === 'none';
             list.style.display = open ? '' : 'none';
             chevron.classList.toggle('open', open);
         }
@@ -1054,21 +983,14 @@
         // ── XSS 防护 ──────────────────────────────────────────────────
         function esc(str) {
             return String(str)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
         // ── 启动 ──────────────────────────────────────────────────────
         initPage();
     </script>
-<!-- 先加载 admin.js -->
-<script type="module" src="/static/js/admin.js"></script>
-
-<!-- 再启动页面逻辑，确保 window.YAML 已就绪 -->
-<script type="module">
-    // 此 module script 保证在前一个 module 执行后才运行
-    initPage();
-</script>
+    <script type="module" src="/static/js/admin.js"></script>
 </body>
 
 </html>
