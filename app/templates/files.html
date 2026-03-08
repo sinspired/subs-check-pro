@@ -391,17 +391,13 @@
             gap: 14px;
         }
 
-        .footer-icon {
-            width: 18px;
-            height: 18px;
-            opacity: 0.45;
-            transition: opacity 0.15s;
-            display: block;
-        }
+        .footer-icon  { width: 15px; height: 15px; opacity: 0.6; transition: opacity 0.15s; display: block; filter: invert(var(--invert)); }
 
         .footer-icons a:hover .footer-icon {
             opacity: 0.85;
         }
+
+        .footer-icon:hover { transform: scale(1.15); }
 
         .footer-copy {
             font-size: 11px;
@@ -587,15 +583,9 @@
 
     <div class="footer-outsie">
         <div class="footer-icons">
-            <a id="githubUrlBtn" href="#" title="GitHub 项目" aria-label="GitHub 项目">
-                <img src="/static/icon/github.svg" alt="GitHub" class="footer-icon" />
-            </a>
-            <a id="dockerUrlBtn" href="#" title="Docker 镜像" aria-label="Docker 镜像">
-                <img src="/static/icon/docker.svg" alt="Docker" class="footer-icon" />
-            </a>
-            <a id="telegramUrlBtn" href="https://t.me/subs_check_pro" title="Telegram 群" aria-label="Telegram 群">
-                <img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon" />
-            </a>
+            <a href="https://github.com/sinspired/subs-check-pro" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
+            <a href="https://hub.docker.com/r/sinspired/subs-check-pro" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
+            <a href="https://t.me/subs_check_pro" title="Telegram"><img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon"/></a>
         </div>
         <div class="footer-copy">
             © 2025 <a href="https://github.com/sinspired" target="_blank" rel="noopener">sinspired</a> ·

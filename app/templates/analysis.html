@@ -682,8 +682,9 @@
         flex-shrink: 0;
     }
     .footer-icons { display: flex; align-items: center; gap: 12px; }
-    .footer-icon  { width: 15px; height: 15px; opacity: 0.4; transition: opacity 0.15s; display: block; }
+    .footer-icon  { width: 15px; height: 15px; opacity: 0.6; transition: opacity 0.15s; display: block; filter: invert(var(--invert)); }
     .footer-icons a:hover .footer-icon { opacity: 0.75; }
+    .footer-icon:hover { transform: scale(1.15); }
     .footer-copy  { font-size: 11px; color: var(--muted); }
     .footer-copy a { color: var(--muted); text-decoration: none; }
     .footer-copy a:hover { color: var(--accent); }
@@ -765,8 +766,8 @@
 
     <div class="login-bottom">
         <div class="footer-icons">
-            <a href="#" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
-            <a href="#" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
+            <a href="https://github.com/sinspired/subs-check-pro" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
+            <a href="https://hub.docker.com/r/sinspired/subs-check-pro" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
             <a href="https://t.me/subs_check_pro" title="Telegram"><img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon"/></a>
         </div>
         <div class="footer-copy">
@@ -977,8 +978,8 @@
     <!-- 页脚 -->
     <footer class="page-footer">
         <div class="footer-icons">
-            <a href="#" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
-            <a href="#" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
+            <a href="https://github.com/sinspired/subs-check-pro" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
+            <a href="https://hub.docker.com/r/sinspired/subs-check-pro" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
             <a href="https://t.me/subs_check_pro" title="Telegram"><img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon"/></a>
         </div>
         <div class="footer-copy">
