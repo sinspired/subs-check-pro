@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,988 +8,1157 @@
     <link rel="stylesheet" href="/static/css/admin.css">
     <script src="/static/js/libs/yaml.bundle.js?v20260109"></script>
     <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 0 16px;
-            box-sizing: border-box;
-            overflow-x: hidden;
-        }
+    *, *::before, *::after { box-sizing: border-box; }
 
-        /* 大屏报告区撑宽到 960px，登录/占位卡片限制为 480px */
-        .card-wrapper {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            max-width: 960px;
-            padding: 24px 0 16px;
-            box-sizing: border-box;
-        }
+    body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+    }
 
-        /* 占位/登录态：卡片居中且不超过 480px */
-        #placeholderState .inner-limit {
-            max-width: 480px;
-            margin: 0 auto;
-        }
+    .theme-wrapper {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 200;
+    }
 
-        .theme-wrapper {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 100;
-        }
+    /* ══ 登录场景：居中卡片，限宽 420px ══ */
+    .login-scene {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        min-height: 100vh;
+    }
 
-        .card {
-            border-radius: 16px;
-            padding: 28px 32px;
-            width: 100%;
-            box-shadow: var(--glass-shadow);
-            animation: slideIn 0.35s ease-out;
-            box-sizing: border-box;
-            flex-shrink: 0;
-        }
+    .login-card {
+        width: 100%;
+        max-width: 420px;
+        border-radius: 16px;
+        padding: 28px 28px 24px;
+        box-shadow: var(--glass-shadow);
+        animation: slideIn 0.3s ease-out;
+    }
 
-        /* 报告顶栏：badge + 退出按钮横排 */
-        .report-topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 18px;
-        }
+    .login-footer {
+        margin-top: 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
 
-        .report-topbar .status-badge {
-            margin-bottom: 0;
-        }
+    /* ══ 报告场景：全屏 flex 列，含固定顶栏 + 可滚动内容 ══ */
+    .report-scene {
+        display: none;
+        flex-direction: column;
+        flex: 1;
+        height: 100vh;        /* 整页高度 */
+        overflow: hidden;     /* 防止 body 双重滚动条 */
+    }
 
-        /* 退出按钮 */
-        .btn-logout {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 10px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            transition: color 0.15s, border-color 0.15s, background 0.15s;
-        }
-        .btn-logout svg { width: 12px; height: 12px; flex-shrink: 0; }
-        .btn-logout:hover {
-            color: var(--danger);
-            border-color: var(--danger);
-            background: color-mix(in srgb, var(--danger) 8%, transparent);
-        }
+    /* 顶部导航栏（sticky） */
+    .report-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        height: 52px;
+        border-bottom: 1px solid var(--border);
+        background: var(--glass-bg);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        flex-shrink: 0;
+        z-index: 100;
+    }
 
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 3px 10px;
-            border-radius: 99px;
-            font-size: 9px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 18px;
-            border: 1px solid var(--border);
-            color: var(--idle);
-        }
+    .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        text-decoration: none;
+    }
+    .nav-brand img { width: 16px; height: 16px; }
 
-        h1 {
-            font-size: 15px;
-            font-weight: 600;
-            margin: 0 0 6px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--muted);
-            letter-spacing: 0.02em;
-            text-transform: uppercase;
-        }
+    .nav-meta {
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        flex: 1;
+        text-align: center;
+    }
 
-        h1 svg {
-            width: 16px;
-            height: 16px;
-            flex-shrink: 0;
-            color: var(--muted);
-        }
+    .nav-actions { display: flex; align-items: center; gap: 8px; }
 
-        .desc {
-            font-size: 13px;
-            color: var(--muted);
-            line-height: 1.6;
-            margin: 0 0 22px;
-        }
+    .btn-logout {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .btn-logout svg { width: 12px; height: 12px; }
+    .btn-logout:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 8%, transparent);
+    }
 
-        /* 登录输入区 */
-        .auth-area {
-            margin-top: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+    /* Tab 栏 */
+    .tab-bar {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 0 20px;
+        height: 44px;
+        border-bottom: 1px solid var(--border);
+        background: var(--glass-bg);
+        overflow-x: auto;
+        scrollbar-width: none;
+        flex-shrink: 0;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
 
-        .auth-input {
-            width: 100%;
-            padding: 11px 14px;
-            border: 1.5px solid var(--border);
-            border-radius: 10px;
-            background: var(--input-bg);
-            color: var(--fg);
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            box-sizing: border-box;
-            font-family: inherit;
-        }
+    .tab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: color 0.15s, background 0.15s;
+        flex-shrink: 0;
+    }
+    .tab-btn svg { width: 13px; height: 13px; }
+    .tab-btn:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+    .tab-btn.active {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
 
-        .auth-input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-        }
+    /* Tab 内容区（独立滚动） */
+    .tab-content {
+        display: none;
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+    }
+    .tab-content.active { display: block; }
 
-        .auth-input.error {
-            border-color: var(--danger);
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 12%, transparent);
-        }
+    /* 内容最大宽度 */
+    .tab-inner { max-width: 1100px; margin: 0 auto; }
 
-        .auth-hint {
-            font-size: 12px;
-            color: var(--danger);
-            margin: -4px 0 0;
-            min-height: 16px;
-        }
+    /* ══ 通用组件 ══ */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 99px;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 16px;
+        border: 1px solid var(--border);
+        color: var(--idle);
+    }
 
-        .btn-auth {
-            width: 100%;
-            padding: 11px 14px;
-            border-radius: 10px;
-            border: none;
-            background: var(--accent);
-            color: #fff;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            transition: opacity 0.18s, transform 0.12s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
+    h1 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+    h1 svg { width: 16px; height: 16px; flex-shrink: 0; }
 
-        .btn-auth:hover  { opacity: 0.88; transform: translateY(-1px); }
-        .btn-auth:active { opacity: 0.95; transform: translateY(0); }
-        .btn-auth:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .btn-auth svg    { width: 15px; height: 15px; flex-shrink: 0; }
+    .desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0 0 20px; }
 
-        /* 区块标题 */
-        .section-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            margin-top: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: var(--muted);
-        }
+    .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-        .section-header::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border);
-        }
+    .section-title-toggle {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .toggle-line    { flex: 1; height: 1px; background: var(--border); }
+    .toggle-chevron { width: 12px; height: 12px; flex-shrink: 0; transition: transform 0.2s; }
+    .toggle-chevron.open { transform: rotate(180deg); }
 
-        .section-header-toggle {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            margin-top: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: var(--muted);
-            cursor: pointer;
-            -webkit-user-select: none;
-            user-select: none;
-        }
+    /* 登录表单 */
+    .auth-area { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 
-        .toggle-line   { flex: 1; height: 1px; background: var(--border); }
-        .toggle-chevron { width: 12px; height: 12px; flex-shrink: 0; transition: transform 0.2s; }
-        .toggle-chevron.open { transform: rotate(180deg); }
+    .auth-input {
+        width: 100%;
+        padding: 11px 14px;
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        background: var(--input-bg);
+        color: var(--fg);
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        font-family: inherit;
+    }
+    .auth-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+    .auth-input.error {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 12%, transparent);
+    }
 
-        .summary-block {
-            padding: 14px 16px;
-            background: var(--input-bg);
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            border-left: 3px solid var(--accent);
-            font-size: 13px;
-            color: var(--fg);
-            line-height: 1.75;
-            margin-bottom: 20px;
-            word-break: break-all;
-        }
+    .auth-hint { font-size: 12px; color: var(--danger); min-height: 16px; margin: 0; }
 
-        /* 统计芯片：大屏 4 列，小屏 2 列 */
-        .info-chips {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 4px;
-        }
+    .btn-auth {
+        width: 100%;
+        padding: 11px 14px;
+        border-radius: 10px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        font-family: inherit;
+        transition: opacity 0.18s, transform 0.12s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    .btn-auth:hover   { opacity: 0.88; transform: translateY(-1px); }
+    .btn-auth:active  { opacity: 0.95; transform: translateY(0); }
+    .btn-auth:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .btn-auth svg     { width: 15px; height: 15px; flex-shrink: 0; }
 
-        .info-chip {
-            padding: 12px 10px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--glass-bg);
-            text-align: center;
-        }
+    .retry-area { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+    .retry-msg  { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6; }
 
-        .chip-value {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--fg);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+    .card-footer {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .brand-info {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 700; color: var(--muted);
+    }
+    .brand-info img { width: 16px; height: 16px; }
+    .footer-meta { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-        .chip-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
-        .chip-accent .chip-value { color: var(--accent); }
+    /* ══ Tab 1 概览 ══ */
+    .summary-block {
+        padding: 14px 16px;
+        background: var(--input-bg);
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        font-size: 13px;
+        color: var(--fg);
+        line-height: 1.75;
+        margin-bottom: 16px;
+        word-break: break-all;
+    }
 
-        /* 大屏三列布局：地区 | 协议+质量 | 订阅排名 */
-        .report-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 4px;
-            align-items: start;
-        }
+    .info-chips {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .info-chip {
+        padding: 14px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--glass-bg);
+        text-align: center;
+    }
+    .chip-value { font-size: 18px; font-weight: 700; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chip-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .chip-accent .chip-value { color: var(--accent); }
 
-        /* 大屏时订阅排名独占一列 */
-        @media (min-width: 800px) {
-            .report-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
+    .quality-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .quality-item {
+        flex: 1; text-align: center; padding: 14px 4px;
+        border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border);
+    }
+    .quality-val   { font-size: 22px; font-weight: 700; }
+    .quality-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
-        .stat-panel {
-            padding: 14px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--glass-bg);
-        }
+    .cf-breakdown { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .cf-group { display: flex; align-items: flex-start; gap: 6px; }
+    .cf-group-title { flex-shrink: 0; width: 72px; font-weight: 600; padding-top: 2px; font-size: 10px; }
+    .cf-tags  { display: flex; flex-wrap: wrap; gap: 3px; }
+    .cf-tag   {
+        display: inline-flex; align-items: center; gap: 2px;
+        padding: 1px 6px; border-radius: 99px;
+        border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg);
+    }
+    .cf-tag em { font-style: normal; color: var(--muted); }
 
-        .panel-title {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: var(--muted);
-            margin-bottom: 10px;
-        }
+    .overview-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .stat-panel {
+        padding: 16px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--glass-bg);
+    }
+    .panel-title {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        margin-bottom: 10px;
+    }
 
-        .geo-row  { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-        .geo-key  { font-size: 11px; font-weight: 600; width: 24px; flex-shrink: 0; color: var(--fg); }
-        .geo-bar-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
-        .geo-bar  { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s ease; }
-        .geo-val  { font-size: 10px; color: var(--muted); width: 18px; text-align: right; flex-shrink: 0; }
+    /* ══ Tab 2 地理 ══ */
+    /* 地图/条形图容器（未来替换 #mapSlot 内部即可） */
+    .geo-view {
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--glass-bg);
+        overflow: hidden;
+        margin-bottom: 4px;
+    }
 
-        .proto-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-        .proto-key { font-size: 11px; font-weight: 600; width: 52px; flex-shrink: 0; }
-        .proto-bar-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
-        .proto-bar { height: 100%; background: var(--warning); border-radius: 99px; transition: width 0.4s ease; }
-        .proto-val { font-size: 10px; color: var(--muted); width: 18px; text-align: right; flex-shrink: 0; }
+    .map-placeholder {
+        min-height: 240px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--input-bg);
+        border-bottom: 1px dashed var(--border);
+    }
+    .map-placeholder-inner { text-align: center; opacity: 0.4; }
+    .map-placeholder-inner svg { width: 32px; height: 32px; margin: 0 auto 8px; display: block; }
+    .map-placeholder-inner span { font-size: 12px; color: var(--muted); }
 
-        .quality-row { display: flex; gap: 8px; margin: 8px 0 10px; }
-        .quality-item {
-            flex: 1; text-align: center; padding: 8px 4px;
-            border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border);
-        }
-        .quality-val   { font-size: 18px; font-weight: 700; }
-        .quality-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    /* 条形图分两列 */
+    .geo-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    .geo-col { padding: 14px 16px; }
+    .geo-col + .geo-col { border-left: 1px solid var(--border); }
 
-        .cf-breakdown { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
-        .cf-group { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; }
-        .cf-group-title { flex-shrink: 0; width: 72px; font-weight: 600; padding-top: 2px; font-size: 10px; }
-        .cf-tags  { display: flex; flex-wrap: wrap; gap: 3px; }
-        .cf-tag   {
-            display: inline-flex; align-items: center; gap: 2px;
-            padding: 1px 6px; border-radius: 99px;
-            border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg);
-        }
-        .cf-tag em { font-style: normal; color: var(--muted); }
+    .geo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .geo-key { font-size: 11px; font-weight: 600; width: 28px; flex-shrink: 0; color: var(--fg); }
+    .geo-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .geo-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.5s ease; }
+    .geo-val { font-size: 11px; color: var(--muted); width: 22px; text-align: right; flex-shrink: 0; }
 
-        .sub-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
-        .sub-item {
-            padding: 10px 12px; border-radius: 10px;
-            border: 1px solid var(--border); background: var(--glass-bg); transition: background 0.15s;
-        }
-        .sub-item:hover { background: var(--input-bg); }
-        .sub-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
-        .sub-url {
-            flex: 1; font-size: 11px; font-family: var(--font-mono, monospace);
-            color: var(--muted); white-space: nowrap; overflow: hidden;
-            text-overflow: ellipsis; min-width: 0;
-        }
-        .sub-rate  { font-size: 13px; font-weight: 700; flex-shrink: 0; }
-        .sub-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
-        .sub-bar  { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
-        .sub-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--muted); }
-        .tag-pill {
-            padding: 1px 6px; border-radius: 4px;
-            background: var(--input-bg); border: 1px solid var(--border);
-            font-size: 10px; white-space: nowrap;
-        }
+    /* ══ Tab 3 协议 ══ */
+    .proto-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .proto-key { font-size: 11px; font-weight: 600; width: 56px; flex-shrink: 0; }
+    .proto-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .proto-bar { height: 100%; background: var(--warning); border-radius: 99px; transition: width 0.5s ease; }
+    .proto-val { font-size: 11px; color: var(--muted); width: 22px; text-align: right; flex-shrink: 0; }
 
-        .bad-list {
-            border-radius: 10px; border: 1px solid var(--border);
-            overflow: hidden; background: var(--glass-bg); margin-bottom: 4px;
-        }
-        .bad-item {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 7px 12px; border-bottom: 1px solid var(--border); gap: 8px;
-        }
-        .bad-item:last-child { border-bottom: none; }
-        .bad-url {
-            font-size: 11px; font-family: var(--font-mono, monospace);
-            color: var(--muted); overflow: hidden; text-overflow: ellipsis;
-            white-space: nowrap; flex: 1; min-width: 0;
-        }
-        .bad-count { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+    /* ══ Tab 4 订阅 ══ */
+    .sub-list { display: flex; flex-direction: column; gap: 8px; }
+    .sub-item {
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--glass-bg);
+        transition: background 0.15s;
+    }
+    .sub-item:hover { background: var(--input-bg); }
+    .sub-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
+    .sub-url {
+        flex: 1; font-size: 11px; font-family: var(--font-mono, monospace);
+        color: var(--muted); white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; min-width: 0;
+    }
+    .sub-rate  { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .sub-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+    .sub-bar  { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
+    .sub-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--muted); }
+    .tag-pill {
+        padding: 1px 6px; border-radius: 4px;
+        background: var(--input-bg); border: 1px solid var(--border);
+        font-size: 10px; white-space: nowrap;
+    }
 
-        /* 加载动画 */
-        .loading-dots::after {
-            content: '';
-            animation: dots 1.2s steps(4, end) infinite;
-        }
-        @keyframes dots {
-            0%  { content: ''; }   25% { content: '.'; }
-            50% { content: '..'; } 75% { content: '...'; }
-        }
+    .bad-list {
+        border-radius: 10px; border: 1px solid var(--border);
+        overflow: hidden; background: var(--glass-bg);
+    }
+    .bad-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; border-bottom: 1px solid var(--border); gap: 8px;
+    }
+    .bad-item:last-child { border-bottom: none; }
+    .bad-url {
+        font-size: 11px; font-family: var(--font-mono, monospace);
+        color: var(--muted); overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; flex: 1; min-width: 0;
+    }
+    .bad-count { font-size: 11px; color: var(--muted); flex-shrink: 0; }
 
-        .card-footer {
-            margin-top: 28px; padding-top: 16px;
-            border-top: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .brand-info {
-            display: flex; align-items: center; gap: 7px;
-            font-size: 12px; font-weight: 700; color: var(--muted);
-        }
-        .brand-info img { width: 16px; height: 16px; }
-        .footer-meta { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    /* 加载动画 */
+    .loading-dots::after { content: ''; animation: dots 1.2s steps(4, end) infinite; }
+    @keyframes dots {
+        0%  { content: ''; }   25% { content: '.'; }
+        50% { content: '..'; } 75% { content: '...'; }
+    }
 
-        .footer-outsie {
-            width: 100%; max-width: 960px; padding: 12px 0 24px;
-            display: flex; flex-direction: column; align-items: center; gap: 10px; flex-shrink: 0;
-        }
-        .footer-icons  { display: flex; align-items: center; gap: 14px; }
-        .footer-icon   { width: 18px; height: 18px; opacity: 0.45; transition: opacity 0.15s; display: block; }
-        .footer-icons a:hover .footer-icon { opacity: 0.85; }
-        .footer-copy   { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.6; }
-        .footer-copy a { color: var(--muted); text-decoration: none; }
-        .footer-copy a:hover { color: var(--accent); }
+    /* 页脚（报告场景底部） */
+    .page-footer {
+        padding: 12px 20px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: var(--glass-bg);
+        flex-shrink: 0;
+    }
+    .footer-icons { display: flex; align-items: center; gap: 14px; }
+    .footer-icon  { width: 16px; height: 16px; opacity: 0.4; transition: opacity 0.15s; display: block; }
+    .footer-icons a:hover .footer-icon { opacity: 0.8; }
+    .footer-copy  { font-size: 11px; color: var(--muted); }
+    .footer-copy a { color: var(--muted); text-decoration: none; }
+    .footer-copy a:hover { color: var(--accent); }
 
-        code {
-            font-family: var(--font-mono, monospace);
-            background: var(--placehoder-bg, rgba(0,0,0,.06));
-            color: var(--danger); padding: 1px 5px; border-radius: 4px; font-size: 11px;
-        }
+    code {
+        font-family: var(--font-mono, monospace);
+        background: var(--placehoder-bg, rgba(0,0,0,.06));
+        color: var(--danger); padding: 1px 5px; border-radius: 4px; font-size: 11px;
+    }
 
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
 
-        @media (max-width: 600px) {
-            .card { padding: 22px 16px 16px; }
-            .report-grid  { grid-template-columns: 1fr; }
-            .info-chips   { grid-template-columns: repeat(2, 1fr); }
-        }
+    /* ══ 响应式 ══ */
+    @media (max-width: 640px) {
+        .overview-grid { grid-template-columns: 1fr; }
+        .geo-split { grid-template-columns: 1fr; }
+        .geo-col + .geo-col { border-left: none; border-top: 1px solid var(--border); }
+        .info-chips { grid-template-columns: repeat(2, 1fr); }
+        .tab-btn span { display: none; }  /* 小屏只显示 Tab 图标 */
+        .nav-meta { display: none; }
+    }
     </style>
 </head>
-
 <body>
 
-    <!-- 主题切换按钮（fixed，始终右上角，切换逻辑由 admin.js 接管） -->
-    <div class="theme-wrapper">
-        <div class="theme-toggle" role="group" aria-label="主题切换" style="display:flex;align-items:center;">
-            <button id="themeToggle" class="icon-btn" aria-pressed="false" aria-label="切换主题" title="切换主题">
-                <svg class="icon" id="iconMoon" width="20" height="20" viewBox="0 0 24 24"
-                     fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
-                    <circle cx="12" cy="12" r="5"/>
-                    <line x1="12" y1="1"  x2="12" y2="3"/>
-                    <line x1="12" y1="21" x2="12" y2="23"/>
-                    <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"/>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                    <line x1="1"  y1="12" x2="3"  y2="12"/>
-                    <line x1="21" y1="12" x2="23" y2="12"/>
-                    <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36"/>
-                    <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
+<!-- 主题切换按钮（fixed，切换逻辑由 admin.js 接管） -->
+<div class="theme-wrapper">
+    <div style="display:flex;align-items:center;">
+        <button id="themeToggle" class="icon-btn" aria-pressed="false" aria-label="切换主题" title="切换主题">
+            <svg class="icon" id="iconMoon" width="20" height="20" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1"  x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1"  y1="12" x2="3"  y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36"/>
+                <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
+            </svg>
+            <svg class="icon" id="iconSun" width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- ① 登录 / 占位 场景 -->
+<div class="login-scene" id="loginScene">
+    <div class="login-card">
+        <div class="status-badge" id="placeholderBadge">Analysis Report</div>
+        <h1>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6"  y1="20" x2="6"  y2="14"/>
+                <line x1="2"  y1="20" x2="22" y2="20"/>
+            </svg>
+            检测结果分析
+        </h1>
+
+        <!-- 加载中 -->
+        <p class="desc" id="placeholderMsg" style="display:none">
+            正在获取报告<span class="loading-dots"></span>
+        </p>
+
+        <!-- 内嵌登录框 -->
+        <div id="inlineLoginArea" style="display:none">
+            <p class="desc">请输入 API 密钥以查看检测分析报告。</p>
+            <div class="auth-area">
+                <input class="auth-input" type="password" id="inlineApiKey"
+                       placeholder="输入 API 密钥..."
+                       autocomplete="current-password"
+                       onkeydown="if(event.keyCode===13)inlineLogin()">
+                <p class="auth-hint" id="loginHint"></p>
+                <button class="btn-auth" id="inlineLoginBtn" onclick="inlineLogin()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                    验证并查看
+                </button>
+            </div>
+        </div>
+
+        <!-- 错误 / 无数据 -->
+        <div class="retry-area" id="retryArea" style="display:none">
+            <p class="retry-msg" id="retryMsg"></p>
+            <button class="btn-auth" onclick="initPage()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 .49-3.33"/>
                 </svg>
-                <svg class="icon" id="iconSun" width="16" height="16" viewBox="0 0 24 24"
-                     fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
+                重试
             </button>
         </div>
-    </div>
 
-    <div class="card-wrapper">
-        <div class="card">
-
-            <!-- ① 占位区：加载中 / 未登录 / 错误，初始可见 -->
-            <div id="placeholderState">
-                <div class="inner-limit">
-                    <div class="status-badge" id="placeholderBadge">Analysis Report</div>
-                    <h1>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="20" x2="18" y2="10"/>
-                            <line x1="12" y1="20" x2="12" y2="4"/>
-                            <line x1="6"  y1="20" x2="6"  y2="14"/>
-                            <line x1="2"  y1="20" x2="22" y2="20"/>
-                        </svg>
-                        检测结果分析
-                    </h1>
-
-                    <!-- 加载中 -->
-                    <p class="desc" id="placeholderMsg" style="display:none">
-                        正在获取报告<span class="loading-dots"></span>
-                    </p>
-
-                    <!-- 未登录：内嵌登录框 -->
-                    <div id="inlineLoginArea" style="display:none">
-                        <p class="desc">请输入 API 密钥以查看检测分析报告。</p>
-                        <div class="auth-area">
-                            <input class="auth-input" type="password" id="inlineApiKey"
-                                   placeholder="输入 API 密钥..."
-                                   autocomplete="current-password"
-                                   onkeydown="if(event.keyCode===13)inlineLogin()">
-                            <p class="auth-hint" id="loginHint"></p>
-                            <button class="btn-auth" id="inlineLoginBtn" onclick="inlineLogin()">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="5" y1="12" x2="19" y2="12"/>
-                                    <polyline points="12 5 19 12 12 19"/>
-                                </svg>
-                                验证并查看
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 错误 / 无数据 -->
-                    <div id="retryArea" style="display:none">
-                        <p class="desc" id="retryMsg"></p>
-                        <button class="btn-auth" onclick="initPage()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="1 4 1 10 7 10"/>
-                                <path d="M3.51 15a9 9 0 1 0 .49-3.33"/>
-                            </svg>
-                            重试
-                        </button>
-                    </div>
-
-                    <div class="card-footer">
-                        <div class="brand-info">
-                            <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
-                        </div>
-                        <div class="footer-meta">Analysis Report</div>
-                    </div>
-                </div>
+        <div class="card-footer">
+            <div class="brand-info">
+                <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
             </div>
-
-            <!-- ② 报告内容区：由 JS 填充后显示 -->
-            <div id="reportState" style="display:none">
-
-                <!-- 顶栏：badge + 退出按钮 -->
-                <div class="report-topbar">
-                    <div class="status-badge">Analysis Report</div>
-                    <button class="btn-logout" onclick="doLogout()" title="退出登录">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                            <polyline points="16 17 21 12 16 7"/>
-                            <line x1="21" y1="12" x2="9" y2="12"/>
-                        </svg>
-                        退出
-                    </button>
-                </div>
-
-                <h1>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="20" x2="18" y2="10"/>
-                        <line x1="12" y1="20" x2="12" y2="4"/>
-                        <line x1="6"  y1="20" x2="6"  y2="14"/>
-                        <line x1="2"  y1="20" x2="22" y2="20"/>
-                    </svg>
-                    检测结果分析
-                </h1>
-                <p class="desc" id="reportMeta"></p>
-
-                <!-- 摘要 -->
-                <div class="summary-block" id="summaryBlock"></div>
-
-                <!-- 统计芯片 -->
-                <div class="info-chips" id="infoChips"></div>
-
-                <!-- 全局统计（地区 + 协议/质量） -->
-                <div id="globalSection"></div>
-
-                <!-- 订阅排名 -->
-                <div id="rankingSection"></div>
-
-                <!-- 失效订阅 -->
-                <div id="badSection"></div>
-
-                <div class="card-footer">
-                    <div class="brand-info">
-                        <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
-                    </div>
-                    <div class="footer-meta" id="reportFooterMeta">Analysis Report</div>
-                </div>
-            </div>
-
+            <div class="footer-meta">Analysis Report</div>
         </div>
     </div>
 
-    <div class="footer-outsie">
+    <div class="login-footer">
         <div class="footer-icons">
-            <a id="githubUrlBtn" href="#" title="GitHub 项目" aria-label="GitHub 项目">
-                <img src="/static/icon/github.svg" alt="GitHub" class="footer-icon" />
-            </a>
-            <a id="dockerUrlBtn" href="#" title="Docker 镜像" aria-label="Docker 镜像">
-                <img src="/static/icon/docker.svg" alt="Docker" class="footer-icon" />
-            </a>
-            <a id="telegramUrlBtn" href="https://t.me/subs_check_pro" title="Telegram 群" aria-label="Telegram 群">
-                <img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon" />
-            </a>
+            <a href="#" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
+            <a href="#" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
+            <a href="https://t.me/subs_check_pro" title="Telegram"><img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon"/></a>
         </div>
         <div class="footer-copy">
             © 2025 <a href="https://github.com/sinspired" target="_blank" rel="noopener">sinspired</a> ·
-            <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GPL-3.0 License</a>
+            <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GPL-3.0</a>
+        </div>
+    </div>
+</div>
+
+<!-- ② 报告场景（Tab 布局，全屏高度，内容区独立滚动） -->
+<div class="report-scene" id="reportScene">
+
+    <!-- 顶部导航栏 -->
+    <nav class="report-nav">
+        <div class="nav-brand">
+            <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
+        </div>
+        <div class="nav-meta" id="navMeta">分析报告</div>
+        <div class="nav-actions">
+            <button class="btn-logout" onclick="doLogout()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                退出
+            </button>
+        </div>
+    </nav>
+
+    <!-- Tab 栏 -->
+    <div class="tab-bar" role="tablist">
+        <button class="tab-btn active" role="tab" data-tab="overview" onclick="switchTab('overview')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>概览</span>
+        </button>
+        <button class="tab-btn" role="tab" data-tab="geo" onclick="switchTab('geo')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <span>地理分布</span>
+        </button>
+        <button class="tab-btn" role="tab" data-tab="proto" onclick="switchTab('proto')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span>协议分析</span>
+        </button>
+        <button class="tab-btn" role="tab" data-tab="subs" onclick="switchTab('subs')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6"  x2="21" y2="6"/>
+                <line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6"  x2="3.01" y2="6"/>
+                <line x1="3" y1="12" x2="3.01" y2="12"/>
+                <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <span>订阅排名</span>
+        </button>
+    </div>
+
+    <!-- Tab 1：概览 -->
+    <div class="tab-content active" id="tab-overview" role="tabpanel">
+        <div class="tab-inner">
+            <div class="summary-block" id="summaryBlock"></div>
+            <div class="info-chips"    id="infoChips"></div>
+            <div id="overviewExtra"></div>
         </div>
     </div>
 
-    <script>
-        // ── 主题初始化（读取存储值即时应用，切换逻辑由 admin.js 接管） ──
-        (function () {
-            const saved  = localStorage.getItem('theme');
-            const prefer = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', saved || prefer);
-        })();
+    <!-- Tab 2：地理分布（地图插槽 + 条形图） -->
+    <div class="tab-content" id="tab-geo" role="tabpanel">
+        <div class="tab-inner">
+            <div class="geo-view">
+                <!--
+                    ★ 地图插槽：未来将地图组件插入此处，替换 .map-placeholder 内容即可。
+                       条形图 #geoBars 可保留作为无地图时的降级方案或隐藏。
+                -->
+                <div class="map-placeholder" id="mapSlot">
+                    <div class="map-placeholder-inner">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        <span>地图视图（开发中）</span>
+                    </div>
+                </div>
+                <div id="geoBars" class="geo-split"></div>
+            </div>
+        </div>
+    </div>
 
-        // ── 与 admin.js 共用的 localStorage 键名 ────────────────────
-        const STORAGE_KEY = 'subscheck_api_key';
+    <!-- Tab 3：协议分析 -->
+    <div class="tab-content" id="tab-proto" role="tabpanel">
+        <div class="tab-inner" id="protoContent"></div>
+    </div>
 
-        function getKey() {
-            try {
-                return localStorage.getItem(STORAGE_KEY)
-                    || sessionStorage.getItem(STORAGE_KEY)
-                    || null;
-            } catch { return null; }
-        }
+    <!-- Tab 4：订阅排名 -->
+    <div class="tab-content" id="tab-subs" role="tabpanel">
+        <div class="tab-inner">
+            <div id="rankingContent"></div>
+            <div id="badContent" style="margin-top:16px"></div>
+        </div>
+    </div>
 
-        // ── sfetch（本页独立实现，admin.js 是 module 不挂载到 window）──
-        async function sfetch(url, opts = {}) {
-            const key = getKey();
-            if (!key) return { ok: false, status: 401, error: '未认证' };
-            opts.headers = { ...opts.headers, 'X-API-Key': key };
-            try {
-                const r       = await fetch(url, opts);
-                const ct      = r.headers.get('content-type') || '';
-                const text    = await r.text();
-                const payload = ct.includes('application/json') ? JSON.parse(text) : text;
-                if (r.status === 401) {
-                    try { localStorage.removeItem(STORAGE_KEY); } catch {}
-                    showLoginArea('API 密钥已失效，请重新输入。');
-                    return { ok: false, status: 401, payload };
-                }
-                return r.ok
-                    ? { ok: true,  status: r.status, payload }
-                    : { ok: false, status: r.status, payload };
-            } catch (e) {
-                return { ok: false, error: e.message };
-            }
-        }
+    <!-- 底部页脚 -->
+    <footer class="page-footer">
+        <div class="footer-icons">
+            <a href="#" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
+            <a href="#" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
+            <a href="https://t.me/subs_check_pro" title="Telegram"><img src="/static/icon/telegram.svg" alt="Telegram" class="footer-icon"/></a>
+        </div>
+        <div class="footer-copy">
+            © 2025 <a href="https://github.com/sinspired" target="_blank" rel="noopener">sinspired</a> ·
+            <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GPL-3.0</a>
+        </div>
+    </footer>
+</div>
 
-        // ── 占位区三种子状态 ─────────────────────────────────────────
+<script>
+// ── 主题初始化（切换逻辑由 admin.js 接管） ─────────────────────
+(function () {
+    const saved  = localStorage.getItem('theme');
+    const prefer = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', saved || prefer);
+})();
 
-        /** 加载中 */
-        function showLoading() {
-            document.getElementById('placeholderState').style.display  = '';
-            document.getElementById('reportState').style.display       = 'none';
-            document.getElementById('placeholderBadge').textContent    = 'Analysis Report';
-            document.getElementById('placeholderMsg').style.display    = '';
-            document.getElementById('inlineLoginArea').style.display   = 'none';
-            document.getElementById('retryArea').style.display         = 'none';
-        }
+// ── 与 admin.js 共用的存储键 ───────────────────────────────────
+const STORAGE_KEY = 'subscheck_api_key';
 
-        /** 未登录 / key 失效，展示内嵌登录框 */
-        function showLoginArea(hint = '') {
-            document.getElementById('placeholderState').style.display  = '';
-            document.getElementById('reportState').style.display       = 'none';
-            document.getElementById('placeholderBadge').textContent    = 'Auth Required';
-            document.getElementById('placeholderMsg').style.display    = 'none';
-            document.getElementById('inlineLoginArea').style.display   = '';
-            document.getElementById('retryArea').style.display         = 'none';
+function getKey() {
+    try {
+        return localStorage.getItem(STORAGE_KEY)
+            || sessionStorage.getItem(STORAGE_KEY)
+            || null;
+    } catch { return null; }
+}
 
-            const input    = document.getElementById('inlineApiKey');
-            const hintEl   = document.getElementById('loginHint');
-            if (hint) {
-                input.classList.add('error');
-                hintEl.textContent = hint;
-            } else {
-                input.classList.remove('error');
-                hintEl.textContent = '';
-                input.placeholder  = '输入 API 密钥...';
-            }
-            input.focus();
-        }
-
-        /** 错误 / 暂无数据 */
-        function showRetryArea(msg, badge = 'Error') {
-            document.getElementById('placeholderState').style.display  = '';
-            document.getElementById('reportState').style.display       = 'none';
-            document.getElementById('placeholderBadge').textContent    = badge;
-            document.getElementById('placeholderMsg').style.display    = 'none';
-            document.getElementById('inlineLoginArea').style.display   = 'none';
-            document.getElementById('retryArea').style.display         = '';
-            document.getElementById('retryMsg').textContent            = msg;
-        }
-
-        // ── 内嵌登录 ──────────────────────────────────────────────────
-        async function inlineLogin() {
-            const input  = document.getElementById('inlineApiKey');
-            const btn    = document.getElementById('inlineLoginBtn');
-            const hintEl = document.getElementById('loginHint');
-            const k      = input?.value?.trim();
-
-            // 清空上次错误样式
-            input.classList.remove('error');
-            hintEl.textContent = '';
-
-            if (!k) {
-                input.classList.add('error');
-                hintEl.textContent = '请输入 API 密钥';
-                input.focus();
-                return;
-            }
-
-            btn.disabled = true;
-
-            try {
-                const resp = await fetch('/api/status', { headers: { 'X-API-Key': k } });
-
-                if (resp.status === 401) {
-                    input.classList.add('error');
-                    hintEl.textContent = 'API 密钥无效，请重试';
-                    input.value = '';
-                    input.focus();
-                    return;
-                }
-                if (!resp.ok) {
-                    showRetryArea(`验证失败（HTTP ${resp.status}），请检查服务状态。`);
-                    return;
-                }
-
-                // 验证通过，持久化 key 并加载报告
-                try { localStorage.setItem(STORAGE_KEY, k); } catch {}
-                await loadReport();
-
-            } catch (e) {
-                showRetryArea(`网络错误：${e.message}`);
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        // ── 加载报告 ──────────────────────────────────────────────────
-        async function loadReport() {
-            showLoading();
-            const r = await sfetch('/api/analysis-report');
-
-            if (!r.ok) {
-                // 401 已由 sfetch 内部回到登录框，其余显示重试
-                if (r.status !== 401) {
-                    showRetryArea(`加载失败（HTTP ${r.status}），请检查服务是否正常。`);
-                }
-                return;
-            }
-
-            if (!r.payload?.report) {
-                showRetryArea('尚未生成检测报告，请先在主界面运行一次节点检测。', 'No Data');
-                return;
-            }
-
-            try {
-                const report = YAML.parse(r.payload.report);
-                renderReport(report);
-                document.getElementById('placeholderState').style.display = 'none';
-                document.getElementById('reportState').style.display      = '';
-            } catch (e) {
-                showRetryArea(`报告解析失败：${e.message}`);
-            }
-        }
-
-        // ── 退出登录 ──────────────────────────────────────────────────
-        function doLogout() {
+// ── sfetch（独立实现，admin.js 是 module 不暴露到 window） ─────
+async function sfetch(url, opts = {}) {
+    const key = getKey();
+    if (!key) return { ok: false, status: 401, error: '未认证' };
+    opts.headers = { ...opts.headers, 'X-API-Key': key };
+    try {
+        const r       = await fetch(url, opts);
+        const ct      = r.headers.get('content-type') || '';
+        const text    = await r.text();
+        const payload = ct.includes('application/json') ? JSON.parse(text) : text;
+        if (r.status === 401) {
             try { localStorage.removeItem(STORAGE_KEY); } catch {}
-            showLoginArea();
+            showLoginArea('API 密钥已失效，请重新输入。');
+            return { ok: false, status: 401, payload };
         }
+        return r.ok
+            ? { ok: true,  status: r.status, payload }
+            : { ok: false, status: r.status, payload };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
 
-        // ── 主初始化（重试按钮也调用此函数） ─────────────────────────
-        async function initPage() {
-            if (!getKey()) {
-                showLoginArea();
-                return;
-            }
-            await loadReport();
+// ── 场景切换：login ↔ report ───────────────────────────────────
+function showScene(name) {
+    const isLogin  = name === 'login';
+    document.getElementById('loginScene').style.display  = isLogin  ? 'flex' : 'none';
+    document.getElementById('reportScene').style.display = !isLogin ? 'flex' : 'none';
+}
+
+// ── 登录场景子状态 ─────────────────────────────────────────────
+function showLoading() {
+    showScene('login');
+    document.getElementById('placeholderBadge').textContent  = 'Analysis Report';
+    document.getElementById('placeholderMsg').style.display  = '';
+    document.getElementById('inlineLoginArea').style.display = 'none';
+    document.getElementById('retryArea').style.display       = 'none';
+}
+
+function showLoginArea(hint = '') {
+    showScene('login');
+    document.getElementById('placeholderBadge').textContent  = 'Auth Required';
+    document.getElementById('placeholderMsg').style.display  = 'none';
+    document.getElementById('inlineLoginArea').style.display = '';
+    document.getElementById('retryArea').style.display       = 'none';
+    const input  = document.getElementById('inlineApiKey');
+    const hintEl = document.getElementById('loginHint');
+    if (hint) {
+        input.classList.add('error');
+        hintEl.textContent = hint;
+    } else {
+        input.classList.remove('error');
+        hintEl.textContent  = '';
+        input.placeholder   = '输入 API 密钥...';
+    }
+    setTimeout(() => input.focus(), 50);
+}
+
+function showRetryArea(msg, badge = 'Error') {
+    showScene('login');
+    document.getElementById('placeholderBadge').textContent  = badge;
+    document.getElementById('placeholderMsg').style.display  = 'none';
+    document.getElementById('inlineLoginArea').style.display = 'none';
+    document.getElementById('retryArea').style.display       = '';
+    document.getElementById('retryMsg').textContent          = msg;
+}
+
+// ── Tab 切换 ───────────────────────────────────────────────────
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(c =>
+        c.classList.toggle('active', c.id === 'tab-' + name));
+}
+
+// ── 内嵌登录 ──────────────────────────────────────────────────
+async function inlineLogin() {
+    const input  = document.getElementById('inlineApiKey');
+    const btn    = document.getElementById('inlineLoginBtn');
+    const hintEl = document.getElementById('loginHint');
+    const k      = input?.value?.trim();
+
+    input.classList.remove('error');
+    hintEl.textContent = '';
+
+    if (!k) {
+        input.classList.add('error');
+        hintEl.textContent = '请输入 API 密钥';
+        input.focus();
+        return;
+    }
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/status', { headers: { 'X-API-Key': k } });
+        if (resp.status === 401) {
+            input.classList.add('error');
+            hintEl.textContent = 'API 密钥无效，请重试';
+            input.value = '';
+            input.focus();
+            return;
         }
-
-        // ── 跨标签页退出：admin 页 doLogout 清除 key 后同步回到登录框 ──
-        window.addEventListener('storage', e => {
-            if (e.key === STORAGE_KEY && !e.newValue) {
-                showLoginArea('已在其他页面退出登录，请重新输入。');
-            }
-        });
-
-        // ── 渲染主函数 ────────────────────────────────────────────────
-        function renderReport(r) {
-            const ci = r.check_info       || {};
-            const ga = r.global_analysis  || {};
-            const sr = r.subs_ranking     || [];
-            const sb = r.subs_ranking_bad || [];
-
-            document.getElementById('summaryBlock').textContent =
-                (r.summary || '').trim() || '暂无摘要';
-            document.getElementById('reportMeta').textContent =
-                `检测时间：${ci.check_time || '-'}  ·  耗时：${ci.check_duration || '-'}`;
-            document.getElementById('reportFooterMeta').textContent =
-                ci.check_time ? `@ ${ci.check_time}` : 'Analysis Report';
-
-            renderInfoChips(ci, ga);
-            renderGlobal(ga);
-            renderRanking(sr);
-            renderBad(sb);
+        if (!resp.ok) {
+            showRetryArea(`验证失败（HTTP ${resp.status}），请检查服务状态。`);
+            return;
         }
+        try { localStorage.setItem(STORAGE_KEY, k); } catch {}
+        await loadReport();
+    } catch (e) {
+        showRetryArea(`网络错误：${e.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+}
 
-        // ── 统计芯片 ──────────────────────────────────────────────────
-        function renderInfoChips(ci, ga) {
-            const minSpeedVal = ci.check_min_speed;
-            const minSpeedStr = (minSpeedVal && String(minSpeedVal) !== '0')
-                ? minSpeedVal + ' KB/s' : '未开启';
+// ── 加载报告 ──────────────────────────────────────────────────
+async function loadReport() {
+    showLoading();
+    const r = await sfetch('/api/analysis-report');
 
-            document.getElementById('infoChips').innerHTML = [
-                { label: '可用节点', value: ga.alive_count    || 0,   accent: true },
-                { label: '流量消耗', value: ci.check_traffic  || '-' },
-                { label: '检测数量', value: ci.check_count    || '-' },
-                { label: '速度下限', value: minSpeedStr },
-            ].map(c => `
-                <div class="info-chip${c.accent ? ' chip-accent' : ''}">
-                    <div class="chip-value">${c.value}</div>
-                    <div class="chip-label">${c.label}</div>
-                </div>
-            `).join('');
-        }
+    if (!r.ok) {
+        if (r.status !== 401) showRetryArea(`加载失败（HTTP ${r.status}），请检查服务是否正常。`);
+        return;
+    }
+    if (!r.payload?.report) {
+        showRetryArea('尚未生成检测报告，请先在主界面运行一次节点检测。', 'No Data');
+        return;
+    }
+    try {
+        const report = YAML.parse(r.payload.report);
+        renderReport(report);
+        showScene('report');
+    } catch (e) {
+        showRetryArea(`报告解析失败：${e.message}`);
+    }
+}
 
-        // ── 全局统计（地区 + 协议 + 线路质量） ──────────────────────
-        function renderGlobal(ga) {
-            const geo   = ga.geography_distribution || {};
-            const proto = ga.protocol_distribution  || {};
-            const qm    = ga.quality_metrics        || {};
-            const cfd   = qm.cf_details             || {};
-            const total = ga.alive_count            || 1;
+// ── 退出 ──────────────────────────────────────────────────────
+function doLogout() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    showLoginArea();
+}
 
-            const geoEntries   = Object.entries(geo).sort((a, b) => b[1] - a[1]);
-            const protoEntries = Object.entries(proto).sort((a, b) => b[1] - a[1]);
-            const maxGeo       = geoEntries[0]?.[1] || 1;
+// ── 主初始化 ──────────────────────────────────────────────────
+async function initPage() {
+    if (!getKey()) { showLoginArea(); return; }
+    await loadReport();
+}
 
-            const cfCon   = cfd['consistent_¹⁺']  || {};
-            const cfIncon = cfd['inconsistent_⁰']  || {};
-            const cfBlock = cfd['blocked_⁻¹']      || {};
+// 跨标签页退出同步
+window.addEventListener('storage', e => {
+    if (e.key === STORAGE_KEY && !e.newValue)
+        showLoginArea('已在其他页面退出登录，请重新输入。');
+});
 
-            let vps = {};
-            for (const [k, v] of Object.entries(qm)) {
-                if (k.startsWith('vps_details') && typeof v === 'object') { vps = v; break; }
-            }
+// ══════════════════════════════════════════════
+// 渲染函数
+// ══════════════════════════════════════════════
+function renderReport(r) {
+    const ci = r.check_info       || {};
+    const ga = r.global_analysis  || {};
+    const sr = r.subs_ranking     || [];
+    const sb = r.subs_ranking_bad || [];
 
-            const cfConTotal  = Object.values(cfCon).reduce((a, b) => a + b, 0);
-            const vpsTotal    = Object.values(vps).reduce((a, b) => a + b, 0);
-            const cfRatio     = qm.cf_consistent_ratio || `${Math.round(cfConTotal / total * 100)}%`;
-            const vpsRatioStr = `${Math.round(vpsTotal / total * 100)}%`;
+    document.getElementById('navMeta').textContent =
+        ci.check_time
+            ? `${ci.check_time}  ·  耗时 ${ci.check_duration || '-'}`
+            : '分析报告';
 
-            document.getElementById('globalSection').innerHTML = `
-                <div class="section-header">全局统计</div>
-                <div class="report-grid">
-                    <div class="stat-panel">
-                        <div class="panel-title">地区分布（共 ${geoEntries.length} 个）</div>
-                        ${geoEntries.map(([k, v]) => `
-                            <div class="geo-row">
-                                <span class="geo-key">${k}</span>
-                                <div class="geo-bar-wrap">
-                                    <div class="geo-bar" style="width:${Math.round(v / maxGeo * 100)}%"></div>
-                                </div>
-                                <span class="geo-val">${v}</span>
-                            </div>
-                        `).join('')}
+    renderOverview(r, ci, ga);
+    renderGeo(ga);
+    renderProto(ga);
+    renderSubs(sr, sb);
+}
+
+// ── Tab 1：概览 ──────────────────────────────────────────────
+function renderOverview(r, ci, ga) {
+    document.getElementById('summaryBlock').textContent =
+        (r.summary || '').trim() || '暂无摘要';
+
+    const minSpeedVal = ci.check_min_speed;
+    const minSpeedStr = (minSpeedVal && String(minSpeedVal) !== '0') ? minSpeedVal + ' KB/s' : '未开启';
+    document.getElementById('infoChips').innerHTML = [
+        { label: '可用节点', value: ga.alive_count   || 0,   accent: true },
+        { label: '流量消耗', value: ci.check_traffic  || '-' },
+        { label: '检测数量', value: ci.check_count    || '-' },
+        { label: '速度下限', value: minSpeedStr },
+    ].map(c => `
+        <div class="info-chip${c.accent ? ' chip-accent' : ''}">
+            <div class="chip-value">${c.value}</div>
+            <div class="chip-label">${c.label}</div>
+        </div>
+    `).join('');
+
+    const qm    = ga.quality_metrics || {};
+    const cfd   = qm.cf_details      || {};
+    const total = ga.alive_count     || 1;
+    const cfCon   = cfd['consistent_¹⁺']  || {};
+    const cfIncon = cfd['inconsistent_⁰']  || {};
+    const cfBlock = cfd['blocked_⁻¹']      || {};
+    let vps = {};
+    for (const [k, v] of Object.entries(qm)) {
+        if (k.startsWith('vps_details') && typeof v === 'object') { vps = v; break; }
+    }
+    const cfConTotal  = Object.values(cfCon).reduce((a, b) => a + b, 0);
+    const vpsTotal    = Object.values(vps).reduce((a, b) => a + b, 0);
+    const cfRatio     = qm.cf_consistent_ratio || `${Math.round(cfConTotal / total * 100)}%`;
+    const vpsRatioStr = `${Math.round(vpsTotal / total * 100)}%`;
+
+    const geoCount   = Object.keys(ga.geography_distribution  || {}).length;
+    const protoCount = Object.keys(ga.protocol_distribution   || {}).length;
+    const subCount   = (r.subs_ranking || []).length;
+
+    document.getElementById('overviewExtra').innerHTML = `
+        <div class="section-title" style="margin-top:16px">线路质量</div>
+        <div class="overview-grid">
+            <div class="stat-panel">
+                <div class="quality-row">
+                    <div class="quality-item">
+                        <div class="quality-val" style="color:var(--success)">${cfRatio}</div>
+                        <div class="quality-label">CF 中转 ¹⁺</div>
                     </div>
-                    <div class="stat-panel">
-                        <div class="panel-title">协议分布</div>
-                        ${protoEntries.map(([k, v]) => `
-                            <div class="proto-row">
-                                <span class="proto-key">${k}</span>
-                                <div class="proto-bar-wrap">
-                                    <div class="proto-bar" style="width:${Math.round(v / total * 100)}%"></div>
-                                </div>
-                                <span class="proto-val">${v}</span>
+                    <div class="quality-item">
+                        <div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div>
+                        <div class="quality-label">独立 VPS ²</div>
+                    </div>
+                </div>
+                <div class="cf-breakdown">
+                    ${cfGroup('CF 一致 ¹⁺',  cfCon,   'var(--success)')}
+                    ${cfGroup('CF 不一致 ⁰', cfIncon, 'var(--warning)')}
+                    ${Object.keys(cfBlock).length ? cfGroup('CF 异常 ⁻¹', cfBlock, 'var(--danger)') : ''}
+                    ${cfGroup('独立 VPS ²',   vps,     'var(--idle)')}
+                </div>
+            </div>
+            <div class="stat-panel">
+                <div class="panel-title">快速导航</div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+                    ${[
+                        ['geo',   '地理分布', `${geoCount} 个地区`],
+                        ['proto', '协议分析', `${protoCount} 种协议`],
+                        ['subs',  '订阅排名', `${subCount} 个有效`],
+                    ].map(([tab, label, sub]) => `
+                        <button onclick="switchTab('${tab}')"
+                            style="display:flex;align-items:center;justify-content:space-between;
+                                   padding:9px 12px;border-radius:8px;border:1px solid var(--border);
+                                   background:var(--input-bg);cursor:pointer;font-family:inherit;
+                                   color:var(--fg);transition:border-color 0.15s,background 0.15s;text-align:left;"
+                            onmouseover="this.style.borderColor='var(--accent)';this.style.background='color-mix(in srgb,var(--accent) 6%,transparent)'"
+                            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--input-bg)'">
+                            <span style="font-size:13px;font-weight:600">${label}</span>
+                            <span style="font-size:11px;color:var(--muted)">${sub} →</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function cfGroup(title, obj, color) {
+    const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return '';
+    return `
+        <div class="cf-group">
+            <span class="cf-group-title" style="color:${color}">${title}</span>
+            <span class="cf-tags">
+                ${entries.map(([k, v]) => `<span class="cf-tag">${k}<em>${v}</em></span>`).join('')}
+            </span>
+        </div>
+    `;
+}
+
+// ── Tab 2：地理分布 ──────────────────────────────────────────
+function renderGeo(ga) {
+    const geo     = ga.geography_distribution || {};
+    const entries = Object.entries(geo).sort((a, b) => b[1] - a[1]);
+    const maxVal  = entries[0]?.[1] || 1;
+
+    if (!entries.length) {
+        document.getElementById('geoBars').innerHTML =
+            '<div style="padding:16px;color:var(--muted);font-size:13px">暂无地区数据</div>';
+        return;
+    }
+
+    const half  = Math.ceil(entries.length / 2);
+    const left  = entries.slice(0, half);
+    const right = entries.slice(half);
+    const barRow = ([k, v]) => `
+        <div class="geo-row">
+            <span class="geo-key">${k}</span>
+            <div class="geo-bar-wrap">
+                <div class="geo-bar" style="width:${Math.round(v / maxVal * 100)}%"></div>
+            </div>
+            <span class="geo-val">${v}</span>
+        </div>
+    `;
+    document.getElementById('geoBars').innerHTML = `
+        <div class="geo-col">${left.map(barRow).join('')}</div>
+        <div class="geo-col">${right.map(barRow).join('')}</div>
+    `;
+}
+
+// ── Tab 3：协议分析 ──────────────────────────────────────────
+function renderProto(ga) {
+    const proto   = ga.protocol_distribution || {};
+    const total   = ga.alive_count           || 1;
+    const entries = Object.entries(proto).sort((a, b) => b[1] - a[1]);
+
+    if (!entries.length) {
+        document.getElementById('protoContent').innerHTML =
+            '<p style="color:var(--muted);font-size:13px">暂无协议数据</p>';
+        return;
+    }
+    document.getElementById('protoContent').innerHTML = `
+        <div class="section-title">协议分布（共 ${entries.length} 种）</div>
+        <div class="stat-panel" style="max-width:560px">
+            ${entries.map(([k, v]) => `
+                <div class="proto-row">
+                    <span class="proto-key">${k}</span>
+                    <div class="proto-bar-wrap">
+                        <div class="proto-bar" style="width:${Math.round(v / total * 100)}%"></div>
+                    </div>
+                    <span class="proto-val">${v}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// ── Tab 4：订阅排名 + 失效订阅 ──────────────────────────────
+function renderSubs(subs, subsBad) {
+    if (!subs.length) {
+        document.getElementById('rankingContent').innerHTML =
+            '<p style="color:var(--muted);font-size:13px">暂无有效订阅</p>';
+    } else {
+        document.getElementById('rankingContent').innerHTML = `
+            <div class="section-title">订阅排名（${subs.length} 个有效）</div>
+            <div class="sub-list">
+                ${subs.map(s => {
+                    const stats    = s.stats || {};
+                    const rateStr  = String(stats.rate || '0%');
+                    const rateNum  = parseFloat(rateStr);
+                    const barColor = rateNum >= 10 ? 'var(--success)'
+                                   : rateNum > 0   ? 'var(--warning)'
+                                   : 'var(--danger)';
+                    const locs   = Array.isArray(s.top_locations)
+                        ? s.top_locations.join('').split('|').filter(Boolean) : [];
+                    const protos = s.protocols
+                        ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : [];
+                    return `
+                        <div class="sub-item">
+                            <div class="sub-header">
+                                <span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span>
+                                <span class="sub-rate" style="color:${barColor}">${rateStr}</span>
                             </div>
-                        `).join('')}
-                        <div class="panel-title" style="margin-top:14px">线路质量</div>
-                        <div class="quality-row">
-                            <div class="quality-item">
-                                <div class="quality-val" style="color:var(--success)">${cfRatio}</div>
-                                <div class="quality-label">CF 中转 ¹⁺</div>
+                            <div class="sub-bar-wrap">
+                                <div class="sub-bar" style="width:${Math.min(rateNum,100)}%;background:${barColor}"></div>
                             </div>
-                            <div class="quality-item">
-                                <div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div>
-                                <div class="quality-label">独立 VPS ²</div>
+                            <div class="sub-meta">
+                                <span>${stats.success||0} / ${stats.total||0} 节点</span>
+                                ${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}
+                                ${protos.map(([k,v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}
                             </div>
                         </div>
-                        <div class="cf-breakdown">
-                            ${cfGroup('CF 一致 ¹⁺',  cfCon,   'var(--success)')}
-                            ${cfGroup('CF 不一致 ⁰', cfIncon, 'var(--warning)')}
-                            ${Object.keys(cfBlock).length ? cfGroup('CF 异常 ⁻¹', cfBlock, 'var(--danger)') : ''}
-                            ${cfGroup('独立 VPS ²',   vps,     'var(--idle)')}
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    if (!subsBad.length) {
+        document.getElementById('badContent').innerHTML = '';
+        return;
+    }
+    document.getElementById('badContent').innerHTML = `
+        <div class="section-title-toggle" onclick="toggleBad()">
+            失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span>
+            <span class="toggle-line"></span>
+            <svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+        </div>
+        <div id="badList" style="display:none">
+            <div class="bad-list">
+                ${subsBad.map(s => {
+                    const stats = s.stats || {};
+                    return `
+                        <div class="bad-item">
+                            <span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span>
+                            <span class="bad-count">${stats.success||0}/${stats.total||0}</span>
                         </div>
-                    </div>
-                </div>
-            `;
-        }
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
 
-        function cfGroup(title, obj, color) {
-            const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
-            if (!entries.length) return '';
-            return `
-                <div class="cf-group">
-                    <span class="cf-group-title" style="color:${color}">${title}</span>
-                    <span class="cf-tags">
-                        ${entries.map(([k, v]) => `<span class="cf-tag">${k}<em>${v}</em></span>`).join('')}
-                    </span>
-                </div>
-            `;
-        }
+function toggleBad() {
+    const list    = document.getElementById('badList');
+    const chevron = document.getElementById('badChevron');
+    const open    = list.style.display === 'none';
+    list.style.display = open ? '' : 'none';
+    chevron.classList.toggle('open', open);
+}
 
-        // ── 订阅排名 ──────────────────────────────────────────────────
-        function renderRanking(subs) {
-            if (!subs.length) {
-                document.getElementById('rankingSection').innerHTML = '';
-                return;
-            }
-            document.getElementById('rankingSection').innerHTML = `
-                <div class="section-header">订阅排名（${subs.length} 个有效）</div>
-                <div class="sub-list">
-                    ${subs.map(s => {
-                        const stats    = s.stats || {};
-                        const rateStr  = String(stats.rate || '0%');
-                        const rateNum  = parseFloat(rateStr);
-                        const barColor = rateNum >= 10 ? 'var(--success)'
-                                       : rateNum > 0   ? 'var(--warning)'
-                                       : 'var(--danger)';
-                        const locs = Array.isArray(s.top_locations)
-                            ? s.top_locations.join('').split('|').filter(Boolean) : [];
-                        const protos = s.protocols
-                            ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : [];
-                        return `
-                            <div class="sub-item">
-                                <div class="sub-header">
-                                    <span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span>
-                                    <span class="sub-rate" style="color:${barColor}">${rateStr}</span>
-                                </div>
-                                <div class="sub-bar-wrap">
-                                    <div class="sub-bar" style="width:${Math.min(rateNum,100)}%;background:${barColor}"></div>
-                                </div>
-                                <div class="sub-meta">
-                                    <span>${stats.success||0} / ${stats.total||0} 节点</span>
-                                    ${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}
-                                    ${protos.map(([k,v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
-        }
+// ── XSS 防护 ──────────────────────────────────────────────────
+function esc(str) {
+    return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-        // ── 失效订阅 ──────────────────────────────────────────────────
-        function renderBad(subsBad) {
-            if (!subsBad.length) {
-                document.getElementById('badSection').innerHTML = '';
-                return;
-            }
-            document.getElementById('badSection').innerHTML = `
-                <div class="section-header-toggle" onclick="toggleBad()">
-                    失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span>
-                    <span class="toggle-line"></span>
-                    <svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                </div>
-                <div id="badList" style="display:none">
-                    <div class="bad-list">
-                        ${subsBad.map(s => {
-                            const stats = s.stats || {};
-                            return `
-                                <div class="bad-item">
-                                    <span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span>
-                                    <span class="bad-count">${stats.success||0}/${stats.total||0}</span>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function toggleBad() {
-            const list    = document.getElementById('badList');
-            const chevron = document.getElementById('badChevron');
-            const open    = list.style.display === 'none';
-            list.style.display = open ? '' : 'none';
-            chevron.classList.toggle('open', open);
-        }
-
-        // ── XSS 防护 ──────────────────────────────────────────────────
-        function esc(str) {
-            return String(str)
-                .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-        }
-
-        // ── 启动 ──────────────────────────────────────────────────────
-        initPage();
-    </script>
-    <script type="module" src="/static/js/admin.js"></script>
+// ── 启动 ──────────────────────────────────────────────────────
+initPage();
+</script>
+<script type="module" src="/static/js/admin.js"></script>
 </body>
-
 </html>
