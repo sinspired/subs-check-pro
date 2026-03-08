@@ -51,6 +51,10 @@
     successTitle: $(`#successTitle`),
     successText: $('#successText'),
     progressPercent: $('#progressPercent'),
+    subStoreBtn: document.getElementById('sub-store'),
+    subStoreBtnMobile: document.getElementById('btnSubStore'),
+    fileManagerBtn: $('#file-manager'),
+    projectInfoBtn: $('#project-info'),
     downloadLogsBtnSide: $('#downloadLogsBtnSide'),
     searchBtn: $('#searchBtn'),
     logoutBtn: $('#logoutBtn'),
@@ -59,7 +63,6 @@
     themeToggleBtn: $('#themeToggle'),
     iconMoon: $('#iconMoon'),
     iconSun: $('#iconSun'),
-    projectInfoBtn: $('#project-info'),
     projectMenu: $('#projectMenu'),
     githubMenuBtn: $('#githubMenuBtn'),
     dockerMenuBtn: $('#dockerMenuBtn'),
@@ -2337,8 +2340,6 @@
 
   function bindControls() {
     els.loginBtn?.addEventListener('click', onLoginBtnClick)
-    els.subStoreBtn = document.getElementById('sub-store')
-    els.subStoreBtnMobile = document.getElementById('btnSubStore')
     els.subStoreBtn?.addEventListener('click', handleOpenSubStore)
     els.subStoreBtnMobile?.addEventListener('click', handleOpenSubStore)
 
@@ -2412,6 +2413,10 @@
     els.openEditorBtn?.addEventListener('click', () =>
       els.editorContainer?.scrollIntoView({ behavior: 'smooth' })
     )
+
+    els.fileManagerBtn?.addEventListener('click', () => {
+      window.open('/files', '_blank', 'noopener,noreferrer');
+    });
 
     els.downloadLogsBtnSide?.addEventListener('click', () => {
       const t = els.logContainer?.innerText || ''
