@@ -204,6 +204,8 @@ func (app *App) registerWebUIRoutes(router *gin.Engine) {
 	})
 
 	router.GET("/admin/version", app.getOriginVersion)
+
+	router.GET("/analysis", app.handleAnalysis)
 }
 
 // registerAPIRoutes 注册api状态路由
@@ -374,6 +376,12 @@ func (app *App) getAnalysisReport(c *gin.Context) {
 
 	// 返回 JSON 对象，包含 report 字符串
 	c.JSON(http.StatusOK, gin.H{"report": string(data)})
+}
+
+// handleAnalysis 渲染检测分析报告页面
+// 数据通过客户端 JS 从 /api/analysis-report 拉取（已有鉴权）
+func (app *App) handleAnalysis(c *gin.Context) {
+    c.HTML(http.StatusOK, "analysis.html", gin.H{})
 }
 
 // getVersion 获取版本

@@ -55,6 +55,7 @@
     subStoreBtnMobile: $('#btnSubStore'),
     fileManagerBtn: $('#file-manager'),
     btnFiles: $('#btnFiles'),
+    analysisBtn: $('#analysisBtn'),
     projectInfoBtn: $('#project-info'),
     downloadLogsBtnSide: $('#downloadLogsBtnSide'),
     searchBtn: $('#searchBtn'),
@@ -2416,11 +2417,20 @@
     )
 
     els.fileManagerBtn?.addEventListener('click', () => {
+      if (sessionKey) safeLS('subscheck_api_key', sessionKey);
       window.open('/files', '_blank', 'noopener,noreferrer');
     });
 
     els.btnFiles?.addEventListener('click', () => {
+      if (sessionKey) safeLS('subscheck_api_key', sessionKey);
       window.open('/files', '_blank', 'noopener,noreferrer');
+    });
+
+    els.analysisBtn?.addEventListener('click', () => {
+      // 打开新标签前，将当前 sessionKey 写入 localStorage
+      // 使 analysis.html 可以跨标签读取（无论是否勾选"记住密钥"）
+      if (sessionKey) safeLS('subscheck_api_key', sessionKey);
+      window.open('/analysis', '_blank', 'noopener,noreferrer');
     });
 
     els.downloadLogsBtnSide?.addEventListener('click', () => {
