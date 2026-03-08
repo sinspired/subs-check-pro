@@ -11,22 +11,16 @@
     *, *::before, *::after { box-sizing: border-box; }
 
     body {
-        margin: 0;
-        padding: 0;
+        margin: 0; padding: 0;
         min-height: 100vh;
         display: flex;
         flex-direction: column;
         overflow-x: hidden;
     }
 
-    .theme-wrapper {
-        position: fixed;
-        top: 16px;
-        right: 16px;
-        z-index: 200;
-    }
-
-    /* ══ 登录场景：居中卡片，限宽 420px ══ */
+    /* ════════════════════════════════════════
+       登录场景
+    ════════════════════════════════════════ */
     .login-scene {
         flex: 1;
         display: flex;
@@ -39,37 +33,38 @@
 
     .login-card {
         width: 100%;
-        max-width: 420px;
+        max-width: 400px;
         border-radius: 16px;
         padding: 28px 28px 24px;
         box-shadow: var(--glass-shadow);
-        animation: slideIn 0.3s ease-out;
+        animation: fadeUp 0.3s ease-out;
     }
 
-    .login-footer {
-        margin-top: 28px;
+    .login-bottom {
+        margin-top: 24px;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 10px;
     }
 
-    /* ══ 报告场景：全屏 flex 列，含固定顶栏 + 可滚动内容 ══ */
+    /* ════════════════════════════════════════
+       报告场景：顶栏 + 侧边栏/内容 的经典布局
+    ════════════════════════════════════════ */
     .report-scene {
         display: none;
         flex-direction: column;
-        flex: 1;
-        height: 100vh;        /* 整页高度 */
-        overflow: hidden;     /* 防止 body 双重滚动条 */
+        height: 100vh;
+        overflow: hidden;
     }
 
-    /* 顶部导航栏（sticky） */
-    .report-nav {
+    /* 顶部导航栏（大小屏共用） */
+    .topbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 20px;
         height: 52px;
+        padding: 0 16px 0 20px;
         border-bottom: 1px solid var(--border);
         background: var(--glass-bg);
         backdrop-filter: blur(12px);
@@ -78,28 +73,33 @@
         z-index: 100;
     }
 
-    .nav-brand {
+    .topbar-brand {
         display: flex;
         align-items: center;
         gap: 8px;
         font-size: 12px;
         font-weight: 700;
         color: var(--muted);
-        text-decoration: none;
     }
-    .nav-brand img { width: 16px; height: 16px; }
+    .topbar-brand img { width: 16px; height: 16px; }
 
-    .nav-meta {
+    .topbar-meta {
+        flex: 1;
+        text-align: center;
         font-size: 10px;
         color: var(--muted);
         letter-spacing: 0.04em;
-        flex: 1;
-        text-align: center;
+        padding: 0 12px;
     }
 
-    .nav-actions { display: flex; align-items: center; gap: 8px; }
+    .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
 
-    .btn-logout {
+    /* 顶栏小按钮（主题切换 & 退出，样式统一） */
+    .topbar-btn {
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -113,20 +113,114 @@
         font-family: inherit;
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s, background 0.15s;
+        white-space: nowrap;
     }
-    .btn-logout svg { width: 12px; height: 12px; }
-    .btn-logout:hover {
+    .topbar-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .topbar-btn:hover {
+        color: var(--fg);
+        border-color: var(--fg);
+        background: color-mix(in srgb, var(--fg) 6%, transparent);
+    }
+    .topbar-btn.danger:hover {
         color: var(--danger);
         border-color: var(--danger);
         background: color-mix(in srgb, var(--danger) 8%, transparent);
     }
 
-    /* Tab 栏 */
-    .tab-bar {
+    /* ── 主体区域：侧边栏 + 内容（大屏） ── */
+    .body-area {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    /* ════════════════════════════════════════
+       侧边栏（大屏显示）
+    ════════════════════════════════════════ */
+    .sidebar {
+        width: 180px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--border);
+        background: var(--glass-bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start; /* 确保按钮靠上排列 */
+         gap: 2px;
+        padding: 12px 8px;
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+    .sidebar::-webkit-scrollbar { display: none; }
+
+    .sidebar-label {
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        padding: 4px 8px 8px;
+        opacity: 0.6;
+    }
+
+    .sidebar-btn {
         display: flex;
         align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s;
+        text-align: left;
+        width: 100%;
+    }
+    .sidebar-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .sidebar-btn .s-badge {
+        margin-left: auto;
+        font-size: 9px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 99px;
+        background: var(--border);
+        color: var(--muted);
+        flex-shrink: 0;
+    }
+    .sidebar-btn:hover {
+        color: var(--fg);
+        background: color-mix(in srgb, var(--fg) 6%, transparent);
+    }
+    .sidebar-btn.active {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+    .sidebar-btn.active .s-badge {
+        background: color-mix(in srgb, var(--accent) 20%, transparent);
+        color: var(--accent);
+    }
+
+    .sidebar-divider {
+        display: block;              /* 确保是块级显示 */
+        height: 0;                   /* 高度靠边框撑开 */
+        border-top: 1px solid var(--border); /* 使用 border 替代 background 更稳定 */
+        margin: 4px 4px;             /* 上下边距：让订阅按钮组稍微拉开一点点距离 */
+        flex-shrink: 0;              /* 防止被压缩 */
+        align-self: stretch;         /* 强制拉伸宽度，防止宽度为 0 */
+    }
+
+    /* ════════════════════════════════════════
+       顶部 Tab 栏（小屏显示）
+    ════════════════════════════════════════ */
+    .tab-bar {
+        display: none; /* 默认隐藏，小屏显示 */
+        align-items: center;
+         justify-content: center; /* 小屏时按钮水平居中 */
         gap: 2px;
-        padding: 0 20px;
+        padding: 0 12px;
         height: 44px;
         border-bottom: 1px solid var(--border);
         background: var(--glass-bg);
@@ -140,7 +234,7 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 6px 14px;
+        padding: 6px 12px;
         border-radius: 8px;
         border: none;
         background: transparent;
@@ -160,19 +254,48 @@
         background: color-mix(in srgb, var(--accent) 10%, transparent);
     }
 
-    /* Tab 内容区（独立滚动） */
+    /* ════════════════════════════════════════
+       内容区（大屏：侧边栏右侧；小屏：Tab 下方）
+    ════════════════════════════════════════ */
+    .content-area {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* 小屏时 tab-bar 嵌入 content-area 上方 */
     .tab-content {
         display: none;
         flex: 1;
         overflow-y: auto;
-        padding: 20px;
+        padding: 20px 24px;
     }
     .tab-content.active { display: block; }
 
-    /* 内容最大宽度 */
-    .tab-inner { max-width: 1100px; margin: 0 auto; }
+    .tab-inner {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
 
-    /* ══ 通用组件 ══ */
+    /* ════════════════════════════════════════
+       响应式断点
+    ════════════════════════════════════════ */
+    @media (max-width: 720px) {
+        .sidebar    { display: none; }
+        .tab-bar    { display: flex; }
+        .topbar-meta { display: none; }
+        .tab-btn span { display: none; } /* 小屏只显示图标 */
+        .tab-content { padding: 16px; }
+        .overview-grid { grid-template-columns: 1fr; }
+        .info-chips    { grid-template-columns: repeat(2, 1fr); }
+        .geo-split     { grid-template-columns: 1fr; }
+        .geo-col + .geo-col { border-left: none; border-top: 1px solid var(--border); }
+    }
+
+    /* ════════════════════════════════════════
+       通用组件
+    ════════════════════════════════════════ */
     .status-badge {
         display: inline-flex;
         align-items: center;
@@ -201,15 +324,15 @@
     }
     h1 svg { width: 16px; height: 16px; flex-shrink: 0; }
 
-    .desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0 0 20px; }
+    .desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0 0 18px; }
 
     .section-title {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
+        letter-spacing: 0.08em;
         color: var(--muted);
-        margin: 0 0 12px;
+        margin: 0 0 10px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -217,12 +340,12 @@
     .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
     .section-title-toggle {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
+        letter-spacing: 0.08em;
         color: var(--muted);
-        margin: 0 0 12px;
+        margin: 0 0 10px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -230,11 +353,11 @@
         user-select: none;
     }
     .toggle-line    { flex: 1; height: 1px; background: var(--border); }
-    .toggle-chevron { width: 12px; height: 12px; flex-shrink: 0; transition: transform 0.2s; }
+    .toggle-chevron { width: 11px; height: 11px; flex-shrink: 0; transition: transform 0.2s; }
     .toggle-chevron.open { transform: rotate(180deg); }
 
     /* 登录表单 */
-    .auth-area { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .auth-area  { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 
     .auth-input {
         width: 100%;
@@ -256,7 +379,6 @@
         border-color: var(--danger);
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 12%, transparent);
     }
-
     .auth-hint { font-size: 12px; color: var(--danger); min-height: 16px; margin: 0; }
 
     .btn-auth {
@@ -282,12 +404,12 @@
     .btn-auth:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
     .btn-auth svg     { width: 15px; height: 15px; flex-shrink: 0; }
 
-    .retry-area { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+    .retry-area { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
     .retry-msg  { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6; }
 
     .card-footer {
-        margin-top: 24px;
-        padding-top: 16px;
+        margin-top: 22px;
+        padding-top: 14px;
         border-top: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
@@ -300,20 +422,66 @@
     .brand-info img { width: 16px; height: 16px; }
     .footer-meta { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-    /* ══ Tab 1 概览 ══ */
-    .summary-block {
-        padding: 14px 16px;
+    /* ════════════════════════════════════════
+       Tab 1：概览
+    ════════════════════════════════════════ */
+
+    /* 摘要：结构化高亮版 */
+    .summary-card {
+        padding: 16px 18px;
         background: var(--input-bg);
-        border-radius: 10px;
+        border-radius: 12px;
         border: 1px solid var(--border);
         border-left: 3px solid var(--accent);
+        margin-bottom: 16px;
+        line-height: 1.8;
+    }
+    .summary-title {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .summary-title svg { width: 11px; height: 11px; }
+    /* 摘要正文：数字自动高亮 */
+    .summary-body {
         font-size: 13px;
         color: var(--fg);
-        line-height: 1.75;
-        margin-bottom: 16px;
-        word-break: break-all;
+        line-height: 1.9;
+    }
+    .summary-body .num {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        padding: 0 3px;
+        border-radius: 3px;
+        font-size: 12px;
+    }
+    .summary-body .num-ok  { color: var(--success); background: color-mix(in srgb, var(--success) 10%, transparent); }
+    .summary-body .num-warn { color: var(--warning); background: color-mix(in srgb, var(--warning) 10%, transparent); }
+
+    /* 摘要折叠（文本过长时） */
+    .summary-body.collapsed {
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .summary-toggle {
+        font-size: 11px;
+        color: var(--accent);
+        cursor: pointer;
+        margin-top: 6px;
+        display: inline-block;
     }
 
+    /* 4 统计芯片 */
     .info-chips {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -331,30 +499,13 @@
     .chip-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
     .chip-accent .chip-value { color: var(--accent); }
 
-    .quality-row { display: flex; gap: 10px; margin-bottom: 12px; }
-    .quality-item {
-        flex: 1; text-align: center; padding: 14px 4px;
-        border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border);
-    }
-    .quality-val   { font-size: 22px; font-weight: 700; }
-    .quality-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
-
-    .cf-breakdown { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-    .cf-group { display: flex; align-items: flex-start; gap: 6px; }
-    .cf-group-title { flex-shrink: 0; width: 72px; font-weight: 600; padding-top: 2px; font-size: 10px; }
-    .cf-tags  { display: flex; flex-wrap: wrap; gap: 3px; }
-    .cf-tag   {
-        display: inline-flex; align-items: center; gap: 2px;
-        padding: 1px 6px; border-radius: 99px;
-        border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg);
-    }
-    .cf-tag em { font-style: normal; color: var(--muted); }
-
+    /* 概览双列：线路质量 + 快速导航 */
     .overview-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
     }
+
     .stat-panel {
         padding: 16px;
         border-radius: 10px;
@@ -367,11 +518,65 @@
         text-transform: uppercase;
         letter-spacing: 0.07em;
         color: var(--muted);
-        margin-bottom: 10px;
+        margin-bottom: 12px;
     }
 
-    /* ══ Tab 2 地理 ══ */
-    /* 地图/条形图容器（未来替换 #mapSlot 内部即可） */
+    .quality-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .quality-item {
+        flex: 1; text-align: center; padding: 12px 4px;
+        border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border);
+    }
+    .quality-val   { font-size: 20px; font-weight: 700; }
+    .quality-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+    .cf-breakdown { display: flex; flex-direction: column; gap: 5px; }
+    .cf-group { display: flex; align-items: flex-start; gap: 6px; }
+    .cf-group-title { flex-shrink: 0; width: 68px; font-weight: 600; padding-top: 2px; font-size: 10px; }
+    .cf-tags  { display: flex; flex-wrap: wrap; gap: 3px; }
+    .cf-tag   {
+        display: inline-flex; align-items: center; gap: 2px;
+        padding: 1px 6px; border-radius: 99px;
+        border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg);
+    }
+    .cf-tag em { font-style: normal; color: var(--muted); }
+
+    /* 快速导航卡片 */
+    .nav-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--input-bg);
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--fg);
+        transition: border-color 0.15s, background 0.15s;
+        text-align: left;
+        width: 100%;
+        margin-bottom: 6px;
+    }
+    .nav-card:last-child { margin-bottom: 0; }
+    .nav-card:hover {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 6%, transparent);
+    }
+    .nav-card-left  { display: flex; align-items: center; gap: 8px; }
+    .nav-card-left svg { width: 13px; height: 13px; color: var(--muted); flex-shrink: 0; }
+    .nav-card-label { font-size: 13px; font-weight: 600; }
+    .nav-card-right {
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .nav-card-right svg { width: 11px; height: 11px; opacity: 0.5; }
+
+    /* ════════════════════════════════════════
+       Tab 2：地理分布
+    ════════════════════════════════════════ */
     .geo-view {
         border-radius: 12px;
         border: 1px solid var(--border);
@@ -379,41 +584,47 @@
         overflow: hidden;
         margin-bottom: 4px;
     }
-
-    .map-placeholder {
-        min-height: 240px;
+    /* 地图插槽（future: 替换内部内容即可） */
+    .map-slot {
+        min-height: 220px;
         display: flex;
         align-items: center;
         justify-content: center;
         background: var(--input-bg);
-        border-bottom: 1px dashed var(--border);
+        border-bottom: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+        position: relative;
     }
-    .map-placeholder-inner { text-align: center; opacity: 0.4; }
-    .map-placeholder-inner svg { width: 32px; height: 32px; margin: 0 auto 8px; display: block; }
-    .map-placeholder-inner span { font-size: 12px; color: var(--muted); }
+    .map-slot-hint {
+        text-align: center;
+        opacity: 0.35;
+    }
+    .map-slot-hint svg { width: 28px; height: 28px; margin: 0 auto 6px; display: block; }
+    .map-slot-hint span { font-size: 11px; color: var(--muted); }
 
-    /* 条形图分两列 */
-    .geo-split {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-    }
-    .geo-col { padding: 14px 16px; }
+    /* 条形图区分两列 */
+    .geo-split { display: grid; grid-template-columns: 1fr 1fr; }
+    .geo-col   { padding: 14px 16px; }
     .geo-col + .geo-col { border-left: 1px solid var(--border); }
 
-    .geo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .geo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
     .geo-key { font-size: 11px; font-weight: 600; width: 28px; flex-shrink: 0; color: var(--fg); }
     .geo-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
     .geo-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.5s ease; }
     .geo-val { font-size: 11px; color: var(--muted); width: 22px; text-align: right; flex-shrink: 0; }
 
-    /* ══ Tab 3 协议 ══ */
+    /* ════════════════════════════════════════
+       Tab 3：协议分析
+    ════════════════════════════════════════ */
     .proto-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .proto-key { font-size: 11px; font-weight: 600; width: 56px; flex-shrink: 0; }
     .proto-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
     .proto-bar { height: 100%; background: var(--warning); border-radius: 99px; transition: width 0.5s ease; }
-    .proto-val { font-size: 11px; color: var(--muted); width: 22px; text-align: right; flex-shrink: 0; }
+    .proto-val { font-size: 11px; color: var(--muted); width: 28px; text-align: right; flex-shrink: 0; }
+    .proto-pct { font-size: 10px; color: var(--muted); width: 32px; text-align: right; flex-shrink: 0; }
 
-    /* ══ Tab 4 订阅 ══ */
+    /* ════════════════════════════════════════
+       Tab 4：订阅排名
+    ════════════════════════════════════════ */
     .sub-list { display: flex; flex-direction: column; gap: 8px; }
     .sub-item {
         padding: 12px 14px;
@@ -457,14 +668,11 @@
 
     /* 加载动画 */
     .loading-dots::after { content: ''; animation: dots 1.2s steps(4, end) infinite; }
-    @keyframes dots {
-        0%  { content: ''; }   25% { content: '.'; }
-        50% { content: '..'; } 75% { content: '...'; }
-    }
+    @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
 
-    /* 页脚（报告场景底部） */
+    /* 页脚 */
     .page-footer {
-        padding: 12px 20px;
+        padding: 10px 20px;
         border-top: 1px solid var(--border);
         display: flex;
         align-items: center;
@@ -473,9 +681,9 @@
         background: var(--glass-bg);
         flex-shrink: 0;
     }
-    .footer-icons { display: flex; align-items: center; gap: 14px; }
-    .footer-icon  { width: 16px; height: 16px; opacity: 0.4; transition: opacity 0.15s; display: block; }
-    .footer-icons a:hover .footer-icon { opacity: 0.8; }
+    .footer-icons { display: flex; align-items: center; gap: 12px; }
+    .footer-icon  { width: 15px; height: 15px; opacity: 0.4; transition: opacity 0.15s; display: block; }
+    .footer-icons a:hover .footer-icon { opacity: 0.75; }
     .footer-copy  { font-size: 11px; color: var(--muted); }
     .footer-copy a { color: var(--muted); text-decoration: none; }
     .footer-copy a:hover { color: var(--accent); }
@@ -486,49 +694,15 @@
         color: var(--danger); padding: 1px 5px; border-radius: 4px; font-size: 11px;
     }
 
-    @keyframes slideIn {
+    @keyframes fadeUp {
         from { opacity: 0; transform: translateY(10px); }
         to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ══ 响应式 ══ */
-    @media (max-width: 640px) {
-        .overview-grid { grid-template-columns: 1fr; }
-        .geo-split { grid-template-columns: 1fr; }
-        .geo-col + .geo-col { border-left: none; border-top: 1px solid var(--border); }
-        .info-chips { grid-template-columns: repeat(2, 1fr); }
-        .tab-btn span { display: none; }  /* 小屏只显示 Tab 图标 */
-        .nav-meta { display: none; }
     }
     </style>
 </head>
 <body>
 
-<!-- 主题切换按钮（fixed，切换逻辑由 admin.js 接管） -->
-<div class="theme-wrapper">
-    <div style="display:flex;align-items:center;">
-        <button id="themeToggle" class="icon-btn" aria-pressed="false" aria-label="切换主题" title="切换主题">
-            <svg class="icon" id="iconMoon" width="20" height="20" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
-                <circle cx="12" cy="12" r="5"/>
-                <line x1="12" y1="1"  x2="12" y2="3"/>
-                <line x1="12" y1="21" x2="12" y2="23"/>
-                <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"/>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                <line x1="1"  y1="12" x2="3"  y2="12"/>
-                <line x1="21" y1="12" x2="23" y2="12"/>
-                <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36"/>
-                <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
-            </svg>
-            <svg class="icon" id="iconSun" width="16" height="16" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-        </button>
-    </div>
-</div>
-
-<!-- ① 登录 / 占位 场景 -->
+<!-- ① 登录 / 占位场景 -->
 <div class="login-scene" id="loginScene">
     <div class="login-card">
         <div class="status-badge" id="placeholderBadge">Analysis Report</div>
@@ -589,7 +763,7 @@
         </div>
     </div>
 
-    <div class="login-footer">
+    <div class="login-bottom">
         <div class="footer-icons">
             <a href="#" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
             <a href="#" title="Docker"><img src="/static/icon/docker.svg" alt="Docker" class="footer-icon"/></a>
@@ -602,17 +776,38 @@
     </div>
 </div>
 
-<!-- ② 报告场景（Tab 布局，全屏高度，内容区独立滚动） -->
+<!-- ② 报告场景 -->
 <div class="report-scene" id="reportScene">
 
     <!-- 顶部导航栏 -->
-    <nav class="report-nav">
-        <div class="nav-brand">
-            <img src="/static/icon/favicon.svg" alt="logo">Subs-Check-PRO
+    <div class="topbar">
+        <div class="topbar-brand">
+            <img src="/static/icon/favicon.svg" alt="logo">
+            Subs-Check-PRO
         </div>
-        <div class="nav-meta" id="navMeta">分析报告</div>
-        <div class="nav-actions">
-            <button class="btn-logout" onclick="doLogout()">
+        <div class="topbar-meta" id="navMeta">分析报告</div>
+        <div class="topbar-actions">
+            <!-- 主题切换（与退出同款样式） -->
+            <button class="topbar-btn" id="themeToggle" aria-label="切换主题" title="切换主题">
+                <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" style="display:none">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1"  x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+                <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+                <span id="themeLabel">浅色</span>
+            </button>
+            <!-- 退出 -->
+            <button class="topbar-btn danger" onclick="doLogout()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -622,95 +817,164 @@
                 退出
             </button>
         </div>
-    </nav>
-
-    <!-- Tab 栏 -->
-    <div class="tab-bar" role="tablist">
-        <button class="tab-btn active" role="tab" data-tab="overview" onclick="switchTab('overview')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-            </svg>
-            <span>概览</span>
-        </button>
-        <button class="tab-btn" role="tab" data-tab="geo" onclick="switchTab('geo')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="2" y1="12" x2="22" y2="12"/>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-            <span>地理分布</span>
-        </button>
-        <button class="tab-btn" role="tab" data-tab="proto" onclick="switchTab('proto')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            <span>协议分析</span>
-        </button>
-        <button class="tab-btn" role="tab" data-tab="subs" onclick="switchTab('subs')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <line x1="8" y1="6"  x2="21" y2="6"/>
-                <line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6"  x2="3.01" y2="6"/>
-                <line x1="3" y1="12" x2="3.01" y2="12"/>
-                <line x1="3" y1="18" x2="3.01" y2="18"/>
-            </svg>
-            <span>订阅排名</span>
-        </button>
     </div>
 
-    <!-- Tab 1：概览 -->
-    <div class="tab-content active" id="tab-overview" role="tabpanel">
-        <div class="tab-inner">
-            <div class="summary-block" id="summaryBlock"></div>
-            <div class="info-chips"    id="infoChips"></div>
-            <div id="overviewExtra"></div>
-        </div>
-    </div>
+    <!-- 主体区：侧边栏（大屏）+ 内容区 -->
+    <div class="body-area">
 
-    <!-- Tab 2：地理分布（地图插槽 + 条形图） -->
-    <div class="tab-content" id="tab-geo" role="tabpanel">
-        <div class="tab-inner">
-            <div class="geo-view">
-                <!--
-                    ★ 地图插槽：未来将地图组件插入此处，替换 .map-placeholder 内容即可。
-                       条形图 #geoBars 可保留作为无地图时的降级方案或隐藏。
-                -->
-                <div class="map-placeholder" id="mapSlot">
-                    <div class="map-placeholder-inner">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="2" y1="12" x2="22" y2="12"/>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                        </svg>
-                        <span>地图视图（开发中）</span>
+        <!-- 侧边栏（大屏显示） -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-label">导航</div>
+            <button class="sidebar-btn active" data-tab="overview" onclick="switchTab('overview')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                概览
+            </button>
+            <button class="sidebar-btn" data-tab="geo" onclick="switchTab('geo')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                地理分布
+                <span class="s-badge" id="sb-geo">0</span>
+            </button>
+            <button class="sidebar-btn" data-tab="proto" onclick="switchTab('proto')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+                协议分析
+                <span class="s-badge" id="sb-proto">0</span>
+            </button>
+            <div class="sidebar-divider"></div>
+            <button class="sidebar-btn" data-tab="subs" onclick="switchTab('subs')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="8" y1="6"  x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <line x1="3" y1="6"  x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+                订阅排名
+                <span class="s-badge" id="sb-subs">0</span>
+            </button>
+        </nav>
+
+        <!-- 内容区 -->
+        <div class="content-area">
+
+            <!-- 顶部 Tab 栏（小屏显示） -->
+            <div class="tab-bar" id="tabBar" role="tablist">
+                <button class="tab-btn active" role="tab" data-tab="overview" onclick="switchTab('overview')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    <span>概览</span>
+                </button>
+                <button class="tab-btn" role="tab" data-tab="geo" onclick="switchTab('geo')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                    <span>地理</span>
+                </button>
+                <button class="tab-btn" role="tab" data-tab="proto" onclick="switchTab('proto')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    <span>协议</span>
+                </button>
+                <button class="tab-btn" role="tab" data-tab="subs" onclick="switchTab('subs')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="8" y1="6"  x2="21" y2="6"/>
+                        <line x1="8" y1="12" x2="21" y2="12"/>
+                        <line x1="8" y1="18" x2="21" y2="18"/>
+                        <line x1="3" y1="6"  x2="3.01" y2="6"/>
+                        <line x1="3" y1="12" x2="3.01" y2="12"/>
+                        <line x1="3" y1="18" x2="3.01" y2="18"/>
+                    </svg>
+                    <span>订阅</span>
+                </button>
+            </div>
+
+            <!-- Tab 1：概览 -->
+            <div class="tab-content active" id="tab-overview" role="tabpanel">
+                <div class="tab-inner">
+                    <div class="summary-card" id="summaryCard">
+                        <div class="summary-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            检测摘要
+                        </div>
+                        <div class="summary-body" id="summaryBody"></div>
+                        <span class="summary-toggle" id="summaryToggle" style="display:none"
+                              onclick="toggleSummary()">展开全文 ↓</span>
+                    </div>
+                    <div class="info-chips" id="infoChips"></div>
+                    <div id="overviewExtra"></div>
+                </div>
+            </div>
+
+            <!-- Tab 2：地理分布 -->
+            <div class="tab-content" id="tab-geo" role="tabpanel">
+                <div class="tab-inner">
+                    <div class="geo-view">
+                        <!--
+                            ★ 地图插槽：未来用地图替换 #mapSlot 内容即可。
+                              条形图 #geoBars 可作为降级方案或隐藏。
+                        -->
+                        <div class="map-slot" id="mapSlot">
+                            <div class="map-slot-hint">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="2" y1="12" x2="22" y2="12"/>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                                </svg>
+                                <span>地图视图（开发中）</span>
+                            </div>
+                        </div>
+                        <div id="geoBars" class="geo-split"></div>
                     </div>
                 </div>
-                <div id="geoBars" class="geo-split"></div>
             </div>
-        </div>
-    </div>
 
-    <!-- Tab 3：协议分析 -->
-    <div class="tab-content" id="tab-proto" role="tabpanel">
-        <div class="tab-inner" id="protoContent"></div>
-    </div>
+            <!-- Tab 3：协议分析 -->
+            <div class="tab-content" id="tab-proto" role="tabpanel">
+                <div class="tab-inner" id="protoContent"></div>
+            </div>
 
-    <!-- Tab 4：订阅排名 -->
-    <div class="tab-content" id="tab-subs" role="tabpanel">
-        <div class="tab-inner">
-            <div id="rankingContent"></div>
-            <div id="badContent" style="margin-top:16px"></div>
-        </div>
-    </div>
+            <!-- Tab 4：订阅排名 -->
+            <div class="tab-content" id="tab-subs" role="tabpanel">
+                <div class="tab-inner">
+                    <div id="rankingContent"></div>
+                    <div id="badContent" style="margin-top:16px"></div>
+                </div>
+            </div>
 
-    <!-- 底部页脚 -->
+        </div><!-- end content-area -->
+    </div><!-- end body-area -->
+
+    <!-- 页脚 -->
     <footer class="page-footer">
         <div class="footer-icons">
             <a href="#" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
@@ -722,17 +986,37 @@
             <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GPL-3.0</a>
         </div>
     </footer>
-</div>
+
+</div><!-- end report-scene -->
 
 <script>
-// ── 主题初始化（切换逻辑由 admin.js 接管） ─────────────────────
+// ── 主题初始化（此页面自管理，admin.js module 也会接管切换） ──
 (function () {
     const saved  = localStorage.getItem('theme');
     const prefer = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', saved || prefer);
+    applyTheme(saved || prefer);
 })();
 
-// ── 与 admin.js 共用的存储键 ───────────────────────────────────
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    const isDark = theme === 'dark';
+    const moon   = document.getElementById('iconMoon');
+    const sun    = document.getElementById('iconSun');
+    const label  = document.getElementById('themeLabel');
+    if (moon)  moon.style.display  = isDark ? 'block' : 'none';
+    if (sun)   sun.style.display   = isDark ? 'none'  : 'block';
+    if (label) label.textContent   = isDark ? '深色'  : '浅色';
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.setAttribute('aria-pressed', String(isDark));
+}
+
+document.getElementById('themeToggle')?.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+});
+
+// ── 存储键 ────────────────────────────────────────────────────
 const STORAGE_KEY = 'subscheck_api_key';
 
 function getKey() {
@@ -743,7 +1027,7 @@ function getKey() {
     } catch { return null; }
 }
 
-// ── sfetch（独立实现，admin.js 是 module 不暴露到 window） ─────
+// ── sfetch ────────────────────────────────────────────────────
 async function sfetch(url, opts = {}) {
     const key = getKey();
     if (!key) return { ok: false, status: 401, error: '未认证' };
@@ -766,17 +1050,16 @@ async function sfetch(url, opts = {}) {
     }
 }
 
-// ── 场景切换：login ↔ report ───────────────────────────────────
+// ── 场景切换 ──────────────────────────────────────────────────
 function showScene(name) {
-    const isLogin  = name === 'login';
-    document.getElementById('loginScene').style.display  = isLogin  ? 'flex' : 'none';
-    document.getElementById('reportScene').style.display = !isLogin ? 'flex' : 'none';
+    document.getElementById('loginScene').style.display  = name === 'login'  ? 'flex'  : 'none';
+    document.getElementById('reportScene').style.display = name === 'report' ? 'flex'  : 'none';
 }
 
-// ── 登录场景子状态 ─────────────────────────────────────────────
+// ── 登录场景子状态 ────────────────────────────────────────────
 function showLoading() {
     showScene('login');
-    document.getElementById('placeholderBadge').textContent  = 'Analysis Report';
+    _setBadge('Analysis Report');
     document.getElementById('placeholderMsg').style.display  = '';
     document.getElementById('inlineLoginArea').style.display = 'none';
     document.getElementById('retryArea').style.display       = 'none';
@@ -784,7 +1067,7 @@ function showLoading() {
 
 function showLoginArea(hint = '') {
     showScene('login');
-    document.getElementById('placeholderBadge').textContent  = 'Auth Required';
+    _setBadge('Auth Required');
     document.getElementById('placeholderMsg').style.display  = 'none';
     document.getElementById('inlineLoginArea').style.display = '';
     document.getElementById('retryArea').style.display       = 'none';
@@ -803,19 +1086,51 @@ function showLoginArea(hint = '') {
 
 function showRetryArea(msg, badge = 'Error') {
     showScene('login');
-    document.getElementById('placeholderBadge').textContent  = badge;
+    _setBadge(badge);
     document.getElementById('placeholderMsg').style.display  = 'none';
     document.getElementById('inlineLoginArea').style.display = 'none';
     document.getElementById('retryArea').style.display       = '';
     document.getElementById('retryMsg').textContent          = msg;
 }
 
-// ── Tab 切换 ───────────────────────────────────────────────────
+function _setBadge(text) {
+    document.getElementById('placeholderBadge').textContent = text;
+}
+
+// ── Tab / Sidebar 切换（同步两套导航） ────────────────────────
 function switchTab(name) {
+    // 侧边栏
+    document.querySelectorAll('.sidebar-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.tab === name));
+    // 顶部 Tab
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === name));
+    // 内容
     document.querySelectorAll('.tab-content').forEach(c =>
         c.classList.toggle('active', c.id === 'tab-' + name));
+}
+
+// ── 摘要折叠 ──────────────────────────────────────────────────
+let summaryExpanded = false;
+function toggleSummary() {
+    summaryExpanded = !summaryExpanded;
+    const body   = document.getElementById('summaryBody');
+    const toggle = document.getElementById('summaryToggle');
+    body.classList.toggle('collapsed', !summaryExpanded);
+    toggle.textContent = summaryExpanded ? '收起 ↑' : '展开全文 ↓';
+}
+
+// ── 摘要文字高亮处理（数字 + 百分比） ────────────────────────
+function highlightSummary(text) {
+    if (!text) return '<span style="color:var(--muted)">暂无摘要</span>';
+    // 将百分比、数字用 span 高亮，并在标点处换行使排版更舒适
+    return text
+        // 百分比高亮（绿色）
+        .replace(/(\d+\.?\d*%)/g, '<span class="num num-ok">$1</span>')
+        // 纯数字（4位以上视为统计数字）高亮
+        .replace(/\b(\d{2,})\b/g, '<span class="num">$1</span>')
+        // 中文句号后软换行（宽屏不强制折行，增加自然断点）
+        .replace(/。/g, '。<wbr>');
 }
 
 // ── 内嵌登录 ──────────────────────────────────────────────────
@@ -863,7 +1178,8 @@ async function loadReport() {
     const r = await sfetch('/api/analysis-report');
 
     if (!r.ok) {
-        if (r.status !== 401) showRetryArea(`加载失败（HTTP ${r.status}），请检查服务是否正常。`);
+        if (r.status !== 401)
+            showRetryArea(`加载失败（HTTP ${r.status}），请检查服务是否正常。`);
         return;
     }
     if (!r.payload?.report) {
@@ -885,21 +1201,20 @@ function doLogout() {
     showLoginArea();
 }
 
-// ── 主初始化 ──────────────────────────────────────────────────
+// ── 初始化 ────────────────────────────────────────────────────
 async function initPage() {
     if (!getKey()) { showLoginArea(); return; }
     await loadReport();
 }
 
-// 跨标签页退出同步
 window.addEventListener('storage', e => {
     if (e.key === STORAGE_KEY && !e.newValue)
         showLoginArea('已在其他页面退出登录，请重新输入。');
 });
 
-// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // 渲染函数
-// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 function renderReport(r) {
     const ci = r.check_info       || {};
     const ga = r.global_analysis  || {};
@@ -911,17 +1226,42 @@ function renderReport(r) {
             ? `${ci.check_time}  ·  耗时 ${ci.check_duration || '-'}`
             : '分析报告';
 
-    renderOverview(r, ci, ga);
+    // 更新侧边栏徽章数字
+    const geoCount   = Object.keys(ga.geography_distribution  || {}).length;
+    const protoCount = Object.keys(ga.protocol_distribution   || {}).length;
+    _sb('sb-geo',   geoCount);
+    _sb('sb-proto', protoCount);
+    _sb('sb-subs',  sr.length);
+
+    renderOverview(r, ci, ga, sr.length, geoCount, protoCount);
     renderGeo(ga);
     renderProto(ga);
     renderSubs(sr, sb);
 }
 
-// ── Tab 1：概览 ──────────────────────────────────────────────
-function renderOverview(r, ci, ga) {
-    document.getElementById('summaryBlock').textContent =
-        (r.summary || '').trim() || '暂无摘要';
+function _sb(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+}
 
+// ── Tab 1：概览 ──────────────────────────────────────────────
+function renderOverview(r, ci, ga, subCount, geoCount, protoCount) {
+    // 摘要高亮
+    const raw = (r.summary || '').trim();
+    const body = document.getElementById('summaryBody');
+    body.innerHTML = highlightSummary(raw);
+
+    // 文字超过 200 字时折叠
+    if (raw.length > 200) {
+        body.classList.add('collapsed');
+        document.getElementById('summaryToggle').style.display = 'inline-block';
+        summaryExpanded = false;
+    } else {
+        body.classList.remove('collapsed');
+        document.getElementById('summaryToggle').style.display = 'none';
+    }
+
+    // 统计芯片
     const minSpeedVal = ci.check_min_speed;
     const minSpeedStr = (minSpeedVal && String(minSpeedVal) !== '0') ? minSpeedVal + ' KB/s' : '未开启';
     document.getElementById('infoChips').innerHTML = [
@@ -936,6 +1276,7 @@ function renderOverview(r, ci, ga) {
         </div>
     `).join('');
 
+    // 线路质量
     const qm    = ga.quality_metrics || {};
     const cfd   = qm.cf_details      || {};
     const total = ga.alive_count     || 1;
@@ -951,14 +1292,11 @@ function renderOverview(r, ci, ga) {
     const cfRatio     = qm.cf_consistent_ratio || `${Math.round(cfConTotal / total * 100)}%`;
     const vpsRatioStr = `${Math.round(vpsTotal / total * 100)}%`;
 
-    const geoCount   = Object.keys(ga.geography_distribution  || {}).length;
-    const protoCount = Object.keys(ga.protocol_distribution   || {}).length;
-    const subCount   = (r.subs_ranking || []).length;
-
     document.getElementById('overviewExtra').innerHTML = `
         <div class="section-title" style="margin-top:16px">线路质量</div>
         <div class="overview-grid">
             <div class="stat-panel">
+                <div class="panel-title">CF 中转 vs 独立 VPS</div>
                 <div class="quality-row">
                     <div class="quality-item">
                         <div class="quality-val" style="color:var(--success)">${cfRatio}</div>
@@ -978,24 +1316,28 @@ function renderOverview(r, ci, ga) {
             </div>
             <div class="stat-panel">
                 <div class="panel-title">快速导航</div>
-                <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
-                    ${[
-                        ['geo',   '地理分布', `${geoCount} 个地区`],
-                        ['proto', '协议分析', `${protoCount} 种协议`],
-                        ['subs',  '订阅排名', `${subCount} 个有效`],
-                    ].map(([tab, label, sub]) => `
-                        <button onclick="switchTab('${tab}')"
-                            style="display:flex;align-items:center;justify-content:space-between;
-                                   padding:9px 12px;border-radius:8px;border:1px solid var(--border);
-                                   background:var(--input-bg);cursor:pointer;font-family:inherit;
-                                   color:var(--fg);transition:border-color 0.15s,background 0.15s;text-align:left;"
-                            onmouseover="this.style.borderColor='var(--accent)';this.style.background='color-mix(in srgb,var(--accent) 6%,transparent)'"
-                            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--input-bg)'">
-                            <span style="font-size:13px;font-weight:600">${label}</span>
-                            <span style="font-size:11px;color:var(--muted)">${sub} →</span>
-                        </button>
-                    `).join('')}
-                </div>
+                ${[
+                    ['geo',   '地理分布', `${geoCount} 个地区`,
+                     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`],
+                    ['proto', '协议分析', `${protoCount} 种协议`,
+                     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`],
+                    ['subs',  '订阅排名', `${subCount} 个有效`,
+                     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],
+                ].map(([tab, label, sub, icon]) => `
+                    <button class="nav-card" onclick="switchTab('${tab}')">
+                        <div class="nav-card-left">
+                            ${icon}
+                            <span class="nav-card-label">${label}</span>
+                        </div>
+                        <div class="nav-card-right">
+                            ${sub}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                    </button>
+                `).join('')}
             </div>
         </div>
     `;
@@ -1025,7 +1367,6 @@ function renderGeo(ga) {
             '<div style="padding:16px;color:var(--muted);font-size:13px">暂无地区数据</div>';
         return;
     }
-
     const half  = Math.ceil(entries.length / 2);
     const left  = entries.slice(0, half);
     const right = entries.slice(half);
@@ -1040,7 +1381,7 @@ function renderGeo(ga) {
     `;
     document.getElementById('geoBars').innerHTML = `
         <div class="geo-col">${left.map(barRow).join('')}</div>
-        <div class="geo-col">${right.map(barRow).join('')}</div>
+        <div class="geo-col">${right.length ? right.map(barRow).join('') : ''}</div>
     `;
 }
 
@@ -1065,6 +1406,7 @@ function renderProto(ga) {
                         <div class="proto-bar" style="width:${Math.round(v / total * 100)}%"></div>
                     </div>
                     <span class="proto-val">${v}</span>
+                    <span class="proto-pct">${Math.round(v / total * 100)}%</span>
                 </div>
             `).join('')}
         </div>
