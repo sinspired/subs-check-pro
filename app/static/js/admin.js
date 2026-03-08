@@ -1,3 +1,5 @@
+import { initConfigForm, renderConfigForm, collectConfigForm } from './config-form.js';
+
 ; (function () {
   'use strict'
 
@@ -82,8 +84,11 @@
     historyLine: $(`#history-line`),
     analysisCard: $('#analysisCard'),
     analysisSummary: $('#analysisSummary'),
-    toastContainer:
-      document.getElementById('toastContainer') || createToastContainer()
+    toastContainer: document.getElementById('toastContainer') || createToastContainer(),
+
+    toggleEditorModeBtn: $('#toggleEditorMode'),
+    editorWrapper: $('#editorWrapper'),
+    cfgPanelsWrap: $('#cfgPanels'),
   }
 
   // ==================== 全局状态 ====================
@@ -107,6 +112,7 @@
   let lastCheckInfo = null
   let checkStartTime = null
   let codeMirrorView = null
+  let editorMode = 'form'   // 'form' | 'yaml'  — 当前视图模式
 
   // Sub-Store 跳转缓存
   let _cachedSubStoreConfig = null
@@ -2181,26 +2187,54 @@
       typeof r.payload?.content === 'string'
         ? r.payload.content
         : String(r.payload || '')
+
+    // ① 同步到 CodeMirror（初始化或更新，原逻辑不变）
     codeMirrorView ? setEditorContent(raw) : initCodeMirror(raw)
     if (codeMirrorView?.scrollDOM) {
       codeMirrorView.scrollDOM.scrollTop = 0
     }
+
+    // ② 新增：同步渲染表单（YAML 解析后交给 config-form.js）
+    try {
+      const parsed = window.YAML.parse(raw)
+      renderConfigForm(parsed)
+    } catch (e) {
+      console.warn('表单渲染失败，YAML 解析错误:', e)
+    }
   }
 
   async function saveConfigWithValidation() {
-    if (!sessionKey || !codeMirrorView) return
-    const rawContent = codeMirrorView.state.doc.toString()
+    if (!sessionKey) return
+
+    let rawContent
+
+    if (editorMode === 'form') {
+      // 表单模式：从 config-form.js 收集值，序列化为 YAML
+      try {
+        const formData = collectConfigForm()
+        // 用 YAML.parseDocument 先序列化，保留注释结构（降级方案：直接 dump）
+        rawContent = window.YAML.dump(formData, { lineWidth: 0 })
+      } catch (e) {
+        return showToast('表单序列化失败：' + e.message, 'error', 5000)
+      }
+    } else {
+      // YAML 编辑器模式：原逻辑
+      if (!codeMirrorView) return
+      rawContent = codeMirrorView.state.doc.toString()
+    }
+
     try {
-      const doc = YAML.parseDocument(rawContent)
+      const doc = window.YAML.parseDocument(rawContent)
       if (doc.errors && doc.errors.length > 0) {
-        return showToast(
-          'YAML 语法错误：' + doc.errors[0].message,
-          'error',
-          5000
-        )
+        return showToast('YAML 语法错误：' + doc.errors[0].message, 'error', 5000)
       }
       const formatted = doc.toString({ lineWidth: 0 })
-      setEditorContent(formatted)
+
+      // 若当前是 YAML 模式，顺手更新编辑器显示
+      if (editorMode === 'yaml' && codeMirrorView) {
+        setEditorContent(formatted)
+      }
+
       const r = await sfetch(API.config, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2209,7 +2243,7 @@
       if (r.ok) {
         showToast(r.payload?.message || '保存成功', 'success')
         _cachedSubStoreConfig = null
-        cachedConfigPayload = null // 清除分享配置缓存
+        cachedConfigPayload = null
       } else {
         showToast('保存失败: ' + (r.payload?.error || '未知错误'), 'error')
       }
@@ -2454,6 +2488,32 @@
       a.remove()
       URL.revokeObjectURL(url)
       showToast('已开始下载日志', 'success')
+    })
+
+    function switchEditorMode(mode) {
+      editorMode = mode
+      const isForm = mode === 'form'
+      const panelsWrap = $('#cfgPanels')          // .cfg-panels-wrap
+      const editorWrap = $('#editorWrapper')      // .editor-wrapper
+      const searchBtnEl = els.searchBtn
+      const toggleBtn = $('#toggleEditorMode')
+
+      if (panelsWrap) panelsWrap.style.display = isForm ? '' : 'none'
+      if (editorWrap) editorWrap.style.display = isForm ? 'none' : ''
+
+      // 搜索按钮只在 YAML 模式有意义
+      if (searchBtnEl) searchBtnEl.style.display = isForm ? 'none' : ''
+
+      if (toggleBtn) {
+        toggleBtn.title = isForm ? '切换到 YAML 编辑器' : '切换到表单界面'
+        // 激活态高亮：YAML 模式时按钮高亮
+        toggleBtn.style.color = isForm ? '' : 'var(--accent)'
+      }
+    }
+
+    // 切换按钮点击事件（追加到 bindControls 内）：
+    $('#toggleEditorMode')?.addEventListener('click', () => {
+      switchEditorMode(editorMode === 'form' ? 'yaml' : 'form')
     })
 
     const logoutHandler = () => {
@@ -2752,6 +2812,10 @@
       showLogin(true)
       setAuthUI(false)
     }
+
+    // 页面加载后调用一次（DOMContentLoaded 或 init 函数里）
+    initConfigForm()
+    switchEditorMode('form')   // 默认表单模式
 
     window.addEventListener('beforeunload', () => {
       stopPollers()

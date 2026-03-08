@@ -1,0 +1,394 @@
+/* ── Tab 导航栏 ─────────────────────────────────────────── */
+.cfg-tab-bar {
+  display: flex;
+  gap: 2px;
+  /* 左右撑满卡片，抵消 card 的 padding:12px */
+  margin: 4px -12px 0;
+  padding: 0 12px 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.cfg-tab-bar::-webkit-scrollbar { display: none; }
+
+.cfg-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.cfg-tab svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+.cfg-tab:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.cfg-tab.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.cfg-tab.active svg { stroke-width: 2.5; }
+
+/* ── 面板容器 ───────────────────────────────────────────── */
+.cfg-panels-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  margin-top: 4px;
+}
+.cfg-panels-wrap::-webkit-scrollbar { width: 4px; }
+
+.cfg-panel {
+  display: none;
+  flex-direction: column;
+  padding: 0 0 16px;
+  animation: fadeIn 0.15s ease;
+}
+.cfg-panel.active { display: flex; }
+
+/* ── 加载占位 ───────────────────────────────────────────── */
+.cfg-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.cfg-loading-spin {
+  width: 22px;
+  height: 22px;
+  stroke: var(--accent);
+  animation: cfg-spin 1s linear infinite;
+}
+@keyframes cfg-spin { to { transform: rotate(360deg); } }
+
+/* ── 分组标题 ───────────────────────────────────────────── */
+.cfg-section {
+  padding: 14px 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+.cfg-section:first-child { padding-top: 6px; }
+
+/* ── 字段行 ─────────────────────────────────────────────── */
+.cfg-field {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.cfg-field:last-child { border-bottom: none; }
+.cfg-field:hover { background: color-mix(in srgb, var(--fg) 2%, transparent); }
+
+/* URL 列表和 Chips 独占一行 */
+.cfg-field.full-width {
+  grid-template-columns: 1fr;
+}
+
+/* ── 标签 ───────────────────────────────────────────────── */
+.cfg-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cfg-label-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfg-label-hint {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+/* ── 文本 / 密码 输入框 ─────────────────────────────────── */
+.cfg-input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cfg-input:focus {
+  border-color: var(--accent-light);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.cfg-input::placeholder { color: var(--muted); opacity: 0.55; }
+
+/* ── 下拉选择框 ─────────────────────────────────────────── */
+.cfg-select {
+  width: 100%;
+  padding: 6px 28px 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23646971' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  min-width: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cfg-select:focus {
+  border-color: var(--accent-light);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* ── 数字步进器 ─────────────────────────────────────────── */
+.cfg-number-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--input-bg);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cfg-number-wrap:focus-within {
+  border-color: var(--accent-light);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.cfg-number-wrap input[type='number'] {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 6px 2px;
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+.cfg-number-wrap input[type='number']::-webkit-inner-spin-button,
+.cfg-number-wrap input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+.cfg-step-btn {
+  width: 28px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+.cfg-step-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+/* ── iOS 风格开关 ───────────────────────────────────────── */
+.cfg-toggle-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+.cfg-toggle {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: block;
+}
+.cfg-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.cfg-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  border-radius: 22px;
+  transition: background 0.2s;
+}
+.cfg-toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cfg-toggle input:checked + .cfg-toggle-slider { background: var(--accent); }
+.cfg-toggle input:checked + .cfg-toggle-slider::before { transform: translateX(16px); }
+.cfg-toggle input:focus-visible + .cfg-toggle-slider {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
+}
+
+/* ── 多选标签（Chips）────────────────────────────────────── */
+.cfg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-top: 4px;
+}
+.cfg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.cfg-chip input { display: none; }
+.cfg-chip:hover { border-color: var(--accent-light); color: var(--fg); }
+.cfg-chip.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── URL 列表 ───────────────────────────────────────────── */
+.cfg-url-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 4px;
+}
+.cfg-url-item {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.cfg-url-item .cfg-input {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 5px 8px;
+}
+.cfg-url-del {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 17px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s;
+}
+.cfg-url-del:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.cfg-url-add {
+  align-self: flex-start;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-top: 2px;
+}
+.cfg-url-add:hover { color: var(--accent); border-color: var(--accent-light); }
+
+/* ── 存储条件分组 ────────────────────────────────────────── */
+.cfg-cond-group { display: flex; flex-direction: column; }
+
+/* ── 移动端适配 ─────────────────────────────────────────── */
+@media (max-width: 899px) {
+  .cfg-tab { padding: 5px 8px; font-size: 11.5px; }
+  .cfg-field { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .cfg-label-text { font-size: 12px; }
+  .cfg-input, .cfg-select { font-size: 16px; /* 防 iOS 缩放 */ }
+}
+
+/* ── 视图切换按钮激活态 ──────────────────────────────────── */
+#toggleEditorMode.yaml-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: var(--accent-light);
+}
+
+/* YAML 模式时，Tab 导航和表单面板需要隐藏，编辑器撑满剩余空间 */
+.editor-mode-yaml .cfg-tab-bar { display: none; }
+.editor-mode-yaml #cfgPanels   { display: none; }
+.editor-mode-yaml #editorWrapper {
+  display: flex !important;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 表单模式时，编辑器隐藏 */
+.editor-mode-form #editorWrapper { display: none !important; }
+.editor-mode-form #cfgPanels     { display: block; }
