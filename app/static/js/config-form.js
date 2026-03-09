@@ -20,36 +20,74 @@ const SCHEMA = [
       {
         title: '并发控制',
         fields: [
-          { key: 'alive-concurrent',  label: '测活并发',  hint: '建议 10-1000，0 = 自动', type: 'number', min: 0 },
-          { key: 'speed-concurrent',  label: '测速并发',  hint: '建议 4-32，0 = 自动',    type: 'number', min: 0 },
-          { key: 'media-concurrent',  label: '媒体并发',  hint: '建议 10-200，0 = 自动',  type: 'number', min: 0 },
-          { key: 'concurrent',        label: '基准线程',  hint: '自动并发计算基准，最大 100', type: 'number', min: 1, max: 100 },
+          {
+            key: 'alive-concurrent', label: '测活并发', type: 'number',
+            min: 0, max: 1000,
+            hint: '0 = 自动，建议 10–1000',
+            placeholder: '200',
+          },
+          {
+            key: 'speed-concurrent', label: '测速并发', type: 'number',
+            min: 0, max: 64,
+            hint: '0 = 自动，建议 4–32',
+            placeholder: '8',
+          },
+          {
+            key: 'media-concurrent', label: '媒体并发', type: 'number',
+            min: 0, max: 200,
+            hint: '0 = 自动，建议 10–200',
+            placeholder: '50',
+          },
+          {
+            key: 'concurrent', label: '基准线程', type: 'number',
+            min: 1, max: 100,
+            hint: '自动并发计算基准，最大 100',
+            placeholder: '32',
+          },
         ],
       },
       {
         title: '检测阈值',
         fields: [
-          { key: 'timeout',       label: '超时时间 (ms)', hint: '节点最大延迟',              type: 'number', min: 100 },
-          { key: 'success-limit', label: '节点保存上限',  hint: '0 = 不限制',                type: 'number', min: 0 },
-          { key: 'threshold',     label: '相似度阈值',    hint: '0.75 ≈ /24 同网段去重',    type: 'number', min: 0, max: 1, step: 0.05 },
-          { key: 'node-prefix',   label: '节点前缀',      hint: '依赖重命名开关',             type: 'text',   placeholder: '例：🌟 ' },
+          {
+            key: 'timeout', label: '超时时间 (ms)', type: 'number',
+            min: 100, max: 60000,
+            hint: '节点延迟上限，建议 3000–30000',
+            placeholder: '10000',
+          },
+          {
+            key: 'success-limit', label: '节点保存上限', type: 'number',
+            min: 0,
+            hint: '0 = 不限制',
+            placeholder: '0',
+          },
+          {
+            key: 'threshold', label: '相似度阈值', type: 'number',
+            min: 0, max: 1, step: 0.05,
+            hint: '0.75 ≈ /24 同网段去重，越小越严格',
+            placeholder: '0.75',
+          },
+          {
+            key: 'node-prefix', label: '节点前缀', type: 'text',
+            hint: '依赖"按 IP 重命名"开关',
+            placeholder: '🌟 ',
+          },
         ],
       },
       {
         title: '功能开关',
         fields: [
-          { key: 'ipv6',                 label: '启用 IPv6',         type: 'toggle' },
-          { key: 'media-check',          label: '流媒体检测',         type: 'toggle' },
-          { key: 'isp-check',            label: 'ISP 类型检测',      hint: '检测原生/住宅/机房',   type: 'toggle' },
-          { key: 'enhanced-tag',         label: '增强位置标签',       hint: '显示出口 + CDN 双位置', type: 'toggle' },
-          { key: 'rename-node',          label: '按 IP 重命名',      type: 'toggle' },
-          { key: 'drop-bad-cf-nodes',    label: '丢弃 CF 不可达',    hint: '可能误杀，谨慎开启',   type: 'toggle' },
-          { key: 'keep-success-proxies', label: '保留历次成功节点',  hint: '防上游更新丢失节点',   type: 'toggle' },
+          { key: 'rename-node', label: '重命名节点', hint: '启用后将根据节点 IP 归属地重命名', type: 'toggle' },
+          { key: 'enhanced-tag', label: '增强位置标签', hint: '显示出口 + CDN 双位置', type: 'toggle' },
+          { key: 'isp-check', label: 'ISP 类型检测', hint: '检测原生 / 住宅 / 机房', type: 'toggle' },
+          { key: 'drop-bad-cf-nodes', label: '丢弃 CF 不可达', hint: '可能误杀，谨慎开启', type: 'toggle' },
+          { key: 'keep-success-proxies', label: '保留历次成功节点', hint: '防上游更新丢失节点', type: 'toggle' },
         ],
       },
       {
-        title: '媒体检测平台',
+        title: '流媒体检测',
         fields: [
+          { key: 'media-check', label: '流媒体检测', hint: '启用后将检测流媒体和AI解锁情况', type: 'toggle' },
           {
             key: 'platforms', label: '检测平台', type: 'chips',
             options: ['iprisk', 'openai', 'gemini', 'youtube', 'tiktok', 'netflix', 'disney', 'x'],
@@ -57,12 +95,14 @@ const SCHEMA = [
         ],
       },
       {
-        title: '节点类型过滤',
+        title: '节点过滤',
         fields: [
           {
-            key: 'node-type', label: '仅检测以下协议', hint: '留空 = 检测全部', type: 'chips',
+            key: 'node-type', label: '协议筛选', type: 'chips',
+            hint: '留空 = 检测全部协议',
             options: ['ss', 'vmess', 'vless', 'trojan', 'hysteria', 'hy2', 'tuic'],
           },
+          { key: 'ipv6', label: '启用 IPv6', type: 'toggle' },
         ],
       },
     ],
@@ -75,12 +115,30 @@ const SCHEMA = [
       {
         title: '检测周期',
         fields: [
-          { key: 'check-interval',  label: '检测间隔 (分钟)', hint: 'Cron 表达式优先',          type: 'number', min: 1 },
-          { key: 'cron-expression', label: 'Cron 表达式',     hint: '"0 4,16 * * *" 覆盖间隔',  type: 'text',   placeholder: '留空则用 check-interval' },
-          { key: 'print-progress',  label: '终端显示进度',    type: 'toggle' },
+          {
+            key: 'check-interval', label: '检测间隔 (分钟)', type: 'number',
+            min: 1,
+            hint: 'Cron 表达式优先，建议 720–1440',
+            placeholder: '720',
+          },
+          {
+            key: 'cron-expression', label: 'Cron 表达式', type: 'text',
+            hint: '定时检测任务，留空则使用 check-interval 间隔',
+            placeholder: '0 4,16 * * *',
+          },
+        ],
+      },
+      {
+        // print-progress / progress-mode 独立分组
+        title: '输出显示',
+        fields: [
+          { key: 'print-progress', label: '终端显示进度', type: 'toggle' },
           {
             key: 'progress-mode', label: '进度条模式', type: 'select',
-            options: [{ value: 'auto', label: '自动 (auto)' }, { value: 'stage', label: '分阶段 (stage)' }],
+            options: [
+              { value: 'auto', label: '自动 (auto)' },
+              { value: 'stage', label: '分阶段 (stage)' },
+            ],
           },
         ],
       },
@@ -92,33 +150,78 @@ const SCHEMA = [
     tab: 'subscriptions',
     sections: [
       {
-        title: '获取参数',
+        title: '获取订阅参数',
         fields: [
-          { key: 'sub-urls-retry',   label: '重试次数',   hint: '获取订阅失败重试', type: 'number', min: 0 },
-          { key: 'sub-urls-timeout', label: '超时 (s)',   hint: '网络差可调大',      type: 'number', min: 1 },
-          { key: 'success-rate',     label: '成功率阈值', hint: '低于此值打印地址',  type: 'number', min: 0, max: 100 },
+          {
+            key: 'sub-urls-retry', label: '重试次数', type: 'number',
+            min: 0,
+            hint: '获取订阅失败后的重试次数',
+            placeholder: '3',
+          },
+          {
+            key: 'sub-urls-timeout', label: '请求超时 (s)', type: 'number',
+            min: 1,
+            hint: '网络差可调大，建议 10–60',
+            placeholder: '15',
+          },
+          {
+            key: 'success-rate', label: '成功率阈值 (%)', type: 'number',
+            min: 0, max: 100,
+            hint: '节点成功率低于此值时在日志中显示订阅 URL',
+            placeholder: '40',
+          },
         ],
       },
       {
         title: '测速参数',
         fields: [
-          { key: 'speed-test-url',    label: '测速地址',          hint: '留空关闭测速',    type: 'text',   placeholder: '留空关闭测速' },
-          { key: 'min-speed',         label: '最低速度 (KB/s)',   hint: '低于此值丢弃',   type: 'number', min: 0 },
-          { key: 'download-timeout',  label: '下载超时 (s)',       type: 'number', min: 1 },
-          { key: 'download-mb',       label: '单节点上限 (MB)',   hint: '0 = 不限',        type: 'number', min: 0 },
-          { key: 'total-speed-limit', label: '总带宽限制 (MB/s)', hint: '0 = 不限',        type: 'number', min: 0 },
+          {
+            key: 'speed-test-url', label: '测速地址', type: 'text',
+            hint: 'random = 随机测速地址，留空则关闭测速',
+            placeholder: 'random',
+          },
+          {
+            key: 'min-speed', label: '最低速度 (KB/s)', type: 'number',
+            min: 0,
+            hint: '低于此值的节点将被丢弃，0 = 不过滤',
+            placeholder: '500',
+          },
+          {
+            key: 'download-timeout', label: '下载超时 (s)', type: 'number',
+            min: 1,
+            hint: '测速单节点超时，建议 10 秒',
+            placeholder: '10',
+          },
+          {
+            key: 'download-mb', label: '单节点上限 (MB)', type: 'number',
+            min: 0,
+            hint: '每节点最大下载量，0 = 不限，建议设置避免测速过度消耗流量',
+            placeholder: '20',
+          },
+          {
+            key: 'total-speed-limit', label: '总带宽限制 (MB/s)', type: 'number',
+            min: 0,
+            hint: '全局测速带宽上限，0 = 不限',
+            placeholder: '0',
+          },
         ],
       },
       {
         title: '远程订阅清单',
         fields: [
-          { key: 'sub-urls-remote', label: '远程订阅列表', hint: '集中维护，支持 txt/yaml/json', type: 'url-list' },
+          {
+            key: 'sub-urls-remote', label: '远程订阅列表', type: 'url-list',
+            hint: '集中维护订阅源，支持 txt / yaml / json',
+          },
         ],
       },
       {
         title: '本地订阅地址',
         fields: [
-          { key: 'sub-urls', label: '订阅地址', hint: '支持 clash/v2ray/base64，末尾可加 #备注', type: 'url-list' },
+          {
+            key: 'sub-urls', label: '订阅地址', type: 'url-list',
+            hint: '支持 Clash / V2Ray / Base64，末尾 #备注 可添加标签',
+          },
         ],
       },
     ],
@@ -131,9 +234,19 @@ const SCHEMA = [
       {
         title: 'Apprise 通知',
         fields: [
-          { key: 'apprise-api-server', label: 'Apprise API 地址', hint: '内置或自建服务',                       type: 'text', placeholder: 'https://apprise.example.com/notify' },
-          { key: 'notify-title',       label: '通知标题',          type: 'text' },
-          { key: 'recipient-url',      label: '通知渠道',          hint: '支持 tgram:// bark:// mailto:// 等', type: 'url-list' },
+          {
+            key: 'apprise-api-server', label: 'Apprise API 地址', type: 'text',
+            hint: '内置服务或自建实例的 notify 接口',
+            placeholder: 'https://apprise.example.com/notify',
+          },
+          {
+            key: 'notify-title', label: '通知标题', type: 'text',
+            placeholder: '🔔 Subs-Check-Pro 检测报告',
+          },
+          {
+            key: 'recipient-url', label: '通知渠道', type: 'url-list',
+            hint: '支持 tgram:// bark:// mailto:// ntfy:// 等 Apprise 协议',
+          },
         ],
       },
     ],
@@ -146,14 +259,18 @@ const SCHEMA = [
       {
         title: '存储方式',
         fields: [
-          { key: 'output-dir', label: '输出目录', hint: '留空 = 程序目录/output', type: 'text', placeholder: '/data/output' },
+          {
+            key: 'output-dir', label: '输出目录', type: 'text',
+            hint: '留空 = 程序目录 /output',
+            placeholder: '/data/output',
+          },
           {
             key: 'save-method', label: '存储方式', type: 'select',
             options: [
-              { value: 'local',  label: '本地 (local)' },
+              { value: 'local', label: '本地 (local)' },
               { value: 'webdav', label: 'WebDAV' },
-              { value: 'gist',   label: 'GitHub Gist' },
-              { value: 's3',     label: 'S3 / MinIO / R2' },
+              { value: 'gist', label: 'GitHub Gist' },
+              { value: 's3', label: 'S3 / MinIO / R2' },
             ],
           },
         ],
@@ -161,30 +278,44 @@ const SCHEMA = [
       {
         title: 'WebDAV', conditional: 'webdav',
         fields: [
-          { key: 'webdav-url',      label: 'WebDAV 地址', type: 'text',     placeholder: 'https://example.com/dav/' },
-          { key: 'webdav-username', label: '用户名',       type: 'text' },
-          { key: 'webdav-password', label: '密码',         type: 'password' },
+          { key: 'webdav-url', label: 'WebDAV 地址', type: 'text', placeholder: 'https://dav.example.com/remote.php/dav/files/user/' },
+          { key: 'webdav-username', label: '用户名', type: 'text', placeholder: 'admin' },
+          { key: 'webdav-password', label: '密码', type: 'password', placeholder: '••••••••' },
         ],
       },
       {
         title: 'GitHub Gist', conditional: 'gist',
         fields: [
-          { key: 'github-gist-id',    label: 'Gist ID',      type: 'text' },
-          { key: 'github-token',      label: 'GitHub Token', type: 'password' },
-          { key: 'github-api-mirror', label: 'API 镜像',     hint: '可选，国内加速', type: 'text', placeholder: '留空使用官方' },
+          {
+            key: 'github-gist-id', label: 'Gist ID', type: 'text',
+            placeholder: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
+          },
+          {
+            key: 'github-token', label: 'GitHub Token', type: 'password',
+            placeholder: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+          },
+          {
+            key: 'github-api-mirror', label: 'API 镜像', type: 'text',
+            hint: '可选，留空使用 api.github.com',
+            placeholder: 'https://ghproxy.com/',
+          },
         ],
       },
       {
         title: 'S3 / MinIO / R2', conditional: 's3',
         fields: [
-          { key: 's3-endpoint',      label: 'Endpoint',      type: 'text',     placeholder: '127.0.0.1:9000' },
-          { key: 's3-access-id',     label: 'Access Key ID', type: 'text' },
-          { key: 's3-secret-key',    label: 'Secret Key',    type: 'password' },
-          { key: 's3-bucket',        label: 'Bucket',        type: 'text' },
-          { key: 's3-use-ssl',       label: '使用 SSL',      type: 'toggle' },
+          { key: 's3-endpoint', label: 'Endpoint', type: 'text', placeholder: '127.0.0.1:9000' },
+          { key: 's3-access-id', label: 'Access Key ID', type: 'text', placeholder: 'minioadmin' },
+          { key: 's3-secret-key', label: 'Secret Key', type: 'password', placeholder: '••••••••' },
+          { key: 's3-bucket', label: 'Bucket', type: 'text', placeholder: 'subs-check' },
+          { key: 's3-use-ssl', label: '使用 SSL', type: 'toggle' },
           {
             key: 's3-bucket-lookup', label: 'Bucket 寻址', type: 'select',
-            options: [{ value: 'auto', label: '自动 (auto)' }, { value: 'path', label: 'Path' }, { value: 'dns', label: 'DNS' }],
+            options: [
+              { value: 'auto', label: '自动 (auto)' },
+              { value: 'path', label: 'Path 寻址' },
+              { value: 'dns', label: 'DNS 寻址' },
+            ],
           },
         ],
       },
@@ -198,46 +329,107 @@ const SCHEMA = [
       {
         title: 'WebUI',
         fields: [
-          { key: 'listen-port',    label: '监听端口',    hint: '修改需重启',        type: 'text',     placeholder: ':8199' },
-          { key: 'enable-web-ui', label: '启用 WebUI',  type: 'toggle' },
-          { key: 'api-key',        label: 'API 密钥',   hint: '留空自动生成',      type: 'password' },
-          { key: 'share-password', label: '分享密码',   hint: '用于订阅分享接口',  type: 'password' },
+          {
+            key: 'listen-port', label: '监听端口', type: 'text',
+            hint: '监听端口，用于直接返回节点信息，方便订阅转换',
+            placeholder: ':8199',
+          },
+          { key: 'enable-web-ui', label: '是否启用Web控制面板，访问地址：http://127.0.0.1:8199/admin', type: 'toggle' },
+          {
+            key: 'api-key', label: 'API 密钥', type: 'password',
+            hint: '留空则启动时自动生成',
+            placeholder: '••••••••',
+          },
+          {
+            key: 'share-password', label: '分享密码', type: 'password',
+            hint: '用于订阅分享接口，访问 http://127.0.0.1:8199/sub 验证后查看分享的订阅文件列表',
+            placeholder: '••••••••',
+          },
         ],
       },
       {
         title: 'Sub-Store',
         fields: [
-          { key: 'sub-store-port',         label: '监听端口',        hint: '留空不启动', type: 'text', placeholder: ':8299' },
-          { key: 'sub-store-path',          label: '访问路径',        hint: '建议设置',   type: 'text', placeholder: '/path' },
-          { key: 'mihomo-overwrite-url',    label: 'Mihomo 覆写 URL', type: 'text' },
-          { key: 'sub-store-sync-cron',     label: '同步 Gist Cron',  type: 'text' },
-          { key: 'sub-store-produce-cron',  label: '更新订阅 Cron',   type: 'text' },
-          { key: 'sub-store-push-service',  label: 'Push 推送服务',   type: 'text' },
+          {
+            key: 'sub-store-port', label: '监听端口', type: 'text',
+            hint: '留空则不启动 Sub-Store',
+            placeholder: ':8299',
+          },
+          {
+            key: 'sub-store-path', label: '访问路径', type: 'text',
+            hint: '建议设置以避免泄露节点',
+            placeholder: '/sub-store-path',
+          },
+          {
+            key: 'mihomo-overwrite-url', label: 'Mihomo 覆写 URL', type: 'text',
+            hint: 'Mihomo/Clash 系代理的分流规则文件',
+            placeholder: 'http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml',
+          },
+          {
+            key: 'sub-store-sync-cron', label: '同步 Gist Cron', type: 'text',
+            hint: '定时将订阅/文件上传到私有 Gist',
+            placeholder: '0 2 * * *',
+          },
+          {
+            key: 'sub-store-produce-cron', label: '更新订阅 Cron', type: 'text',
+            placeholder: '0 3 * * *',
+          },
+          {
+            key: 'sub-store-push-service', label: 'Push 推送服务', type: 'text',
+            placeholder: 'https://push.example.com',
+          },
         ],
       },
       {
         title: '代理设置',
         fields: [
-          { key: 'system-proxy',  label: '系统代理',        hint: '用于拉取订阅和推送通知', type: 'text', placeholder: 'http://127.0.0.1:7890' },
-          { key: 'github-proxy',  label: 'GitHub 代理',    type: 'text', placeholder: 'https://ghfast.top/' },
-          { key: 'ghproxy-group', label: 'GitHub 代理列表', hint: '自动筛选可用代理',       type: 'url-list' },
+          {
+            key: 'system-proxy', label: '系统代理', type: 'text',
+            hint: '用于拉取订阅和推送通知',
+            placeholder: 'http://127.0.0.1:10808',
+          },
+          {
+            key: 'github-proxy', label: 'GitHub 代理', type: 'text',
+            hint: '加速 GitHub Release 下载',
+            placeholder: 'https://ghfast.top/',
+          },
+          {
+            key: 'ghproxy-group', label: 'GitHub 代理列表', type: 'url-list',
+            hint: '自动筛选可用代理，按序尝试',
+          },
         ],
       },
       {
         title: '自动更新',
         fields: [
-          { key: 'update',            label: '自动更新',        hint: 'false = 仅提醒', type: 'toggle' },
-          { key: 'update-on-startup', label: '启动时检查更新',  type: 'toggle' },
-          { key: 'prerelease',        label: '使用预发布版本',  type: 'toggle' },
-          { key: 'cron-check-update', label: '检查更新 Cron',   type: 'text',   placeholder: '0 9,21 * * *' },
-          { key: 'update-timeout',    label: '下载超时 (分钟)', type: 'number', min: 1 },
+          { key: 'update', label: '自动更新', hint: '关闭时仅提醒新版本', type: 'toggle' },
+          { key: 'update-on-startup', label: '启动时检查更新', type: 'toggle' },
+          { key: 'prerelease', label: '使用预发布版本', hint: '包含 beta / rc 版本', type: 'toggle' },
+          {
+            key: 'cron-check-update', label: '检查更新 Cron', type: 'text',
+            placeholder: '0 9,21 * * *',
+          },
+          {
+            key: 'update-timeout', label: '下载超时 (分钟)', type: 'number',
+            min: 1,
+            hint: '更新包下载超时，建议 2–10',
+            placeholder: '5',
+          },
         ],
       },
       {
         title: '其他',
         fields: [
-          { key: 'maxmind-db-path', label: 'MaxMind DB 路径', hint: '留空使用内置',   type: 'text' },
-          { key: 'callback-script', label: '回调脚本路径',    hint: '检测完成后执行', type: 'text' },
+          {
+            key: 'maxmind-db-path', label: 'MaxMind DB 路径', type: 'text',
+            hint: '留空则使用内置 GeoLite2 数据库',
+            placeholder: '/data/GeoLite2-City.mmdb',
+          },
+          {
+            key: 'callback-script', label: '回调脚本路径', type: 'text',
+            hint: '检测完成后执行，可用于自定义通知或其他操作',
+            placeholder: '/data/scripts/notify.sh',
+          },
         ],
       },
     ],
@@ -247,7 +439,7 @@ const SCHEMA = [
 /* ════════════════════════════════════════════════════════════
    内部状态
 ════════════════════════════════════════════════════════════ */
-let _cfg  = {};
+let _cfg = {};
 const _built = new Set();
 
 /* ════════════════════════════════════════════════════════════
@@ -256,9 +448,9 @@ const _built = new Set();
 function el(tag, attrs = {}) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class')       e.className   = v;
+    if (k === 'class') e.className = v;
     else if (k === 'textContent') e.textContent = v;
-    else if (k === 'innerHTML')   e.innerHTML   = v;
+    else if (k === 'innerHTML') e.innerHTML = v;
     else if (k.startsWith('data-')) e.dataset[k.slice(5)] = v;
     else e.setAttribute(k, v);
   }
@@ -282,24 +474,26 @@ function mkInput(field, value) {
 
 function mkNumber(field, value) {
   const wrap = el('div', { class: 'cfg-number-wrap' });
-  const inp  = el('input', {
+  const inp = el('input', {
     type: 'number',
     'data-key': field.key,
-    min:  String(field.min  ?? ''),
-    max:  String(field.max  ?? ''),
+    min: String(field.min ?? ''),
+    max: String(field.max ?? ''),
     step: String(field.step ?? 1),
+    placeholder: field.placeholder ?? '',
   });
-  inp.value = value ?? 0;
+  // inp.value = value ?? 0;
+  inp.value = (value !== undefined && value !== null && value !== '') ? value : 0;
 
   const makeBtn = (sym, dir) => {
     const b = el('button', { class: 'cfg-step-btn', type: 'button', textContent: sym });
     b.addEventListener('click', () => {
-      const cur  = parseFloat(inp.value) || 0;
+      const cur = parseFloat(inp.value) || 0;
       const step = field.step ?? 1;
       const next = dir > 0 ? cur + step : cur - step;
-      const lo   = field.min ?? -Infinity;
-      const hi   = field.max ??  Infinity;
-      inp.value  = Math.max(lo, Math.min(hi, +next.toFixed(10)));
+      const lo = field.min ?? -Infinity;
+      const hi = field.max ?? Infinity;
+      inp.value = Math.max(lo, Math.min(hi, +next.toFixed(10)));
       inp.dispatchEvent(new Event('input'));
     });
     return b;
@@ -310,10 +504,10 @@ function mkNumber(field, value) {
 }
 
 function mkToggle(key, value) {
-  const wrap   = el('div',   { class: 'cfg-toggle-wrap' });
-  const label  = el('label', { class: 'cfg-toggle' });
-  const cb     = el('input', { type: 'checkbox', 'data-key': key });
-  const slider = el('span',  { class: 'cfg-toggle-slider' });
+  const wrap = el('div', { class: 'cfg-toggle-wrap' });
+  const label = el('label', { class: 'cfg-toggle' });
+  const cb = el('input', { type: 'checkbox', 'data-key': key });
+  const slider = el('span', { class: 'cfg-toggle-slider' });
   cb.checked = Boolean(value);
   label.append(cb, slider);
   wrap.appendChild(label);
@@ -332,11 +526,11 @@ function mkSelect(field, value) {
 
 function mkChips(field, values) {
   const active = new Set(Array.isArray(values) ? values : []);
-  const wrap   = el('div', { class: 'cfg-chips', 'data-key': field.key });
+  const wrap = el('div', { class: 'cfg-chips', 'data-key': field.key });
 
   for (const opt of field.options) {
     const chip = el('label', { class: `cfg-chip${active.has(opt) ? ' active' : ''}` });
-    const cb   = el('input', { type: 'checkbox', value: opt });
+    const cb = el('input', { type: 'checkbox', value: opt });
     cb.checked = active.has(opt);
     cb.addEventListener('change', () => chip.classList.toggle('active', cb.checked));
     chip.append(cb, document.createTextNode(opt));
@@ -369,7 +563,7 @@ function mkUrlList(field, values) {
 
 function mkField(fieldDef, value) {
   const wide = fieldDef.type === 'url-list' || fieldDef.type === 'chips';
-  const row  = el('div', { class: `cfg-field${wide ? ' full-width' : ''}`, 'data-key': fieldDef.key });
+  const row = el('div', { class: `cfg-field${wide ? ' full-width' : ''}`, 'data-key': fieldDef.key });
 
   const lbl = el('div', { class: 'cfg-label' });
   lbl.appendChild(el('span', { class: 'cfg-label-text', textContent: fieldDef.label }));
@@ -379,12 +573,12 @@ function mkField(fieldDef, value) {
 
   let ctrl;
   switch (fieldDef.type) {
-    case 'number':   ctrl = mkNumber(fieldDef, value);    break;
-    case 'toggle':   ctrl = mkToggle(fieldDef.key, value); break;
-    case 'select':   ctrl = mkSelect(fieldDef, value);    break;
-    case 'chips':    ctrl = mkChips(fieldDef, value);     break;
-    case 'url-list': ctrl = mkUrlList(fieldDef, value);   break;
-    default:         ctrl = mkInput(fieldDef, value);     break;
+    case 'number': ctrl = mkNumber(fieldDef, value); break;
+    case 'toggle': ctrl = mkToggle(fieldDef.key, value); break;
+    case 'select': ctrl = mkSelect(fieldDef, value); break;
+    case 'chips': ctrl = mkChips(fieldDef, value); break;
+    case 'url-list': ctrl = mkUrlList(fieldDef, value); break;
+    default: ctrl = mkInput(fieldDef, value); break;
   }
 
   row.append(lbl, ctrl);
@@ -395,7 +589,7 @@ function mkField(fieldDef, value) {
    面板构建
 ════════════════════════════════════════════════════════════ */
 function buildPanel(tabId) {
-  const panel  = document.getElementById(`panel-${tabId}`);
+  const panel = document.getElementById(`panel-${tabId}`);
   if (!panel) return;
 
   const schema = SCHEMA.find(s => s.tab === tabId);
@@ -440,7 +634,7 @@ function buildPanel(tabId) {
    值收集
 ════════════════════════════════════════════════════════════ */
 function collectPanel(tabId) {
-  const panel  = document.getElementById(`panel-${tabId}`);
+  const panel = document.getElementById(`panel-${tabId}`);
   if (!panel || !_built.has(tabId)) return {};
 
   const schema = SCHEMA.find(s => s.tab === tabId);
