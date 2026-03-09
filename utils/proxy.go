@@ -81,6 +81,14 @@ func GetSysProxy() bool {
 	// 清理所有可能的代理环境变量
 	UnsetAllProxyEnvVars()
 
+	// "direct" 是显式禁用系统代理的硬开关，不再回退自动探测常见端口。
+	if isDirectProxyConfig(config.GlobalConfig.SystemProxy) {
+		config.GlobalConfig.SystemProxy = "direct"
+		slog.Info("系统代理已禁用", "strategy", "direct")
+		IsSysProxyAvailable = false
+		return false
+	}
+
 	// 优先使用配置文件中的代理，其次检测常见端口
 	proxy := findAvailableSysProxy(config.GlobalConfig.SystemProxy, commonProxies)
 	if proxy != "" {
@@ -104,6 +112,10 @@ func GetSysProxy() bool {
 	slog.Debug("未找到可用代理，清除代理环境变量")
 	IsSysProxyAvailable = false
 	return false
+}
+
+func isDirectProxyConfig(proxy string) bool {
+	return strings.EqualFold(strings.TrimSpace(proxy), "direct")
 }
 
 // UnsetAllProxyEnvVars 清理所有可能的代理环境变量
