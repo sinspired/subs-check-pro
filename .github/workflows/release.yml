@@ -130,5 +130,13 @@ jobs:
 
             版本: `${{ github.ref_name }}`
             项目: `${{ github.repository }}`
+
+            说明:
+              - 新增内置文件管理页面（`http://localhost:8199/files`）
+              - 新增检测结果分析报告（`http://localhost:8199/analysis`）
+              - 重构配置编辑器，支持预览、配置分析
+              - 代理节点地理位置可视化
+              - 重构分享页面与报告页面布局
+              - 重构代码,大幅提升 WebUI 使用体验
               
             🔗 [查看详情](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})

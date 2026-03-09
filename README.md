@@ -40,11 +40,13 @@ High-performance proxy subscription checker.
 - [x] 🐳 支持 `docker` 部署
 - [x] 🪟 Windows 可搭配 [专门的 Windows 图形客户端](https://github.com/sinspired/SubsCheck-Win-GUI) 使用
 - [x] 📱 全新设计的 WebUI 管理界面，优化小屏设备访问体验
-- [x] ✏️ 升级配置编辑器，支持根据 `config.yaml` 自动补全与高亮
+- [x] ✏️ 升级配置编辑器，支持自动补全与高亮，内置预览与配置分析，GUI 式编辑
 - [x] 🧩 集成 `sub-store` 前端，WebUI 一键管理
 - [x] 6️⃣ 支持 `IPv6` 代理节点
 - [x] 🔗 适配多种非标订阅格式，提高获取订阅成功率
 - [x] 📡 支持检测 `isp` 类型、`原生/广播IP`、住宅/机房
+- [x] 📂 内置文件管理页面（`/files`），方便查看与下载生成文件
+- [x] 📈 检测结果分析报告（`/analysis`），含地理位置与协议分布可视化
 - [ ] 🚧 本项目现接受 issue 反馈
 
 ### 📖 教程（Wiki）

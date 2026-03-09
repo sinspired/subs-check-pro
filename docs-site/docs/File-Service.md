@@ -4,6 +4,11 @@ subs-check-pro 会在测试完后保存三个文件到 `output/sub` 目录中；
 
 ⚠️ 为方便使用 Cloudflare 隧道映射等方案在公网访问，本项目取消了对 `output` 文件夹的无限制访问。
 
+访问 `http://localhost:8199/files` 进入内置文件服务
+
+![file-hub](https://raw.githubusercontent.com/sinspired/subs-check-pro/main/doc/images/file-hub.png)
+
+
 ## 🔐 使用分享码分享（推荐）
 
 设置 `share-password`，使用分享码进行分享。可分享 `/output/sub` 目录的文件，比如 `all.yaml`、`mihomo.yaml`：
