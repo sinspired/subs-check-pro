@@ -6,8 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	proxyutils "github.com/sinspired/subs-check-pro/proxy"
 
@@ -178,7 +181,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 	}
 	if category.Name == "mihomo.yaml" {
 		if config.GlobalConfig.SubStorePort == "" {
-			yamlData, err := marshalProxiesYAML(category.Proxies)
+			yamlData, err := buildMihomoYAML(category.Proxies)
 			if err != nil {
 				return fmt.Errorf("序列化yaml %s 失败: %w", category.Name, err)
 			}
@@ -232,6 +235,84 @@ func marshalProxiesYAML(proxies []map[string]any) ([]byte, error) {
 	return yaml.Marshal(map[string]any{
 		"proxies": proxies,
 	})
+}
+
+func buildMihomoYAML(proxies []map[string]any) ([]byte, error) {
+	templateData, err := loadMihomoTemplate()
+	if err != nil {
+		return nil, err
+	}
+	return mergeMihomoTemplate(templateData, proxies)
+}
+
+func mergeMihomoTemplate(templateData []byte, proxies []map[string]any) ([]byte, error) {
+	if len(strings.TrimSpace(string(templateData))) == 0 {
+		return nil, fmt.Errorf("mihomo 覆写模板为空")
+	}
+
+	merged := make(map[string]any)
+	if err := yaml.Unmarshal(templateData, &merged); err != nil {
+		return nil, fmt.Errorf("解析 mihomo 覆写模板失败: %w", err)
+	}
+	merged["proxies"] = proxies
+
+	return yaml.Marshal(merged)
+}
+
+func loadMihomoTemplate() ([]byte, error) {
+	source := strings.TrimSpace(config.GlobalConfig.MihomoOverwriteURL)
+	if source == "" {
+		source = "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml"
+	}
+
+	if !strings.Contains(source, "://") {
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return nil, fmt.Errorf("读取 mihomo 覆写模板失败: %w", err)
+		}
+		return data, nil
+	}
+
+	if utils.IsLocalURL(source) {
+		if data, err := readLocalMihomoTemplate(source); err == nil && len(data) > 0 {
+			return data, nil
+		}
+	}
+
+	resp, err := http.Get(source)
+	if err != nil {
+		return nil, fmt.Errorf("获取 mihomo 覆写模板失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取 mihomo 覆写模板失败: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("获取 mihomo 覆写模板失败, 状态码: %d, 错误信息: %s", resp.StatusCode, body)
+	}
+
+	return body, nil
+}
+
+func readLocalMihomoTemplate(source string) ([]byte, error) {
+	u, err := url.Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	filename := path.Base(u.Path)
+	if filename == "." || filename == "/" || filename == "" {
+		return nil, fmt.Errorf("无效的 mihomo 覆写模板路径: %s", source)
+	}
+
+	saver, err := method.NewLocalSaver()
+	if err != nil {
+		return nil, err
+	}
+
+	candidate := filepath.Join(saver.OutputPath, filename)
+	return ReadFileIfExists(candidate)
 }
 
 // chooseSaveMethod 根据配置选择保存方法
