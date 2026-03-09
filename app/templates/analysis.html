@@ -200,6 +200,35 @@
     .footer-copy { font-size: 11px; color: var(--muted); } .footer-copy a { color: var(--muted); text-decoration: none; } .footer-copy a:hover { color: var(--accent); }
     code { font-family: var(--font-mono,monospace); background: var(--placehoder-bg,rgba(0,0,0,.06)); color: var(--danger); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
     @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── 紧凑 chip ── */
+    .summary-chip { padding: 8px 10px; }
+    .chip-icon { width: 18px; height: 18px; border-radius: 5px; margin-bottom: 3px; }
+    .chip-icon svg { width: 10px; height: 10px; }
+    .chip-value { font-size: 15px; }
+    .chip-label { font-size: 9px; }
+    .chip-sub { font-size: 9px; }
+
+    /* ── 概览底部三栏 ── */
+    .overview-grid-3 { display: grid; gap: 12px; }
+    @media (max-width: 720px)  { .overview-grid-3 { grid-template-columns: 1fr; } }
+    @media (min-width: 721px)  { .overview-grid-3 { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1101px) { .overview-grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
+
+    /* ── 配置快览 status 行 ── */
+    .cfg-status-row { display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); gap: 8px; }
+    .cfg-status-row:last-child { border-bottom: none; }
+    .cfg-status-k { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+    .cfg-status-v { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; }
+    .cfg-status-v svg { width: 11px; height: 11px; flex-shrink: 0; }
+    .cfg-status-v.ok   { color: var(--success); }
+    .cfg-status-v.warn { color: var(--warning); }
+    .cfg-status-v.bad  { color: var(--danger);  }
+    .cfg-status-v.muted-v { color: var(--muted); }
+
+    /* ── proto grid 4列 ── */
+    @media (min-width: 1101px) { .proto-grid { grid-template-columns: repeat(4, 1fr); } }
     </style>
 </head>
 <body>
@@ -410,57 +439,143 @@ function renderReport(r,cfg){
     document.getElementById('navMeta').textContent=ci.check_time?`${ci.check_time}  ·  耗时 ${ci.check_duration||'-'}`:'分析报告';
     const geoCount=Object.keys(ga.geography_distribution||{}).length,protoCount=Object.keys(ga.protocol_distribution||{}).length;
     _sb('sb-geo',geoCount);_sb('sb-proto',protoCount);_sb('sb-subs',sr.length);
-    renderOverview(r,ci,ga,sr.length,geoCount,protoCount);
+    renderOverview(r, ci, ga, sr.length, geoCount, protoCount, cfg);
     renderGeo(ga);renderProto(ga);renderSubs(sr,sb);renderConfig(ci,ga,sr,sb,cfg);
 }
 function _sb(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 
-function renderOverview(r,ci,ga,subCount,geoCount,protoCount){
-    const rawSummary=(r.summary||'').trim();
-    document.getElementById('heroSummary').innerHTML=`<div class="hero-summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="hero-summary-text">${buildHeroSentence(ci,ga)}</div></div>`;
-    const minSpeedVal=ci.check_min_speed;
-    const minSpeedStr=(minSpeedVal&&String(minSpeedVal)!=='0')?minSpeedVal+' KB/s':'未开启';
-    const total=parseCount(ga.alive_count);
-    const qm=ga.quality_metrics||{},cfd=qm.cf_details||{};
-    const cfCon=cfd['consistent_\u00b9\u207a']||{},cfIncon=cfd['inconsistent_\u2070']||{};
-    let vps={};for(const[k,v]of Object.entries(qm)){if(k.startsWith('vps_details')&&typeof v==='object'){vps=v;break;}}
-    const cfConTotal=Object.values(cfCon).reduce((a,b)=>a+b,0),vpsTotal=Object.values(vps).reduce((a,b)=>a+b,0);
-    const chips=[
-        {label:'可用节点',value:total,sub:`检测 ${ci.check_count||'-'}`,icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,color:'var(--accent)'},
-        {label:'覆盖地区',value:geoCount,sub:'地理分布',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,color:'var(--idle)'},
-        {label:'CF 中转',value:cfConTotal,sub:total?Math.round(cfConTotal/total*100)+'%':'0%',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,color:'var(--success)'},
-        {label:'独立 VPS',value:vpsTotal,sub:total?Math.round(vpsTotal/total*100)+'%':'0%',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`,color:'var(--warning)'},
-        {label:'流量消耗',value:ci.check_traffic||'-',sub:`耗时 ${ci.check_duration||'-'}`,icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,color:'var(--muted)'},
-        {label:'速度下限',value:minSpeedStr,sub:ci.check_count?`检测 ${ci.check_count}`:'',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,color:'var(--muted)'},
+function buildCfgStatusPanel(cfg, ci) {
+    cfg = cfg || {};
+    const SVG_OK   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const SVG_WARN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    const SVG_DASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+
+    const ghProxy     = cfg['github-proxy'] || '';
+    const recipientUrl= cfg['recipient-url'];
+    const speedTestUrl= cfg['speed-test-url'] || '';
+    const mediaCheck  = cfg['media-check'] !== false;
+    const keepSuccess = cfg['keep-success-proxies'] !== false;
+    const autoUpdate  = cfg['update'] !== false;
+    const minSpeed    = parseInt(cfg['min-speed']) || 0;
+    const dlTimeout   = parseInt(cfg['download-timeout']) || 0;
+    const saveMethod  = cfg['save-method'] || 'local';
+    const cronExpr    = cfg['cron-expression'] || '';
+    const checkInterval = parseInt(cfg['check-interval']) || 0;
+
+    let hasNotify = false;
+    if (Array.isArray(recipientUrl)) hasNotify = recipientUrl.filter(v => typeof v === 'string' && v.trim()).length > 0;
+    else if (typeof recipientUrl === 'string') hasNotify = recipientUrl.trim().length > 0;
+
+    const scheduleStr = cronExpr ? `cron: ${cronExpr}` : (checkInterval ? `${checkInterval} 分钟` : '未设置');
+
+    // (label, valueStr, cls, icon)
+    const rows = [
+        ['GitHub 代理',  ghProxy ? esc(ghProxy.replace(/https?:\/\//,'').replace(/\/$/,'')) : '未设置',   ghProxy ? 'ok' : 'warn',   ghProxy ? SVG_OK : SVG_WARN],
+        ['通知渠道',     hasNotify ? '已配置' : '未配置',                                                  hasNotify ? 'ok' : 'warn', hasNotify ? SVG_OK : SVG_WARN],
+        ['流媒体检测',   mediaCheck ? '已开启' : '已关闭',                                                  mediaCheck ? 'ok' : 'warn',mediaCheck ? SVG_OK : SVG_WARN],
+        ['测速功能',     speedTestUrl ? '已启用' : '已关闭',                                                speedTestUrl ? 'ok' : 'warn', speedTestUrl ? SVG_OK : SVG_WARN],
+        ['最低速度',     minSpeed > 0 ? `${minSpeed} KB/s` : '未设置',                                    minSpeed > 0 ? 'ok' : 'warn', minSpeed > 0 ? SVG_OK : SVG_WARN],
+        ['测速超时',     dlTimeout > 0 ? `${dlTimeout}s` : '未设置',                                      dlTimeout > 0 ? 'ok' : 'warn', dlTimeout > 0 ? SVG_OK : SVG_WARN],
+        ['保留成功节点', keepSuccess ? '已开启' : '已关闭',                                                 keepSuccess ? 'ok' : 'warn', keepSuccess ? SVG_OK : SVG_WARN],
+        ['自动更新',     autoUpdate ? '已开启' : '已关闭',                                                  autoUpdate ? 'ok' : 'warn',  autoUpdate ? SVG_OK : SVG_WARN],
+        ['存储方式',     saveMethod,                                                                        saveMethod !== 'local' ? 'ok' : 'muted-v', SVG_DASH],
+        ['检测周期',     scheduleStr,                                                                       scheduleStr !== '未设置' ? 'ok' : 'warn',  scheduleStr !== '未设置' ? SVG_OK : SVG_WARN],
     ];
-    document.getElementById('summaryChips').innerHTML=chips.map(c=>`<div class="summary-chip"><div class="chip-icon" style="background:color-mix(in srgb,${c.color} 12%,transparent);color:${c.color}">${c.icon}</div><div class="chip-value" style="color:${c.color}">${c.value}</div><div class="chip-label">${c.label}</div><div class="chip-sub">${c.sub||''}</div></div>`).join('');
-    const unlockData=parseUnlockFromSummary(rawSummary);
-    document.getElementById('unlockSection').innerHTML=unlockData.length?`<div class="section-title" style="margin-bottom:8px">媒体 &amp; AI 解锁</div><div class="unlock-row" style="margin-bottom:16px">${unlockData.map(u=>`<span class="unlock-tag"><span class="ut-dot" style="background:${u.color}"></span>${u.name}<span class="ut-count">${u.count}</span></span>`).join('')}</div>`:'';
-    const cfRatio=qm.cf_consistent_ratio||`${Math.round(cfConTotal/Math.max(1,total)*100)}%`;
-    const vpsRatioStr=`${Math.round(vpsTotal/Math.max(1,total)*100)}%`;
-    const cfBlock=cfd['blocked_\u207b\u00b9']||{};
-    document.getElementById('overviewExtra').innerHTML=`
-        <div class="section-title" style="margin-top:4px">线路质量</div>
-        <div class="overview-grid">
-            <div class="stat-panel">
-                <div class="panel-title">CF 中转 vs 独立 VPS</div>
-                <div class="quality-row">
-                    <div class="quality-item"><div class="quality-val" style="color:var(--success)">${cfRatio}</div><div class="quality-label">CF 中转 \u00b9\u207a</div></div>
-                    <div class="quality-item"><div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div><div class="quality-label">独立 VPS \u00b2</div></div>
-                </div>
-                <div class="cf-breakdown">
-                    ${cfGroup('CF 一致 \u00b9\u207a',cfCon,'var(--success)')}
-                    ${cfGroup('CF 不一致 \u2070',cfIncon,'var(--warning)')}
-                    ${Object.keys(cfBlock).length?cfGroup('CF 异常 \u207b\u00b9',cfBlock,'var(--danger)'):''}
-                    ${cfGroup('独立 VPS \u00b2',vps,'var(--idle)')}
-                </div>
-            </div>
-            <div class="stat-panel">
-                <div class="panel-title">快速导航</div>
-                ${[['geo','地理分布',`${geoCount} 个地区`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`],['proto','协议分析',`${protoCount} 种协议`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`],['subs','订阅排名',`${subCount} 个有效`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],['cfgana','配置分析','运行参数',`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>`]].map(([tab,label,sub,icon])=>`<button class="nav-card" onclick="switchTab('${tab}')"><div class="nav-card-left">${icon}<span class="nav-card-label">${label}</span></div><div class="nav-card-right">${sub}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div></button>`).join('')}
-            </div>
+
+    return `
+        <div class="stat-panel">
+            <div class="panel-title">关键配置状态</div>
+            ${rows.map(([k, v, cls, icon]) => `
+                <div class="cfg-status-row">
+                    <span class="cfg-status-k">${k}</span>
+                    <span class="cfg-status-v ${cls}">${icon}${v}</span>
+                </div>`).join('')}
         </div>`;
 }
+
+function renderOverview(r, ci, ga, subCount, geoCount, protoCount, cfg) {
+    cfg = cfg || {};
+    const rawSummary = (r.summary || '').trim();
+    document.getElementById('heroSummary').innerHTML =
+        `<div class="hero-summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="hero-summary-text">${buildHeroSentence(ci, ga)}</div></div>`;
+
+    const minSpeedVal = ci.check_min_speed;
+    const minSpeedStr = (minSpeedVal && String(minSpeedVal) !== '0') ? minSpeedVal + ' KB/s' : '未开启';
+    const total = parseCount(ga.alive_count);
+    const qm = ga.quality_metrics || {}, cfd = qm.cf_details || {};
+    const cfCon = cfd['consistent_¹⁺'] || {}, cfIncon = cfd['inconsistent_⁰'] || {};
+    let vps = {};
+    for (const [k, v] of Object.entries(qm)) { if (k.startsWith('vps_details') && typeof v === 'object') { vps = v; break; } }
+    const cfConTotal = Object.values(cfCon).reduce((a, b) => a + b, 0);
+    const vpsTotal   = Object.values(vps).reduce((a, b) => a + b, 0);
+
+    // ── 紧凑 chips（8个）──
+    const passRate = parseCount(ci.check_count) > 0
+        ? Math.min(100, Math.round(total / parseCount(ci.check_count) * 100)) : 0;
+    const chips = [
+        { label: '可用节点',   value: total,           sub: `共检测 ${ci.check_count || '-'}`,  icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`, color: 'var(--accent)' },
+        { label: '通过率',     value: passRate + '%',  sub: `速度下限 ${minSpeedStr}`,           icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`, color: passRate >= 5 ? 'var(--success)' : passRate > 0 ? 'var(--warning)' : 'var(--danger)' },
+        { label: '覆盖地区',   value: geoCount,        sub: '国家/地区',                         icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`, color: 'var(--idle)' },
+        { label: '协议种类',   value: protoCount,      sub: '协议分布',                          icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--idle)' },
+        { label: 'CF 中转',    value: cfConTotal,      sub: total ? Math.round(cfConTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`, color: 'var(--success)' },
+        { label: '独立 VPS',   value: vpsTotal,        sub: total ? Math.round(vpsTotal / total * 100) + '%' : '0%',   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`, color: 'var(--warning)' },
+        { label: '流量消耗',   value: ci.check_traffic || '-', sub: `耗时 ${ci.check_duration || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--muted)' },
+        { label: '有效订阅',   value: subCount,        sub: `检测时间 ${ci.check_time || '-'}`,  icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`, color: 'var(--muted)' },
+    ];
+    document.getElementById('summaryChips').innerHTML = chips.map(c =>
+        `<div class="summary-chip"><div class="chip-icon" style="background:color-mix(in srgb,${c.color} 12%,transparent);color:${c.color}">${c.icon}</div><div class="chip-value" style="color:${c.color}">${c.value}</div><div class="chip-label">${c.label}</div><div class="chip-sub">${c.sub || ''}</div></div>`
+    ).join('');
+
+    // ── 解锁标签 ──
+    const unlockData = parseUnlockFromSummary(rawSummary);
+    document.getElementById('unlockSection').innerHTML = unlockData.length
+        ? `<div class="section-title" style="margin-bottom:8px">媒体 &amp; AI 解锁</div><div class="unlock-row" style="margin-bottom:16px">${unlockData.map(u => `<span class="unlock-tag"><span class="ut-dot" style="background:${u.color}"></span>${u.name}<span class="ut-count">${u.count}</span></span>`).join('')}</div>` : '';
+
+    // ── 配置快览面板 ──
+    const cfgPanel = buildCfgStatusPanel(cfg, ci);
+
+    // ── 线路质量面板 ──
+    const cfRatio    = qm.cf_consistent_ratio || `${Math.round(cfConTotal / Math.max(1, total) * 100)}%`;
+    const vpsRatioStr = `${Math.round(vpsTotal / Math.max(1, total) * 100)}%`;
+    const cfBlock    = cfd['blocked_⁻¹'] || {};
+    const qualityPanel = `
+        <div class="stat-panel">
+            <div class="panel-title">线路质量</div>
+            <div class="quality-row">
+                <div class="quality-item"><div class="quality-val" style="color:var(--success)">${cfRatio}</div><div class="quality-label">CF 中转 ¹⁺</div></div>
+                <div class="quality-item"><div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div><div class="quality-label">独立 VPS ²</div></div>
+            </div>
+            <div class="cf-breakdown">
+                ${cfGroup('CF 一致 ¹⁺', cfCon, 'var(--success)')}
+                ${cfGroup('CF 不一致 ⁰', cfIncon, 'var(--warning)')}
+                ${Object.keys(cfBlock).length ? cfGroup('CF 异常 ⁻¹', cfBlock, 'var(--danger)') : ''}
+                ${cfGroup('独立 VPS ²', vps, 'var(--idle)')}
+            </div>
+        </div>`;
+
+    // ── 快速导航面板 ──
+    const navPanel = `
+        <div class="stat-panel">
+            <div class="panel-title">快速导航</div>
+            ${[
+                ['geo',    '地理分布', `${geoCount} 个地区`,  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`],
+                ['proto',  '协议分析', `${protoCount} 种协议`, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`],
+                ['subs',   '订阅排名', `${subCount} 个有效`,   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],
+                ['cfgana', '配置分析', '运行参数',             `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>`],
+            ].map(([tab, label, sub, icon]) =>
+                `<button class="nav-card" onclick="switchTab('${tab}')"><div class="nav-card-left">${icon}<span class="nav-card-label">${label}</span></div><div class="nav-card-right">${sub}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div></button>`
+            ).join('')}
+        </div>`;
+
+    document.getElementById('overviewExtra').innerHTML = `
+        <div class="section-title" style="margin-top:4px">概况</div>
+        <div class="overview-grid-3">
+            ${qualityPanel}
+            ${cfgPanel}
+            ${navPanel}
+        </div>`;
+}
+
 function buildHeroSentence(ci,ga){
     const total=ga.alive_count||0,geo=Object.keys(ga.geography_distribution||{}).length;
     const qm=ga.quality_metrics||{},cfRatio=qm.cf_consistent_ratio||'';
