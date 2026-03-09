@@ -13,6 +13,27 @@ import (
 	"github.com/sinspired/subs-check-pro/config"
 )
 
+func TestIsDirectProxyConfig(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{name: "direct", input: "direct", want: true},
+		{name: "mixed case", input: " Direct ", want: true},
+		{name: "proxy url", input: "http://127.0.0.1:7890", want: false},
+		{name: "empty", input: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isDirectProxyConfig(tt.input); got != tt.want {
+				t.Fatalf("isDirectProxyConfig(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindGhProxy(t *testing.T) {
 	if len(GhProxies) == 0 {
 		slog.Debug("未找到可用的 githubproxy，将不使用 githubproxy")

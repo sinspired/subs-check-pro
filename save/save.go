@@ -163,9 +163,7 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 		return nil
 	}
 	if category.Name == "all.yaml" {
-		yamlData, err := yaml.Marshal(map[string]any{
-			"proxies": category.Proxies,
-		})
+		yamlData, err := marshalProxiesYAML(category.Proxies)
 		if err != nil {
 			return fmt.Errorf("序列化yaml %s 失败: %w", category.Name, err)
 		}
@@ -178,7 +176,18 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 		}
 		return nil
 	}
-	if category.Name == "mihomo.yaml" && config.GlobalConfig.SubStorePort != "" {
+	if category.Name == "mihomo.yaml" {
+		if config.GlobalConfig.SubStorePort == "" {
+			yamlData, err := marshalProxiesYAML(category.Proxies)
+			if err != nil {
+				return fmt.Errorf("序列化yaml %s 失败: %w", category.Name, err)
+			}
+			if err := cs.saveMethod(yamlData, category.Name); err != nil {
+				return fmt.Errorf("保存 %s 失败: %w", category.Name, err)
+			}
+			return nil
+		}
+
 		resp, err := http.Get(fmt.Sprintf("%s/api/file/%s", utils.BaseURL, utils.MihomoName))
 		if err != nil {
 			return fmt.Errorf("获取mihomo file请求失败: %w", err)
@@ -217,6 +226,12 @@ func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 	}
 
 	return nil
+}
+
+func marshalProxiesYAML(proxies []map[string]any) ([]byte, error) {
+	return yaml.Marshal(map[string]any{
+		"proxies": proxies,
+	})
 }
 
 // chooseSaveMethod 根据配置选择保存方法
