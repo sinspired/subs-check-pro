@@ -613,7 +613,8 @@ function buildPanel(tabId) {
 
   // 存储方式联动
   if (tabId === 'storage') {
-    const sel = panel.querySelector('[data-key="save-method"]');
+    // 加 select 标签，避免匹配到外层 cfg-field div
+    const sel = panel.querySelector('select[data-key="save-method"]');
     if (sel) {
       const syncGroups = (method) => {
         panel.querySelectorAll('.cfg-cond-group[data-cond]').forEach(g => {
