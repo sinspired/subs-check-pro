@@ -229,6 +229,59 @@
 
     /* ── proto grid 4列 ── */
     @media (min-width: 1101px) { .proto-grid { grid-template-columns: repeat(4, 1fr); } }
+
+    /* ── 地理分布 ── */
+    .geo-region-bar { display: flex; height: 6px; border-radius: 99px; overflow: hidden; gap: 1px; margin-bottom: 14px; }
+    .geo-region-seg { height: 100%; border-radius: 1px; transition: flex .6s cubic-bezier(.4,0,.2,1); }
+    .geo-region-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .geo-region-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .geo-region-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+    .geo-region-item strong { color: var(--fg); }
+
+    .geo-top-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .geo-top-row { display: flex; align-items: center; gap: 8px; }
+    .geo-top-rank { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center;
+    justify-content: center; font-size: 9px; font-weight: 700; background: var(--border); color: var(--muted); flex-shrink: 0; }
+    .geo-top-row:nth-child(1) .geo-top-rank { background: color-mix(in srgb, gold 30%, transparent); color: #b8860b; }
+    .geo-top-row:nth-child(2) .geo-top-rank { background: color-mix(in srgb, silver 30%, transparent); color: #64748b; }
+    .geo-top-row:nth-child(3) .geo-top-rank { background: color-mix(in srgb, #cd7f32 25%, transparent); color: #cd7f32; }
+    .geo-top-key { font-size: 12px; font-weight: 700; width: 28px; flex-shrink: 0; }
+    .geo-top-bar-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .geo-top-bar { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .geo-top-val { font-size: 12px; font-weight: 700; width: 28px; text-align: right; flex-shrink: 0; }
+    .geo-top-pct { font-size: 10px; color: var(--muted); width: 34px; text-align: right; flex-shrink: 0; }
+
+    .geo-all-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    @media (max-width: 540px) { .geo-all-grid { grid-template-columns: 1fr; } }
+    .geo-all-col { padding: 10px 14px; }
+    .geo-all-col + .geo-all-col { border-left: 1px solid var(--border); }
+    @media (max-width: 540px) { .geo-all-col + .geo-all-col { border-left: none; border-top: 1px solid var(--border); } }
+    .geo-all-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .geo-all-key { font-size: 10px; font-weight: 600; width: 24px; flex-shrink: 0; color: var(--muted); }
+    .geo-all-bar-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .geo-all-bar { height: 100%; border-radius: 99px; }
+    .geo-all-val { font-size: 10px; color: var(--fg); font-weight: 600; width: 22px; text-align: right; flex-shrink: 0; }
+    .geo-all-pct { font-size: 9px; color: var(--muted); width: 28px; text-align: right; flex-shrink: 0; }
+
+    .geo-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); padding: 10px 14px 4px; opacity: .6; }
+
+    /* ── 协议分布 ── */
+    .proto-donut-wrap { display: flex; align-items: center; gap: 20px; padding: 14px 16px;
+    background: var(--glass-bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; }
+    .proto-donut-svg { flex-shrink: 0; }
+    .proto-donut-list { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .proto-donut-row { display: flex; align-items: center; gap: 7px; }
+    .proto-donut-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .proto-donut-name { font-size: 11px; font-weight: 700; flex-shrink: 0; width: 68px; }
+    .proto-donut-bar-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .proto-donut-bar { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .proto-donut-val { font-size: 11px; font-weight: 700; width: 28px; text-align: right; flex-shrink: 0; }
+    .proto-donut-pct { font-size: 10px; color: var(--muted); width: 30px; text-align: right; flex-shrink: 0; }
+    @media (max-width: 540px) {
+    .proto-donut-wrap { flex-direction: column; align-items: flex-start; }
+    .proto-donut-svg { display: none; }
+    }
     </style>
 </head>
 <body>
@@ -599,36 +652,262 @@ function cfGroup(title,obj,color){
     return`<div class="cf-group"><span class="cf-group-title" style="color:${color}">${title}</span><span class="cf-tags">${entries.map(([k,v])=>`<span class="cf-tag">${k}<em>${v}</em></span>`).join('')}</span></div>`;
 }
 
-function renderGeo(ga){
-    const geo=ga.geography_distribution||{},entries=Object.entries(geo).sort((a,b)=>b[1]-a[1]);
-    const maxVal=entries[0]?.[1]||1;
-    const geoTotal=entries.reduce((a,[,v])=>a+v,0)||1;
-    if(!entries.length){document.getElementById('geoBars').innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px">暂无地区数据</div>';return;}
-    const half=Math.ceil(entries.length/2);
-    const barRow=([k,v])=>{
-        const pct=Math.round(v/geoTotal*100);
-        return`<div class="geo-row"><span class="geo-key">${k}</span><div class="geo-bar-wrap"><div class="geo-bar" style="width:${Math.round(v/maxVal*100)}%"></div></div><span class="geo-val">${v}</span><span class="geo-pct">${pct}%</span></div>`;
-    };
-    const top3=entries.slice(0,3).map(([k,v])=>`<strong>${k}</strong> ${Math.round(v/geoTotal*100)}%`).join('&ensp;·&ensp;');
-    const summary=`<div class="geo-summary"><div class="geo-summary-item">共 <strong>${entries.length}</strong> 个地区</div><div class="geo-summary-item">节点数 <strong>${geoTotal}</strong></div><div class="geo-summary-item" style="flex:1;justify-content:flex-end;flex-wrap:wrap;gap:6px">前三：${top3}</div></div>`;
-    document.getElementById('geoBars').innerHTML=`<div class="geo-col">${entries.slice(0,half).map(barRow).join('')}</div><div class="geo-col">${entries.slice(half).map(barRow).join('')}</div>`;
-    // Append summary below geo-view
-    const geoView=document.querySelector('.geo-view');
-    if(geoView){const old=geoView.querySelector('.geo-summary');if(old)old.remove();geoView.insertAdjacentHTML('beforeend',summary);}
+// 地区 → 大区映射（可按需扩展）
+const GEO_REGIONS = {
+    // 亚洲
+    HK:'亚洲', TW:'亚洲', JP:'亚洲', KR:'亚洲', SG:'亚洲', IN:'亚洲',
+    TH:'亚洲', MY:'亚洲', ID:'亚洲', VN:'亚洲', PH:'亚洲', CN:'亚洲',
+    MO:'亚洲', MM:'亚洲', KH:'亚洲', BD:'亚洲', PK:'亚洲', LK:'亚洲',
+    // 欧洲
+    DE:'欧洲', FR:'欧洲', GB:'欧洲', NL:'欧洲', SE:'欧洲', CH:'欧洲',
+    FI:'欧洲', NO:'欧洲', DK:'欧洲', AT:'欧洲', BE:'欧洲', ES:'欧洲',
+    IT:'欧洲', PL:'欧洲', RU:'欧洲', UA:'欧洲', CZ:'欧洲', RO:'欧洲',
+    HU:'欧洲', PT:'欧洲', GR:'欧洲', BG:'欧洲', HR:'欧洲', SK:'欧洲',
+    // 北美
+    US:'北美', CA:'北美', MX:'北美',
+    // 南美
+    BR:'南美', AR:'南美', CL:'南美', CO:'南美', PE:'南美',
+    // 中东 & 非洲
+    TR:'中东', AE:'中东', IL:'中东', SA:'中东', QA:'中东', KW:'中东',
+    ZA:'非洲', NG:'非洲', EG:'非洲', KE:'非洲',
+    // 大洋洲
+    AU:'大洋洲', NZ:'大洋洲',
+};
+const REGION_COLORS = {
+    '亚洲': '#0ea5a0', '欧洲': '#7c3aed', '北美': '#2563eb',
+    '南美': '#059669', '中东': '#d97706', '非洲': '#dc2626',
+    '大洋洲': '#db2777', '其他': '#64748b',
+};
+// accent 渐变色列表（前 10 名用彩色，其余统一用 muted）
+const GEO_TOP_COLORS = [
+    '#0ea5a0','#7c3aed','#2563eb','#d97706','#db2777',
+    '#059669','#0891b2','#be185d','#dc2626','#64748b',
+];
+
+function renderGeo(ga) {
+    const geoEl = document.getElementById('geoBars');
+    // ★ 关键修复：清除原有 geo-split 网格，改为块级容器
+    geoEl.className = '';
+    geoEl.style.cssText = 'display:block';
+
+    const geo     = ga.geography_distribution || {};
+    const entries = Object.entries(geo).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) {
+        geoEl.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:13px">暂无地区数据</div>';
+        return;
+    }
+
+    const geoTotal = entries.reduce((a, [, v]) => a + v, 0) || 1;
+    const maxVal   = entries[0]?.[1] || 1;
+    const top10    = entries.slice(0, 10);
+    const rest     = entries.slice(10);
+
+    // ── 大区汇总 ──
+    const regionMap = {};
+    for (const [k, v] of entries) {
+        const r = GEO_REGIONS[k] || '其他';
+        regionMap[r] = (regionMap[r] || 0) + v;
+    }
+    const regionEntries = Object.entries(regionMap).sort((a, b) => b[1] - a[1]);
+
+    const regionBar = regionEntries.map(([r, v]) =>
+        `<div class="geo-region-seg" style="flex:${Math.max(1, v)};background:${REGION_COLORS[r] || '#64748b'}" title="${r}: ${v}"></div>`
+    ).join('');
+
+    const regionLegend = regionEntries.map(([r, v]) =>
+        `<div class="geo-region-item"><span class="geo-region-dot" style="background:${REGION_COLORS[r] || '#64748b'}"></span><strong>${r}</strong>&nbsp;${v}&nbsp;<span style="opacity:.6">${Math.round(v / geoTotal * 100)}%</span></div>`
+    ).join('');
+
+    // ── Top 10 ──
+    const topRows = top10.map(([k, v], i) => {
+        const pct   = Math.round(v / geoTotal * 100);
+        const color = GEO_TOP_COLORS[i] || '#64748b';
+        return `<div class="geo-top-row">
+            <span class="geo-top-rank">${i + 1}</span>
+            <span class="geo-top-key">${k}</span>
+            <div class="geo-top-bar-wrap">
+                <div class="geo-top-bar" style="width:${Math.round(v / maxVal * 100)}%;background:${color}"></div>
+            </div>
+            <span class="geo-top-val">${v}</span>
+            <span class="geo-top-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+
+    // ── 其余国家两列 ──
+    let restHTML = '';
+    if (rest.length) {
+        const half    = Math.ceil(rest.length / 2);
+        const restMax = rest[0]?.[1] || 1;
+        const restRow = ([k, v]) => {
+            const pct = Math.round(v / geoTotal * 100);
+            return `<div class="geo-all-row">
+                <span class="geo-all-key">${k}</span>
+                <div class="geo-all-bar-wrap">
+                    <div class="geo-all-bar" style="width:${Math.round(v / restMax * 100)}%;background:var(--border);filter:brightness(1.6)"></div>
+                </div>
+                <span class="geo-all-val">${v}</span>
+                <span class="geo-all-pct">${pct}%</span>
+            </div>`;
+        };
+        // ★ 左右两列都用同一个 geo-all-grid，且 section-title 在 grid 外部
+        restHTML = `
+            <div style="border-top:1px solid var(--border);margin-top:6px">
+                <div class="geo-section-title">其他地区（${rest.length} 个）</div>
+                <div class="geo-all-grid">
+                    <div class="geo-all-col">${rest.slice(0, half).map(restRow).join('')}</div>
+                    <div class="geo-all-col">${rest.slice(half).map(restRow).join('')}</div>
+                </div>
+            </div>`;
+    }
+
+    // ── 摘要行 ──
+    const top3 = entries.slice(0, 3).map(([k, v]) =>
+        `<strong>${k}</strong> ${Math.round(v / geoTotal * 100)}%`
+    ).join(' &ensp;·&ensp; ');
+
+    // ── 写入 DOM（全部包在一个块容器内）──
+    geoEl.innerHTML = `
+        <div style="padding:14px 16px 0">
+            <div class="section-title" style="margin-bottom:8px">大区分布</div>
+            <div class="geo-region-bar">${regionBar}</div>
+            <div class="geo-region-legend">${regionLegend}</div>
+            <div class="section-title" style="margin-bottom:8px">Top ${top10.length}</div>
+            <div class="geo-top-list">${topRows}</div>
+        </div>
+        ${restHTML}`;
+
+    // ── 摘要追加到 geo-view 底部 ──
+    const geoView = document.querySelector('.geo-view');
+    if (geoView) {
+        const old = geoView.querySelector('.geo-summary');
+        if (old) old.remove();
+        geoView.insertAdjacentHTML('beforeend', `
+            <div class="geo-summary">
+                <div class="geo-summary-item">共 <strong>${entries.length}</strong> 个地区</div>
+                <div class="geo-summary-item">节点数 <strong>${geoTotal}</strong></div>
+                <div class="geo-summary-item" style="flex:1;justify-content:flex-end;flex-wrap:wrap;gap:6px">前三：${top3}</div>
+            </div>`);
+    }
 }
 
 const PROTO_COLORS={vless:'#0ea5a0',vmess:'#d97706',trojan:'#7c3aed',ss:'#2563eb',ssr:'#1d4ed8',http:'#059669',socks5:'#64748b',hysteria:'#db2777',hy2:'#be185d',tuic:'#0891b2'};
 function getProtoColor(name){return PROTO_COLORS[name.toLowerCase().replace(/[^a-z0-9]/g,'')]||'#94a3b8';}
-function renderProto(ga){
-    const proto=ga.protocol_distribution||{},total=ga.alive_count||1;
-    const entries=Object.entries(proto).sort((a,b)=>b[1]-a[1]);
-    if(!entries.length){document.getElementById('protoContent').innerHTML='<p style="color:var(--muted);font-size:13px">暂无协议数据</p>';return;}
-    const bar=entries.map(([k,v])=>`<div class="proto-summary-seg" style="flex:${Math.max(2,Math.round(v/total*100))};background:${getProtoColor(k)}" title="${k}: ${v}"></div>`).join('');
-    const legend=entries.map(([k])=>`<div class="proto-legend-item"><span class="proto-legend-dot" style="background:${getProtoColor(k)}"></span>${k}</div>`).join('');
-    const cards=entries.map(([k,v])=>{const pct=Math.round(v/total*100),color=getProtoColor(k);return`<div class="proto-card proto-${k.toLowerCase().replace(/[^a-z0-9]/g,'')}" style="--proto-color:${color}"><div class="proto-card-header"><span class="proto-card-name" style="color:${color}">${k}</span><span class="proto-card-pct">${pct}%</span></div><div class="proto-card-count" style="color:${color}">${v}</div><div class="proto-card-bar-wrap"><div class="proto-card-bar" style="width:${pct}%"></div></div><div class="proto-card-pct" style="color:var(--muted)">共 ${total} 节点中占 ${v} 个</div></div>`;}).join('');
-    const topProto=entries[0];
-    const protoStatRow=`<div class="proto-stat-row"><div class="proto-stat-item"><div class="proto-stat-val">${total}</div><div class="proto-stat-label">节点总量</div></div><div class="proto-stat-item"><div class="proto-stat-val">${entries.length}</div><div class="proto-stat-label">协议种类</div></div>${topProto?`<div class="proto-stat-item"><div class="proto-stat-val" style="color:${getProtoColor(topProto[0])}">${topProto[0].toUpperCase()}</div><div class="proto-stat-label">主力协议 ${Math.round(topProto[1]/total*100)}%</div></div>`:''}</div>`;
-    document.getElementById('protoContent').innerHTML=`<div class="section-title">协议总览</div>${protoStatRow}<div class="proto-summary-bar">${bar}</div><div class="proto-legend">${legend}</div><div class="proto-grid">${cards}</div>`;
+
+function buildDonutSVG(entries, total, size) {
+    size = size || 110;
+    const r = size * 0.38, cx = size / 2, cy = size / 2;
+    const circumference = 2 * Math.PI * r;
+    let offset = 0;
+    // 留 1% gap
+    const GAP = circumference * 0.008;
+
+    const segments = entries.map(([k, v]) => {
+        const frac  = v / total;
+        const dash  = Math.max(0, circumference * frac - GAP);
+        const color = getProtoColor(k);
+        const seg   = `<circle cx="${cx}" cy="${cy}" r="${r}"
+            fill="none" stroke="${color}" stroke-width="${size * 0.13}"
+            stroke-dasharray="${dash} ${circumference - dash}"
+            stroke-dashoffset="${-offset}"
+            stroke-linecap="butt"
+            style="transition:stroke-dasharray .6s cubic-bezier(.4,0,.2,1)"/>`;
+        offset += circumference * frac;
+        return seg;
+    });
+
+    const inner = `<text x="${cx}" y="${cy - 4}" text-anchor="middle"
+        font-size="${size * 0.17}" font-weight="800" fill="var(--fg)">${total}</text>
+        <text x="${cx}" y="${cy + size * 0.13}" text-anchor="middle"
+        font-size="${size * 0.1}" fill="var(--muted)">节点</text>`;
+
+    return `<svg class="proto-donut-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${size * 0.13}"/>
+        ${segments.join('')}
+        <g style="transform:rotate(90deg);transform-origin:${cx}px ${cy}px">${inner}</g>
+    </svg>`;
+}
+
+function renderProto(ga) {
+    const proto   = ga.protocol_distribution || {};
+    const total   = ga.alive_count || 1;
+    const entries = Object.entries(proto).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) {
+        document.getElementById('protoContent').innerHTML =
+            '<p style="color:var(--muted);font-size:13px">暂无协议数据</p>';
+        return;
+    }
+
+    // ── 甜甜圈图 + 右侧条形列表 ──
+    const donutSVG = buildDonutSVG(entries, total, 110);
+
+    const donutList = entries.map(([k, v]) => {
+        const pct   = Math.round(v / total * 100);
+        const color = getProtoColor(k);
+        return `<div class="proto-donut-row">
+            <span class="proto-donut-dot" style="background:${color}"></span>
+            <span class="proto-donut-name" style="color:${color}">${k.toUpperCase()}</span>
+            <div class="proto-donut-bar-wrap">
+                <div class="proto-donut-bar" style="width:${pct}%;background:${color}"></div>
+            </div>
+            <span class="proto-donut-val">${v}</span>
+            <span class="proto-donut-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+
+    // ── 顶部概要数据行 ──
+    const topProto = entries[0];
+    const protoStatRow = `<div class="proto-stat-row">
+        <div class="proto-stat-item">
+            <div class="proto-stat-val">${total}</div>
+            <div class="proto-stat-label">节点总量</div>
+        </div>
+        <div class="proto-stat-item">
+            <div class="proto-stat-val">${entries.length}</div>
+            <div class="proto-stat-label">协议种类</div>
+        </div>
+        ${topProto ? `<div class="proto-stat-item">
+            <div class="proto-stat-val" style="color:${getProtoColor(topProto[0])}">${topProto[0].toUpperCase()}</div>
+            <div class="proto-stat-label">主力协议 ${Math.round(topProto[1] / total * 100)}%</div>
+        </div>` : ''}
+        ${entries.length > 1 ? `<div class="proto-stat-item">
+            <div class="proto-stat-val" style="color:${getProtoColor(entries[1][0])}">${entries[1][0].toUpperCase()}</div>
+            <div class="proto-stat-label">次要协议 ${Math.round(entries[1][1] / total * 100)}%</div>
+        </div>` : ''}
+    </div>`;
+
+    // ── 堆叠色条 ──
+    const stackBar = entries.map(([k, v]) =>
+        `<div class="proto-summary-seg" style="flex:${Math.max(2, Math.round(v / total * 100))};background:${getProtoColor(k)}" title="${k}: ${v} (${Math.round(v / total * 100)}%)"></div>`
+    ).join('');
+
+    // ── 协议卡片（保留原有卡片，宽屏4列）──
+    const cards = entries.map(([k, v]) => {
+        const pct   = Math.round(v / total * 100);
+        const color = getProtoColor(k);
+        const cls   = `proto-${k.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+        return `<div class="proto-card ${cls}" style="--proto-color:${color}">
+            <div class="proto-card-header">
+                <span class="proto-card-name" style="color:${color}">${k}</span>
+                <span class="proto-card-pct">${pct}%</span>
+            </div>
+            <div class="proto-card-count" style="color:${color}">${v}</div>
+            <div class="proto-card-bar-wrap">
+                <div class="proto-card-bar" style="width:${pct}%"></div>
+            </div>
+            <div class="proto-card-pct" style="color:var(--muted)">共 ${total} 中占 ${v} 个</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('protoContent').innerHTML = `
+        <div class="section-title">协议总览</div>
+        ${protoStatRow}
+        <div class="proto-donut-wrap">
+            ${donutSVG}
+            <div class="proto-donut-list">${donutList}</div>
+        </div>
+        <div class="proto-summary-bar" style="margin-bottom:14px">${stackBar}</div>
+        <div class="section-title">协议卡片</div>
+        <div class="proto-grid">${cards}</div>`;
 }
 
 function renderSubs(subs,subsBad){
