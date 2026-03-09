@@ -10,7 +10,9 @@
   scrollbar-width: none;
   flex-shrink: 0;
 }
-.cfg-tab-bar::-webkit-scrollbar { display: none; }
+.cfg-tab-bar::-webkit-scrollbar {
+  display: none;
+}
 
 .cfg-tab {
   display: inline-flex;
@@ -43,7 +45,9 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.cfg-tab.active svg { stroke-width: 2.5; }
+.cfg-tab.active svg {
+  stroke-width: 2.5;
+}
 
 /* ── 面板容器 ───────────────────────────────────────────── */
 .cfg-panels-wrap {
@@ -54,7 +58,9 @@
   padding-right: 2px;
   margin-top: 4px;
 }
-.cfg-panels-wrap::-webkit-scrollbar { width: 4px; }
+.cfg-panels-wrap::-webkit-scrollbar {
+  width: 4px;
+}
 
 .cfg-panel {
   display: none;
@@ -62,7 +68,9 @@
   padding: 0 0 16px;
   animation: fadeIn 0.15s ease;
 }
-.cfg-panel.active { display: flex; }
+.cfg-panel.active {
+  display: flex;
+}
 
 /* ── 加载占位 ───────────────────────────────────────────── */
 .cfg-loading {
@@ -81,7 +89,11 @@
   stroke: var(--accent);
   animation: cfg-spin 1s linear infinite;
 }
-@keyframes cfg-spin { to { transform: rotate(360deg); } }
+@keyframes cfg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ── 分组标题 ───────────────────────────────────────────── */
 .cfg-section {
@@ -95,7 +107,9 @@
   margin-bottom: 2px;
   flex-shrink: 0;
 }
-.cfg-section:first-child { padding-top: 6px; }
+.cfg-section:first-child {
+  padding-top: 6px;
+}
 
 /* ── 字段行 ─────────────────────────────────────────────── */
 .cfg-field {
@@ -108,8 +122,12 @@
   border-radius: 4px;
   transition: background 0.1s;
 }
-.cfg-field:last-child { border-bottom: none; }
-.cfg-field:hover { background: color-mix(in srgb, var(--fg) 2%, transparent); }
+.cfg-field:last-child {
+  border-bottom: none;
+}
+.cfg-field:hover {
+  background: color-mix(in srgb, var(--fg) 2%, transparent);
+}
 
 /* URL 列表和 Chips 独占一行 */
 .cfg-field.full-width {
@@ -156,30 +174,137 @@
   border-color: var(--accent-light);
   box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
 }
-.cfg-input::placeholder { color: var(--muted); opacity: 0.55; }
+.cfg-input::placeholder {
+  color: var(--muted);
+  opacity: 0.55;
+}
 
-/* ── 下拉选择框 ─────────────────────────────────────────── */
-.cfg-select {
+/* ── 自定义下拉选择器 ───────────────────────────────────── */
+.cfg-sel-wrap {
+  position: relative;
   width: 100%;
-  padding: 6px 28px 6px 10px;
+  min-width: 0;
+}
+
+/* 触发按钮：与 cfg-input 外观完全一致 */
+.cfg-sel-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--input-bg);
   color: var(--fg);
   font-size: 13px;
   font-family: inherit;
-  outline: none;
+  line-height: 1.5;
   cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23646971' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  min-width: 0;
+  outline: none;
+  gap: 6px;
   transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
 }
-.cfg-select:focus {
+.cfg-sel-trigger:hover:not(.open) {
+  border-color: color-mix(in srgb, var(--border) 50%, var(--fg));
+}
+.cfg-sel-trigger.open,
+.cfg-sel-trigger:focus {
   border-color: var(--accent-light);
   box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.cfg-sel-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-sel-arrow {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+.cfg-sel-trigger.open .cfg-sel-arrow {
+  transform: rotate(180deg);
+}
+
+/* 下拉面板 */
+.cfg-sel-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  animation: selDropIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes selDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 选项 */
+.cfg-sel-option {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfg-sel-option:first-child {
+  border-radius: 10px 10px 0 0;
+}
+.cfg-sel-option:last-child {
+  border-radius: 0 0 10px 10px;
+}
+.cfg-sel-option:only-child {
+  border-radius: 10px;
+}
+
+.cfg-sel-option:hover {
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+.cfg-sel-option.selected {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-weight: 600;
+}
+.cfg-sel-option.selected::after {
+  content: '✓';
+  float: right;
+  font-size: 11px;
+  margin-left: 8px;
+  opacity: 0.8;
+}
+
+/* 移动端防缩放：trigger 等同 input */
+@media (max-width: 899px) {
+  .cfg-sel-trigger {
+    font-size: 16px;
+  }
 }
 
 /* ── 数字步进器 ─────────────────────────────────────────── */
@@ -210,7 +335,9 @@
   -moz-appearance: textfield;
 }
 .cfg-number-wrap input[type='number']::-webkit-inner-spin-button,
-.cfg-number-wrap input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; }
+.cfg-number-wrap input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
 
 .cfg-step-btn {
   width: 28px;
@@ -272,8 +399,12 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.cfg-toggle input:checked + .cfg-toggle-slider { background: var(--accent); }
-.cfg-toggle input:checked + .cfg-toggle-slider::before { transform: translateX(16px); }
+.cfg-toggle input:checked + .cfg-toggle-slider {
+  background: var(--accent);
+}
+.cfg-toggle input:checked + .cfg-toggle-slider::before {
+  transform: translateX(16px);
+}
 .cfg-toggle input:focus-visible + .cfg-toggle-slider {
   outline: 2px solid var(--accent-light);
   outline-offset: 2px;
@@ -301,8 +432,13 @@
   user-select: none;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.cfg-chip input { display: none; }
-.cfg-chip:hover { border-color: var(--accent-light); color: var(--fg); }
+.cfg-chip input {
+  display: none;
+}
+.cfg-chip:hover {
+  border-color: var(--accent-light);
+  color: var(--fg);
+}
 .cfg-chip.active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
@@ -360,17 +496,34 @@
   transition: color 0.15s, border-color 0.15s;
   margin-top: 2px;
 }
-.cfg-url-add:hover { color: var(--accent); border-color: var(--accent-light); }
+.cfg-url-add:hover {
+  color: var(--accent);
+  border-color: var(--accent-light);
+}
 
 /* ── 存储条件分组 ────────────────────────────────────────── */
-.cfg-cond-group { display: flex; flex-direction: column; }
+.cfg-cond-group {
+  display: flex;
+  flex-direction: column;
+}
 
 /* ── 移动端适配 ─────────────────────────────────────────── */
 @media (max-width: 899px) {
-  .cfg-tab { padding: 5px 8px; font-size: 11.5px; }
-  .cfg-field { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .cfg-label-text { font-size: 12px; }
-  .cfg-input, .cfg-select { font-size: 16px; /* 防 iOS 缩放 */ }
+  .cfg-tab {
+    padding: 5px 8px;
+    font-size: 11.5px;
+  }
+  .cfg-field {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .cfg-label-text {
+    font-size: 12px;
+  }
+  .cfg-input,
+  .cfg-select {
+    font-size: 16px; /* 防 iOS 缩放 */
+  }
 }
 
 /* ── 视图切换按钮激活态 ──────────────────────────────────── */
@@ -381,8 +534,12 @@
 }
 
 /* YAML 模式时，Tab 导航和表单面板需要隐藏，编辑器撑满剩余空间 */
-.editor-mode-yaml .cfg-tab-bar { display: none; }
-.editor-mode-yaml #cfgPanels   { display: none; }
+.editor-mode-yaml .cfg-tab-bar {
+  display: none;
+}
+.editor-mode-yaml #cfgPanels {
+  display: none;
+}
 .editor-mode-yaml #editorWrapper {
   display: flex !important;
   flex: 1 1 auto;
@@ -390,5 +547,113 @@
 }
 
 /* 表单模式时，编辑器隐藏 */
-.editor-mode-form #editorWrapper { display: none !important; }
-.editor-mode-form #cfgPanels     { display: block; }
+.editor-mode-form #editorWrapper {
+  display: none !important;
+}
+.editor-mode-form #cfgPanels {
+  display: block;
+}
+
+/* btn-round 激活态（YAML 模式时切换按钮高亮） */
+.btn.btn-round.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.cfg-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 38px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.cfg-mode-seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--bg3) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.cfg-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+  white-space: nowrap;
+}
+.cfg-mode-btn svg {
+  width: 13px;
+  height: 13px;
+}
+.cfg-mode-btn:hover {
+  color: var(--fg);
+}
+.cfg-mode-btn.active {
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.cfg-srch-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+}
+.cfg-srch-btn .btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── 帮助链接徽章 ────────────────────────────────────────────────── */
+.cfg-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+.cfg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.cfg-link svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+.cfg-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.cfg-link.cfg-link-github:hover {
+  color: var(--fg);
+  border-color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}

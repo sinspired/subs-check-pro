@@ -238,14 +238,20 @@ const SCHEMA = [
             key: 'apprise-api-server', label: 'Apprise API 地址', type: 'text',
             hint: '内置服务或自建实例的 notify 接口',
             placeholder: 'https://apprise.example.com/notify',
-          },
-          {
-            key: 'notify-title', label: '通知标题', type: 'text',
-            placeholder: '🔔 Subs-Check-Pro 检测报告',
+            links: [
+              { label: '部署通知服务', href: 'https://github.com/sinspired/apprise_vercel', icon: 'github' },
+            ],
           },
           {
             key: 'recipient-url', label: '通知渠道', type: 'url-list',
             hint: '支持 tgram:// bark:// mailto:// ntfy:// 等 Apprise 协议',
+            links: [
+              { label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' },
+            ],
+          },
+          {
+            key: 'notify-title', label: '通知标题', type: 'text',
+            placeholder: '🔔 Subs-Check-Pro 检测报告',
           },
         ],
       },
@@ -392,10 +398,13 @@ const SCHEMA = [
             key: 'github-proxy', label: 'GitHub 代理', type: 'text',
             hint: '加速 GitHub Release 下载',
             placeholder: 'https://ghfast.top/',
+            links: [
+              { label: '自建 CF 代理', href: 'https://github.com/sinspired/CF-Proxy', icon: 'github' },
+            ],
           },
           {
             key: 'ghproxy-group', label: 'GitHub 代理列表', type: 'url-list',
-            hint: '自动筛选可用代理，按序尝试',
+            hint: '自动筛选可用代理',
           },
         ],
       },
@@ -514,14 +523,123 @@ function mkToggle(key, value) {
   return wrap;
 }
 
+/**
+ * 自定义下拉选择器（完全替代原生 <select>）
+ * 渲染为 div 容器，通过隐藏 <select> 同步值供 collectPanel 收集
+ */
 function mkSelect(field, value) {
-  const sel = el('select', { class: 'cfg-select', 'data-key': field.key });
+  const currentVal = value ?? field.options[0]?.value ?? '';
+  const currentLabel = field.options.find(o => o.value === currentVal)?.label ?? currentVal;
+
+  // 隐藏的原生 select，供 collectPanel 读取值
+  const native = el('select', {
+    class: 'cfg-select-native',
+    'data-key': field.key,
+    'aria-hidden': 'true',
+  });
+  native.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:0;height:0;';
   for (const opt of field.options) {
     const o = el('option', { value: opt.value, textContent: opt.label });
-    if (opt.value === (value ?? field.options[0]?.value)) o.selected = true;
-    sel.appendChild(o);
+    if (opt.value === currentVal) o.selected = true;
+    native.appendChild(o);
   }
-  return sel;
+
+  // 触发按钮
+  const trigger = el('button', {
+    type: 'button',
+    class: 'cfg-sel-trigger',
+    'aria-haspopup': 'listbox',
+    'aria-expanded': 'false',
+  });
+  trigger.innerHTML = `
+    <span class="cfg-sel-value">${currentLabel}</span>
+    <svg class="cfg-sel-arrow" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5"
+         stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>`;
+
+  // 下拉列表
+  const dropdown = el('div', { class: 'cfg-sel-dropdown', role: 'listbox' });
+  dropdown.style.display = 'none';
+
+  for (const opt of field.options) {
+    const item = el('div', {
+      class: `cfg-sel-option${opt.value === currentVal ? ' selected' : ''}`,
+      role: 'option',
+      'aria-selected': String(opt.value === currentVal),
+      'data-value': opt.value,
+      textContent: opt.label,
+    });
+    item.addEventListener('mousedown', (e) => {
+      // mousedown 先于 blur，阻止 trigger 失焦关闭
+      e.preventDefault();
+    });
+    item.addEventListener('click', () => {
+      // 更新显示值
+      trigger.querySelector('.cfg-sel-value').textContent = opt.label;
+      // 同步原生 select
+      native.value = opt.value;
+      native.dispatchEvent(new Event('change', { bubbles: true }));
+      // 更新选中态
+      dropdown.querySelectorAll('.cfg-sel-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.value === opt.value);
+        el.setAttribute('aria-selected', String(el.dataset.value === opt.value));
+      });
+      closeDropdown();
+    });
+    dropdown.appendChild(item);
+  }
+
+  // 包装容器
+  const wrap = el('div', { class: 'cfg-sel-wrap' });
+  wrap.append(native, trigger, dropdown);
+
+  // 打开 / 关闭
+  function openDropdown() {
+    dropdown.style.display = '';
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.classList.add('open');
+    // 滚动到选中项
+    const sel = dropdown.querySelector('.cfg-sel-option.selected');
+    sel?.scrollIntoView({ block: 'nearest' });
+  }
+  function closeDropdown() {
+    dropdown.style.display = 'none';
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.classList.remove('open');
+  }
+
+  trigger.addEventListener('click', () => {
+    dropdown.style.display === 'none' ? openDropdown() : closeDropdown();
+  });
+
+  // 点击外部关闭
+  trigger.addEventListener('blur', () => {
+    // 延迟，让 option 的 click 先触发
+    setTimeout(closeDropdown, 120);
+  });
+
+  // 键盘导航
+  trigger.addEventListener('keydown', (e) => {
+    const items = [...dropdown.querySelectorAll('.cfg-sel-option')];
+    const cur = items.findIndex(i => i.classList.contains('selected'));
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      dropdown.style.display === 'none' ? openDropdown() : closeDropdown();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (dropdown.style.display === 'none') openDropdown();
+      items[Math.min(cur + 1, items.length - 1)]?.click();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[Math.max(cur - 1, 0)]?.click();
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+
+  return wrap;
 }
 
 function mkChips(field, values) {
@@ -561,6 +679,33 @@ function mkUrlList(field, values) {
   return wrap;
 }
 
+// SVG 图标映射
+const LINK_ICONS = {
+  github: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>`,
+  docs: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  link: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+};
+
+/**
+ * 渲染帮助链接徽章组
+ * @param {Array<{label:string, href:string, icon?:string}>} links
+ */
+function mkLinks(links) {
+  const wrap = el('div', { class: 'cfg-links' });
+  for (const lk of links) {
+    const a = el('a', {
+      class: `cfg-link${lk.icon === 'github' ? ' cfg-link-github' : ''}`,
+      href: lk.href,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: lk.href,
+    });
+    a.innerHTML = (LINK_ICONS[lk.icon] ?? LINK_ICONS.link) + lk.label;
+    wrap.appendChild(a);
+  }
+  return wrap;
+}
+
 function mkField(fieldDef, value) {
   const wide = fieldDef.type === 'url-list' || fieldDef.type === 'chips';
   const row = el('div', { class: `cfg-field${wide ? ' full-width' : ''}`, 'data-key': fieldDef.key });
@@ -569,6 +714,11 @@ function mkField(fieldDef, value) {
   lbl.appendChild(el('span', { class: 'cfg-label-text', textContent: fieldDef.label }));
   if (fieldDef.hint) {
     lbl.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
+  }
+
+  // 渲染帮助链接
+  if (fieldDef.links?.length) {
+    lbl.appendChild(mkLinks(fieldDef.links));
   }
 
   let ctrl;
@@ -613,8 +763,8 @@ function buildPanel(tabId) {
 
   // 存储方式联动
   if (tabId === 'storage') {
-    // 加 select 标签，避免匹配到外层 cfg-field div
-    const sel = panel.querySelector('select[data-key="save-method"]');
+    // 监听隐藏的原生 select 的 change 事件
+    const sel = panel.querySelector('select.cfg-select-native[data-key="save-method"]');
     if (sel) {
       const syncGroups = (method) => {
         panel.querySelectorAll('.cfg-cond-group[data-cond]').forEach(g => {
@@ -658,7 +808,8 @@ function collectPanel(tabId) {
           break;
         }
         case 'select': {
-          const sel = panel.querySelector(`select[data-key="${key}"]`);
+          // 读取隐藏的原生 select（data-key 在 native 上）
+          const sel = panel.querySelector(`select.cfg-select-native[data-key="${key}"]`);
           if (sel) out[key] = sel.value;
           break;
         }
