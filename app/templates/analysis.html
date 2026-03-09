@@ -10,390 +10,201 @@
     <script src="/static/js/libs/yaml.bundle.js?v20260109"></script>
     <style>
     *, *::before, *::after { box-sizing: border-box; }
-
-    body {
-        margin: 0; padding: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        overflow-x: hidden;
-    }
-
-    /* login scene */
-    .login-scene {
-        flex: 1; display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 24px 16px; min-height: 100vh; gap: 16px;
-    }
-    .login-card {
-        width: 100%; max-width: 400px; border-radius: 16px;
-        padding: 42px 28px 12px; box-shadow: var(--glass-shadow);
-        animation: fadeUp 0.3s ease-out; overflow: hidden;
-    }
+    body { margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+    .login-scene { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; min-height: 100vh; gap: 16px; }
+    .login-card { width: 100%; max-width: 400px; border-radius: 16px; padding: 42px 28px 12px; box-shadow: var(--glass-shadow); animation: fadeUp 0.3s ease-out; overflow: hidden; }
     .login-card-body { padding-bottom: 24px; }
-    .login-card-footer {
-        border-top: 1px solid var(--border); padding: 10px 0;
-        width:100%; display: flex; justify-content: space-between; align-items: center;
-    }
+    .login-card-footer { border-top: 1px solid var(--border); padding: 10px 0; width:100%; display: flex; justify-content: space-between; align-items: center; }
     .brand-info { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--muted); }
     .brand-info img { width: 14px; height: 14px; }
     .footer-meta { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .login-bottom { margin-top:20px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-
-    /* report scene */
     .report-scene { display: none; flex-direction: column; height: 100vh; overflow: hidden; }
-
-    .topbar {
-        display: flex; align-items: center; justify-content: space-between;
-        height: 52px; padding: 0 16px 0 20px;
-        border-bottom: 1px solid var(--border); background: var(--glass-bg);
-        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        flex-shrink: 0; z-index: 100;
-    }
+    .topbar { display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 16px 0 20px; border-bottom: 1px solid var(--border); background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); flex-shrink: 0; z-index: 100; }
     .topbar-brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
     .topbar-brand img { width: 16px; height: 16px; }
     .topbar-meta { flex: 1; text-align: center; font-size: 10px; color: var(--muted); letter-spacing: 0.04em; padding: 0 12px; }
     .topbar-actions { display: flex; align-items: center; gap: 6px; }
-    .topbar-btn {
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
-        background: transparent; color: var(--muted);
-        font-size: 11px; font-weight: 600; font-family: inherit;
-        cursor: pointer; transition: color .15s, border-color .15s, background .15s; white-space: nowrap;
-    }
+    .topbar-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; font-family: inherit; cursor: pointer; transition: color .15s, border-color .15s, background .15s; white-space: nowrap; }
     .topbar-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
     .topbar-btn:hover { color: var(--fg); border-color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
     .topbar-btn.danger:hover { color: var(--danger); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
-
     .body-area { display: flex; flex: 1; overflow: hidden; }
-
-    /* sidebar */
-    .sidebar {
-        width: 180px; flex-shrink: 0;
-        border-right: 1px solid var(--border); background: var(--glass-bg);
-        display: flex; flex-direction: column; justify-content: flex-start;
-        gap: 2px; padding: 12px 8px; overflow-y: auto; scrollbar-width: none;
-    }
+    .sidebar { width: 180px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--glass-bg); display: flex; flex-direction: column; justify-content: flex-start; gap: 2px; padding: 12px 8px; overflow-y: auto; scrollbar-width: none; }
     .sidebar::-webkit-scrollbar { display: none; }
     .sidebar-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 4px 8px 8px; opacity: .6; }
-    .sidebar-btn {
-        display: flex; align-items: center; gap: 10px;
-        padding: 9px 10px; border-radius: 8px; border: none;
-        background: transparent; color: var(--muted);
-        font-size: 12px; font-weight: 600; font-family: inherit;
-        cursor: pointer; transition: color .15s, background .15s; text-align: left; width: 100%;
-    }
+    .sidebar-btn { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: color .15s, background .15s; text-align: left; width: 100%; }
     .sidebar-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
     .sidebar-btn .s-badge { margin-left: auto; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 99px; background: var(--border); color: var(--muted); flex-shrink: 0; }
     .sidebar-btn:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
     .sidebar-btn.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
     .sidebar-btn.active .s-badge { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
     .sidebar-divider { display: block; height: 0; border-top: 1px solid var(--border); margin: 4px; flex-shrink: 0; align-self: stretch; }
-
-    /* tab bar (small screen) */
-    .tab-bar {
-        display: none; align-items: center; justify-content: center;
-        gap: 2px; padding: 0 12px; height: 44px;
-        border-bottom: 1px solid var(--border); background: var(--glass-bg);
-        overflow-x: auto; scrollbar-width: none; flex-shrink: 0;
-    }
+    .tab-bar { display: none; align-items: center; justify-content: center; gap: 2px; padding: 0 12px; height: 44px; border-bottom: 1px solid var(--border); background: var(--glass-bg); overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
     .tab-bar::-webkit-scrollbar { display: none; }
-    .tab-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 6px 12px; border-radius: 8px; border: none;
-        background: transparent; color: var(--muted);
-        font-size: 12px; font-weight: 600; font-family: inherit;
-        cursor: pointer; white-space: nowrap;
-        transition: color .15s, background .15s; flex-shrink: 0;
-    }
+    .tab-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap; transition: color .15s, background .15s; flex-shrink: 0; }
     .tab-btn svg { width: 13px; height: 13px; }
     .tab-btn:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
     .tab-btn.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-
-    /* content area */
     .content-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
     .tab-content { display: none; flex: 1; overflow-y: auto; padding: 20px 24px; }
     .tab-content.active { display: block; }
-    .tab-inner { max-width: 1100px; margin: 0 auto; }
-
-    /* responsive */
+    .tab-inner { max-width: 1200px; margin: 0 auto; }
     @media (max-width: 720px) {
-        .sidebar      { display: none; }
-        .tab-bar      { display: flex; }
-        .topbar-meta  { display: none; }
-        .tab-btn span { display: none; }
-        .tab-content  { padding: 12px; }
-        .geo-split    { grid-template-columns: 1fr; }
-        .geo-col + .geo-col { border-left: none; border-top: 1px solid var(--border); }
-        .overview-grid      { grid-template-columns: 1fr !important; }
-        .summary-chips-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        .proto-grid   { grid-template-columns: 1fr !important; }
-        .cfg-analysis-grid  { grid-template-columns: 1fr !important; }
-        /* 复制按钮小屏：只留图标 */
-        .copy-btn .btn-text { display: none; }
-        .copy-btn { padding: 6px 8px; }
-        /* 极窄屏隐藏 checkbox 文字 */
-        .scope-text { display: none; }
+        .sidebar { display: none; } .tab-bar { display: flex; } .topbar-meta { display: none; }
+        .tab-btn span { display: none; } .tab-content { padding: 12px; }
+        .geo-split { grid-template-columns: 1fr; } .geo-col + .geo-col { border-left: none; border-top: 1px solid var(--border); }
+        .overview-grid { grid-template-columns: 1fr !important; } .summary-chips-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        .proto-grid { grid-template-columns: 1fr !important; }
+        .cfg-bottom-grid { grid-template-columns: 1fr !important; }
+        .copy-btn .btn-text { display: none; } .copy-btn { padding: 6px 8px; }
     }
     @media (min-width: 721px) and (max-width: 1100px) {
-        .overview-grid { grid-template-columns: 1fr 1fr; }
-        .summary-chips-grid { grid-template-columns: repeat(3, 1fr); }
+        .overview-grid { grid-template-columns: 1fr 1fr; } .summary-chips-grid { grid-template-columns: repeat(3, 1fr); }
+        .cfg-bottom-grid { grid-template-columns: 260px 1fr; }
     }
     @media (min-width: 1101px) {
-        .tab-content { padding: 24px 32px; }
-        .overview-grid { grid-template-columns: 1fr 1fr 1fr; }
-        .summary-chips-grid { grid-template-columns: repeat(4, 1fr); }
+        .tab-content { padding: 24px 32px; } .overview-grid { grid-template-columns: 1fr 1fr 1fr; }
+        .summary-chips-grid { grid-template-columns: repeat(4, 1fr); } .cfg-bottom-grid { grid-template-columns: 280px 1fr; }
     }
-
-    /* common */
-    .status-badge {
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 3px 10px; border-radius: 99px;
-        font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
-        margin-bottom: 20px; border: 1px solid var(--border); color: var(--idle);
-    }
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 20px; border: 1px solid var(--border); color: var(--idle); }
     h1 { font-size: 15px; font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; color: var(--muted); letter-spacing: .02em; text-transform: uppercase; }
     h1 svg { width: 16px; height: 16px; flex-shrink: 0; }
     .desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0 0 18px; }
-
     .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
     .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
     .section-title-toggle { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; -webkit-user-select: none; user-select: none; }
-    .toggle-line    { flex: 1; height: 1px; background: var(--border); }
+    .toggle-line { flex: 1; height: 1px; background: var(--border); }
     .toggle-chevron { width: 11px; height: 11px; flex-shrink: 0; transition: transform .2s; }
     .toggle-chevron.open { transform: rotate(180deg); }
-
-    .auth-area  { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .auth-area { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
     .auth-input { width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--input-bg); color: var(--fg); font-size: 14px; outline: none; transition: border-color .2s, box-shadow .2s; font-family: inherit; }
     .auth-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
     .auth-input.error { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 12%, transparent); }
     .auth-hint { font-size: 12px; color: var(--danger); min-height: 16px; margin: 0; }
     .btn-auth { width: 100%; padding: 11px 14px; border-radius: 10px; border: none; background: var(--accent); color: #fff; cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit; transition: opacity .18s, transform .12s; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; }
-    .btn-auth:hover   { opacity: .88; transform: translateY(-1px); }
-    .btn-auth:active  { opacity: .95; transform: translateY(0); }
-    .btn-auth:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-    .btn-auth svg     { width: 15px; height: 15px; flex-shrink: 0; }
+    .btn-auth:hover { opacity: .88; transform: translateY(-1px); } .btn-auth:active { opacity: .95; transform: translateY(0); }
+    .btn-auth:disabled { opacity: .6; cursor: not-allowed; transform: none; } .btn-auth svg { width: 15px; height: 15px; flex-shrink: 0; }
     .retry-area { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-    .retry-msg  { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6; }
-
-    /* === Tab 1: overview === */
-    .hero-summary {
-        padding: 14px 18px;
-        background: color-mix(in srgb, var(--accent) 6%, transparent);
-        border-radius: 10px;
-        border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-        border-left: 3px solid var(--accent);
-        margin-bottom: 16px;
-        display: flex; align-items: flex-start; gap: 10px;
-    }
+    .retry-msg { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6; }
+    .hero-summary { padding: 14px 18px; background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); border-left: 3px solid var(--accent); margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px; }
     .hero-summary svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; color: var(--accent); }
     .hero-summary-text { font-size: 13px; color: var(--fg); line-height: 1.7; flex: 1; }
-    .hero-summary-text .hl      { font-weight: 700; color: var(--accent); }
-    .hero-summary-text .hl-ok   { font-weight: 700; color: var(--success); }
-    .hero-summary-text .hl-warn { font-weight: 700; color: var(--warning); }
-
-    /* ── 摘要芯片：紧凑化 ── */
+    .hero-summary-text .hl { font-weight: 700; color: var(--accent); } .hero-summary-text .hl-ok { font-weight: 700; color: var(--success); } .hero-summary-text .hl-warn { font-weight: 700; color: var(--warning); }
     .summary-chips-grid { display: grid; gap: 8px; margin-bottom: 14px; }
-
-    .summary-chip {
-        padding: 10px 12px;            /* 原 14px 16px，缩减消除空旷感 */
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: var(--glass-bg);
-        display: flex; flex-direction: column; gap: 2px;
-        position: relative; overflow: hidden;
-        transition: border-color .15s, background .15s;
-    }
-    .summary-chip:hover {
-        border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-        background: color-mix(in srgb, var(--accent) 4%, transparent);
-    }
-    .chip-icon {
-        width: 22px; height: 22px;     /* 原 28px，缩小 */
-        border-radius: 6px;
-        display: flex; align-items: center; justify-content: center;
-        margin-bottom: 4px; flex-shrink: 0;
-    }
-    .chip-icon svg { width: 12px; height: 12px; }
-    .chip-value { font-size: 19px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
-    .chip-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-    .chip-sub   { font-size: 10px; color: var(--muted); opacity: .7; margin-top: 1px; }
-
+    .summary-chip { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); display: flex; flex-direction: column; gap: 2px; position: relative; overflow: hidden; transition: border-color .15s, background .15s; }
+    .summary-chip:hover { border-color: color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--accent) 4%, transparent); }
+    .chip-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; flex-shrink: 0; }
+    .chip-icon svg { width: 12px; height: 12px; } .chip-value { font-size: 19px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+    .chip-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); } .chip-sub { font-size: 10px; color: var(--muted); opacity: .7; margin-top: 1px; }
     .unlock-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
     .unlock-tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); background: var(--glass-bg); }
-    .unlock-tag .ut-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-    .unlock-tag .ut-count { color: var(--muted); font-size: 10px; }
-
-    .overview-grid { display: grid; gap: 12px; }
-    .stat-panel { padding: 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); }
+    .unlock-tag .ut-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; } .unlock-tag .ut-count { color: var(--muted); font-size: 10px; }
+    .overview-grid { display: grid; gap: 12px; } .stat-panel { padding: 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); }
     .panel-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 12px; }
     .quality-row { display: flex; gap: 10px; margin-bottom: 12px; }
     .quality-item { flex: 1; text-align: center; padding: 10px 4px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border); }
-    .quality-val   { font-size: 20px; font-weight: 700; }
-    .quality-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
-    .cf-breakdown { display: flex; flex-direction: column; gap: 5px; }
-    .cf-group { display: flex; align-items: flex-start; gap: 6px; }
-    .cf-group-title { flex-shrink: 0; width: 68px; font-weight: 600; padding-top: 2px; font-size: 10px; }
-    .cf-tags  { display: flex; flex-wrap: wrap; gap: 3px; }
-    .cf-tag   { display: inline-flex; align-items: center; gap: 2px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg); }
-    .cf-tag em { font-style: normal; color: var(--muted); }
+    .quality-val { font-size: 20px; font-weight: 700; } .quality-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .cf-breakdown { display: flex; flex-direction: column; gap: 5px; } .cf-group { display: flex; align-items: flex-start; gap: 6px; }
+    .cf-group-title { flex-shrink: 0; width: 68px; font-weight: 600; padding-top: 2px; font-size: 10px; } .cf-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+    .cf-tag { display: inline-flex; align-items: center; gap: 2px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--border); font-size: 10px; background: var(--glass-bg); } .cf-tag em { font-style: normal; color: var(--muted); }
     .nav-card { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg); cursor: pointer; font-family: inherit; color: var(--fg); transition: border-color .15s, background .15s; text-align: left; width: 100%; margin-bottom: 6px; }
-    .nav-card:last-child { margin-bottom: 0; }
-    .nav-card:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-    .nav-card-left { display: flex; align-items: center; gap: 8px; }
-    .nav-card-left svg { width: 13px; height: 13px; color: var(--muted); flex-shrink: 0; }
-    .nav-card-label { font-size: 13px; font-weight: 600; }
-    .nav-card-right { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
-    .nav-card-right svg { width: 11px; height: 11px; opacity: .5; }
-
-    /* === Tab 2: geo === */
+    .nav-card:last-child { margin-bottom: 0; } .nav-card:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+    .nav-card-left { display: flex; align-items: center; gap: 8px; } .nav-card-left svg { width: 13px; height: 13px; color: var(--muted); flex-shrink: 0; }
+    .nav-card-label { font-size: 13px; font-weight: 600; } .nav-card-right { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; } .nav-card-right svg { width: 11px; height: 11px; opacity: .5; }
     .geo-view { border-radius: 12px; border: 1px solid var(--border); background: var(--glass-bg); overflow: hidden; margin-bottom: 4px; }
     .map-slot { width: 100%; aspect-ratio: 16/7; min-height: 160px; max-height: 360px; display: none; align-items: center; justify-content: center; background: var(--input-bg); border-bottom: 1px dashed color-mix(in srgb, var(--border) 80%, transparent); }
-    .map-slot-hint { text-align: center; opacity: .35; }
-    .map-slot-hint svg { width: 28px; height: 28px; margin: 0 auto 6px; display: block; }
-    .map-slot-hint span { font-size: 11px; color: var(--muted); }
-    .geo-split { display: grid; grid-template-columns: 1fr 1fr; }
-    .geo-col   { padding: 14px 16px; }
-    .geo-col + .geo-col { border-left: 1px solid var(--border); }
-    .geo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-    .geo-key { font-size: 11px; font-weight: 600; width: 28px; flex-shrink: 0; color: var(--fg); }
-    .geo-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
-    .geo-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width .5s ease; }
-    .geo-val { font-size: 11px; color: var(--muted); width: 22px; text-align: right; flex-shrink: 0; }
-
-    /* === Tab 3: proto === */
+    .map-slot-hint { text-align: center; opacity: .35; } .map-slot-hint svg { width: 28px; height: 28px; margin: 0 auto 6px; display: block; } .map-slot-hint span { font-size: 11px; color: var(--muted); }
+    .geo-split { display: grid; grid-template-columns: 1fr 1fr; } .geo-col { padding: 14px 16px; } .geo-col + .geo-col { border-left: 1px solid var(--border); }
+    .geo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; } .geo-key { font-size: 11px; font-weight: 600; width: 28px; flex-shrink: 0; color: var(--fg); }
+    .geo-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; } .geo-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width .5s ease; }
+    .geo-val { font-size: 11px; color: var(--fg); font-weight: 600; width: 22px; text-align: right; flex-shrink: 0; }
+    .geo-pct { font-size: 10px; color: var(--muted); width: 34px; text-align: right; flex-shrink: 0; }
+    .geo-summary { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .geo-summary-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+    .geo-summary-item strong { color: var(--fg); font-weight: 700; }
+    .sub-tier { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
+    .sub-tier.tier-s { background: color-mix(in srgb, #10b981 14%, transparent); color: #10b981; }
+    .sub-tier.tier-a { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+    .sub-tier.tier-b { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+    .sub-tier.tier-c { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+    .proto-stat-row { display: flex; gap: 20px; padding: 10px 16px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
+    .proto-stat-item { display: flex; flex-direction: column; gap: 2px; }
+    .proto-stat-val { font-size: 18px; font-weight: 800; letter-spacing: -.02em; color: var(--fg); line-height: 1; }
+    .proto-stat-label { font-size: 10px; color: var(--muted); }
     .proto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
     .proto-card { padding: 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); display: flex; flex-direction: column; gap: 8px; transition: border-color .15s, transform .15s; }
     .proto-card:hover { border-color: var(--proto-color, var(--accent)); transform: translateY(-1px); }
-    .proto-card-header { display: flex; align-items: center; justify-content: space-between; }
-    .proto-card-name  { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-    .proto-card-count { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
-    .proto-card-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
-    .proto-card-bar  { height: 100%; border-radius: 99px; background: var(--proto-color, var(--accent)); transition: width .6s cubic-bezier(.4,0,.2,1); }
-    .proto-card-pct  { font-size: 10px; color: var(--muted); font-weight: 600; }
-    .proto-vless    { --proto-color: #0ea5a0; } .proto-vmess  { --proto-color: #d97706; }
-    .proto-trojan   { --proto-color: #7c3aed; } .proto-ss     { --proto-color: #2563eb; }
-    .proto-ssr      { --proto-color: #1d4ed8; } .proto-http   { --proto-color: #059669; }
-    .proto-socks5   { --proto-color: #64748b; } .proto-hysteria { --proto-color: #db2777; }
-    .proto-hy2      { --proto-color: #be185d; } .proto-tuic   { --proto-color: #0891b2; }
-    .proto-summary-bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; gap: 1px; margin-bottom: 16px; }
-    .proto-summary-seg { height: 100%; border-radius: 1px; }
-    .proto-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-    .proto-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
-    .proto-legend-dot  { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-
-    /* === Tab 4: subs + copy toolbar === */
-    /*
-     * copy-toolbar：永不换行（flex-wrap:nowrap）
-     * 按钮文字放在 span.btn-text 里，720px 以下 CSS 隐藏，仅剩图标
-     */
-    .copy-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 9px 12px;
-        margin-bottom: 14px;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: var(--glass-bg);
-        flex-wrap: nowrap;    /* 永不换行 */
-        overflow: hidden;
-    }
-    .copy-toolbar-label {
-        font-size: 11px; font-weight: 600; color: var(--muted);
-        flex-shrink: 0; white-space: nowrap;
-    }
+    .proto-card-header { display: flex; align-items: center; justify-content: space-between; } .proto-card-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .proto-card-count { font-size: 22px; font-weight: 800; letter-spacing: -.02em; } .proto-card-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .proto-card-bar { height: 100%; border-radius: 99px; background: var(--proto-color, var(--accent)); transition: width .6s cubic-bezier(.4,0,.2,1); } .proto-card-pct { font-size: 10px; color: var(--muted); font-weight: 600; }
+    .proto-vless{--proto-color:#0ea5a0}.proto-vmess{--proto-color:#d97706}.proto-trojan{--proto-color:#7c3aed}.proto-ss{--proto-color:#2563eb}.proto-ssr{--proto-color:#1d4ed8}.proto-http{--proto-color:#059669}.proto-socks5{--proto-color:#64748b}.proto-hysteria{--proto-color:#db2777}.proto-hy2{--proto-color:#be185d}.proto-tuic{--proto-color:#0891b2}
+    .proto-summary-bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; gap: 1px; margin-bottom: 16px; } .proto-summary-seg { height: 100%; border-radius: 1px; }
+    .proto-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; } .proto-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); } .proto-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .copy-toolbar { display: flex; align-items: center; gap: 6px; padding: 9px 12px; margin-bottom: 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); flex-wrap: nowrap; overflow: hidden; }
+    .copy-toolbar-label { font-size: 11px; font-weight: 600; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
     @media (max-width: 480px) { .copy-toolbar-label { display: none; } }
-
-    .copy-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 5px 10px;
-        border-radius: 7px;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--fg);
-        font-size: 11px; font-weight: 600; font-family: inherit;
-        cursor: pointer;
-        transition: color .15s, border-color .15s, background .15s;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-    .copy-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
-    .copy-btn:hover  { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-    .copy-btn.copied { color: var(--success); border-color: var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
-
-    .copy-scope { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
-    .copy-scope label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-
+    .copy-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--fg); font-size: 11px; font-weight: 600; font-family: inherit; cursor: pointer; transition: color .15s, border-color .15s, background .15s; white-space: nowrap; flex-shrink: 0; }
+    .copy-btn svg { width: 11px; height: 11px; flex-shrink: 0; } .copy-btn:hover { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); } .copy-btn.copied { color: var(--success); border-color: var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
+    .copy-scope { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); flex-shrink: 0; white-space: nowrap; } .copy-scope label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
     .sub-list { display: flex; flex-direction: column; gap: 8px; }
-    .sub-item { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); transition: background .15s; }
-    .sub-item:hover { background: var(--input-bg); }
+    .sub-item { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); transition: background .15s; } .sub-item:hover { background: var(--input-bg); }
     .sub-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
     .sub-rank { flex-shrink: 0; width: 18px; height: 18px; border-radius: 4px; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--muted); }
-    .sub-item:nth-child(1) .sub-rank { background: color-mix(in srgb, gold   30%, transparent); color: #b8860b; }
-    .sub-item:nth-child(2) .sub-rank { background: color-mix(in srgb, silver 30%, transparent); color: #64748b; }
-    .sub-item:nth-child(3) .sub-rank { background: color-mix(in srgb, #cd7f32 25%, transparent); color: #cd7f32; }
-    .sub-url { flex: 1; font-size: 11px; font-family: var(--font-mono,monospace); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .sub-rate  { font-size: 13px; font-weight: 700; flex-shrink: 0; }
-    .sub-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
-    .sub-bar  { height: 100%; border-radius: 99px; transition: width .5s ease; }
-    .sub-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--muted); }
-    .tag-pill { padding: 1px 6px; border-radius: 4px; background: var(--input-bg); border: 1px solid var(--border); font-size: 10px; white-space: nowrap; }
+    .sub-item:nth-child(1) .sub-rank { background: color-mix(in srgb, gold 30%, transparent); color: #b8860b; } .sub-item:nth-child(2) .sub-rank { background: color-mix(in srgb, silver 30%, transparent); color: #64748b; } .sub-item:nth-child(3) .sub-rank { background: color-mix(in srgb, #cd7f32 25%, transparent); color: #cd7f32; }
+    .sub-url { flex: 1; font-size: 11px; font-family: var(--font-mono,monospace); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; } .sub-rate { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .sub-bar-wrap { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; } .sub-bar { height: 100%; border-radius: 99px; transition: width .5s ease; }
+    .sub-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--muted); } .tag-pill { padding: 1px 6px; border-radius: 4px; background: var(--input-bg); border: 1px solid var(--border); font-size: 10px; white-space: nowrap; }
     .bad-list { border-radius: 10px; border: 1px solid var(--border); overflow: hidden; background: var(--glass-bg); }
-    .bad-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); gap: 8px; }
-    .bad-item:last-child { border-bottom: none; }
-    .bad-url { font-size: 11px; font-family: var(--font-mono,monospace); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-    .bad-count { font-size: 11px; color: var(--muted); flex-shrink: 0; }
-
-    /* === Tab 5: config analysis === */
-    .cfg-analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .bad-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); gap: 8px; } .bad-item:last-child { border-bottom: none; }
+    .bad-url { font-size: 11px; font-family: var(--font-mono,monospace); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; } .bad-count { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+    /* cfg-analysis-grid: 2-col on medium+, 关键配置项 spans more via wider right col */
+    .cfg-analysis-grid { display: grid; gap: 12px; margin-bottom: 16px; grid-template-columns: 1fr; }
+    @media (min-width: 721px)  { .cfg-analysis-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1101px) { .cfg-analysis-grid { grid-template-columns: 1fr 1.45fr 1fr 1fr; } }
     .cfg-card { padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); }
-    .cfg-card-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-    .cfg-card-title svg { width: 12px; height: 12px; flex-shrink: 0; }
-    .cfg-kv { display: flex; align-items: baseline; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); gap: 8px; }
-    .cfg-kv:last-child { border-bottom: none; }
-    .cfg-k { font-size: 12px; color: var(--muted); flex-shrink: 0; }
-    .cfg-v { font-size: 12px; font-weight: 600; color: var(--fg); text-align: right; word-break: break-all; }
-    .cfg-v.ok   { color: var(--success); }
-    .cfg-v.warn { color: var(--warning); }
-    .cfg-v.bad  { color: var(--danger); }
+    .cfg-card-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; } .cfg-card-title svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .cfg-kv { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); gap: 8px; } .cfg-kv:last-child { border-bottom: none; }
+    .cfg-k { font-size: 12px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
+    .cfg-v { font-size: 12px; font-weight: 600; color: var(--fg); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; max-width: 55%; }
+    .cfg-v.ok { color: var(--success); } .cfg-v.warn { color: var(--warning); } .cfg-v.bad { color: var(--danger); }
+    /* cfg-bottom-grid — deploy cards left, suggestions right */
+    .cfg-bottom-grid { display: grid; gap: 16px; align-items: start; margin-top: 8px; }
+    .deploy-cards-col { display: flex; flex-direction: column; gap: 10px; }
+    .deploy-card { padding: 14px 15px; border-radius: 10px; border: 1px solid var(--border); background: var(--glass-bg); }
+    .deploy-card-title { font-size: 11px; font-weight: 700; color: var(--fg); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .deploy-card-title svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--warning); }
+    .deploy-card-desc { font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
+    .deploy-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .deploy-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--fg); text-decoration: none; background: var(--input-bg); transition: border-color .15s, color .15s, background .15s; }
+    .deploy-badge svg { width: 11px; height: 11px; flex-shrink: 0; }
+    .deploy-badge:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .deploy-badge.primary { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .deploy-badge.primary:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
     .suggest-list { display: flex; flex-direction: column; gap: 6px; }
     .suggest-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; border: 1px solid transparent; }
     .suggest-item svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px; }
-    .suggest-item.info { background: color-mix(in srgb, var(--accent)  8%, transparent); border-color: color-mix(in srgb, var(--accent)  20%, transparent); }
+    .suggest-item.info { background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: color-mix(in srgb, var(--accent) 20%, transparent); }
     .suggest-item.warn { background: color-mix(in srgb, var(--warning) 8%, transparent); border-color: color-mix(in srgb, var(--warning) 20%, transparent); }
     .suggest-item.good { background: color-mix(in srgb, var(--success) 8%, transparent); border-color: color-mix(in srgb, var(--success) 20%, transparent); }
-    .suggest-item.info svg { color: var(--accent);  }
-    .suggest-item.warn svg { color: var(--warning); }
-    .suggest-item.good svg { color: var(--success); }
-
-    /* loading / footer */
+    .suggest-item.info svg { color: var(--accent); } .suggest-item.warn svg { color: var(--warning); } .suggest-item.good svg { color: var(--success); }
     .loading-dots::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
     @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
     .page-footer { padding: 10px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 16px; background: var(--glass-bg); flex-shrink: 0; }
-    .footer-icons { display: flex; align-items: center; gap: 12px; }
-    .footer-icon  { width: 15px; height: 15px; opacity: .6; transition: opacity .15s; display: block; filter: invert(var(--invert)); }
-    .footer-icons a:hover .footer-icon { opacity: .75; }
-    .footer-copy  { font-size: 11px; color: var(--muted); }
-    .footer-copy a { color: var(--muted); text-decoration: none; }
-    .footer-copy a:hover { color: var(--accent); }
+    .footer-icons { display: flex; align-items: center; gap: 12px; } .footer-icon { width: 15px; height: 15px; opacity: .6; transition: opacity .15s; display: block; filter: invert(var(--invert)); } .footer-icons a:hover .footer-icon { opacity: .75; }
+    .footer-copy { font-size: 11px; color: var(--muted); } .footer-copy a { color: var(--muted); text-decoration: none; } .footer-copy a:hover { color: var(--accent); }
     code { font-family: var(--font-mono,monospace); background: var(--placehoder-bg,rgba(0,0,0,.06)); color: var(--danger); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
     @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
     </style>
 </head>
 <body>
 
-<!-- login/placeholder scene -->
+<!-- login scene -->
 <div class="login-scene" id="loginScene">
     <div class="login-card">
         <div class="login-card-body">
             <div class="status-badge" id="placeholderBadge">Analysis Report</div>
-            <h1>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
-                检测结果分析
-            </h1>
+            <h1><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>检测结果分析</h1>
             <p class="desc" id="placeholderMsg" style="display:none">正在获取报告<span class="loading-dots"></span></p>
             <div id="inlineLoginArea" style="display:none">
                 <p class="desc">请输入 API 密钥以查看检测分析报告。</p>
@@ -401,17 +212,13 @@
                     <input class="auth-input" type="password" id="inlineApiKey" placeholder="输入 API 密钥..." autocomplete="current-password" onkeydown="if(event.keyCode===13)inlineLogin()">
                     <p class="auth-hint" id="loginHint"></p>
                     <button class="btn-auth" id="inlineLoginBtn" onclick="inlineLogin()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                        验证并查看
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>验证并查看
                     </button>
                 </div>
             </div>
             <div class="retry-area" id="retryArea" style="display:none">
                 <p class="retry-msg" id="retryMsg"></p>
-                <button class="btn-auth" onclick="initPage()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.33"/></svg>
-                    重试
-                </button>
+                <button class="btn-auth" onclick="initPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.33"/></svg>重试</button>
             </div>
         </div>
         <div class="login-card-footer">
@@ -441,105 +248,35 @@
                 <span id="themeLabel">浅色</span>
             </button>
             <button class="topbar-btn danger" onclick="doLogout()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                退出
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>退出
             </button>
         </div>
     </div>
-
     <div class="body-area">
         <nav class="sidebar" id="sidebar">
             <div class="sidebar-label">导航</div>
-            <button class="sidebar-btn active" data-tab="overview" onclick="switchTab('overview')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                概览
-            </button>
-            <button class="sidebar-btn" data-tab="geo" onclick="switchTab('geo')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                地理分布 <span class="s-badge" id="sb-geo">0</span>
-            </button>
-            <button class="sidebar-btn" data-tab="proto" onclick="switchTab('proto')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                协议分析 <span class="s-badge" id="sb-proto">0</span>
-            </button>
+            <button class="sidebar-btn active" data-tab="overview" onclick="switchTab('overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>概览</button>
+            <button class="sidebar-btn" data-tab="geo" onclick="switchTab('geo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>地理分布 <span class="s-badge" id="sb-geo">0</span></button>
+            <button class="sidebar-btn" data-tab="proto" onclick="switchTab('proto')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>协议分析 <span class="s-badge" id="sb-proto">0</span></button>
             <div class="sidebar-divider"></div>
-            <button class="sidebar-btn" data-tab="subs" onclick="switchTab('subs')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                订阅排名 <span class="s-badge" id="sb-subs">0</span>
-            </button>
-            <button class="sidebar-btn" data-tab="cfgana" onclick="switchTab('cfgana')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
-                配置分析
-            </button>
+            <button class="sidebar-btn" data-tab="subs" onclick="switchTab('subs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>订阅排名 <span class="s-badge" id="sb-subs">0</span></button>
+            <button class="sidebar-btn" data-tab="cfgana" onclick="switchTab('cfgana')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>配置分析</button>
         </nav>
-
         <div class="content-area">
-            <!-- tab bar (small screen) -->
             <div class="tab-bar" id="tabBar" role="tablist">
-                <button class="tab-btn active" role="tab" data-tab="overview" onclick="switchTab('overview')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                    <span>概览</span>
-                </button>
-                <button class="tab-btn" role="tab" data-tab="geo" onclick="switchTab('geo')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                    <span>地理</span>
-                </button>
-                <button class="tab-btn" role="tab" data-tab="proto" onclick="switchTab('proto')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                    <span>协议</span>
-                </button>
-                <button class="tab-btn" role="tab" data-tab="subs" onclick="switchTab('subs')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    <span>订阅</span>
-                </button>
-                <button class="tab-btn" role="tab" data-tab="cfgana" onclick="switchTab('cfgana')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-                    <span>配置</span>
-                </button>
+                <button class="tab-btn active" role="tab" data-tab="overview" onclick="switchTab('overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>概览</span></button>
+                <button class="tab-btn" role="tab" data-tab="geo" onclick="switchTab('geo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>地理</span></button>
+                <button class="tab-btn" role="tab" data-tab="proto" onclick="switchTab('proto')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>协议</span></button>
+                <button class="tab-btn" role="tab" data-tab="subs" onclick="switchTab('subs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>订阅</span></button>
+                <button class="tab-btn" role="tab" data-tab="cfgana" onclick="switchTab('cfgana')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg><span>配置</span></button>
             </div>
-
-            <div class="tab-content active" id="tab-overview" role="tabpanel">
-                <div class="tab-inner">
-                    <div id="heroSummary"></div>
-                    <div class="summary-chips-grid" id="summaryChips"></div>
-                    <div id="unlockSection"></div>
-                    <div id="overviewExtra"></div>
-                </div>
-            </div>
-
-            <div class="tab-content" id="tab-geo" role="tabpanel">
-                <div class="tab-inner">
-                    <div class="geo-view">
-                        <div class="map-slot" id="mapSlot">
-                            <div class="map-slot-hint">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                <span>地图视图（开发中）</span>
-                            </div>
-                        </div>
-                        <div id="geoBars" class="geo-split"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-content" id="tab-proto" role="tabpanel">
-                <div class="tab-inner" id="protoContent"></div>
-            </div>
-
-            <div class="tab-content" id="tab-subs" role="tabpanel">
-                <div class="tab-inner">
-                    <div id="copyToolbar"></div>
-                    <div id="rankingContent"></div>
-                    <div id="badContent" style="margin-top:16px"></div>
-                </div>
-            </div>
-
-            <!-- Tab 5: config analysis -->
-            <div class="tab-content" id="tab-cfgana" role="tabpanel">
-                <div class="tab-inner" id="cfganaContent"></div>
-            </div>
+            <div class="tab-content active" id="tab-overview" role="tabpanel"><div class="tab-inner"><div id="heroSummary"></div><div class="summary-chips-grid" id="summaryChips"></div><div id="unlockSection"></div><div id="overviewExtra"></div></div></div>
+            <div class="tab-content" id="tab-geo" role="tabpanel"><div class="tab-inner"><div class="geo-view"><div class="map-slot" id="mapSlot"><div class="map-slot-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>地图视图（开发中）</span></div></div><div id="geoBars" class="geo-split"></div></div></div></div>
+            <div class="tab-content" id="tab-proto" role="tabpanel"><div class="tab-inner" id="protoContent"></div></div>
+            <div class="tab-content" id="tab-subs" role="tabpanel"><div class="tab-inner"><div id="copyToolbar"></div><div id="rankingContent"></div><div id="badContent" style="margin-top:16px"></div></div></div>
+            <div class="tab-content" id="tab-cfgana" role="tabpanel"><div class="tab-inner" id="cfganaContent"></div></div>
         </div>
     </div>
-
     <footer class="page-footer">
         <div class="footer-icons">
             <a href="https://github.com/sinspired/subs-check-pro" title="GitHub"><img src="/static/icon/github.svg" alt="GitHub" class="footer-icon"/></a>
@@ -561,9 +298,7 @@ function applyTheme(theme){
     document.documentElement.setAttribute('data-theme',theme);
     localStorage.setItem('theme',theme);
     const isDark=theme==='dark';
-    const moon=document.getElementById('iconMoon');
-    const sun=document.getElementById('iconSun');
-    const label=document.getElementById('themeLabel');
+    const moon=document.getElementById('iconMoon'),sun=document.getElementById('iconSun'),label=document.getElementById('themeLabel');
     if(moon)moon.style.display=isDark?'block':'none';
     if(sun)sun.style.display=isDark?'none':'block';
     if(label)label.textContent=isDark?'深色':'浅色';
@@ -571,8 +306,7 @@ function applyTheme(theme){
     if(btn)btn.setAttribute('aria-pressed',String(isDark));
 }
 document.getElementById('themeToggle')?.addEventListener('click',()=>{
-    const cur=document.documentElement.getAttribute('data-theme');
-    applyTheme(cur==='dark'?'light':'dark');
+    applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
 });
 
 const STORAGE_KEY='subscheck_api_key';
@@ -592,35 +326,17 @@ async function sfetch(url,opts={}){
     }catch(e){return{ok:false,error:e.message};}
 }
 
-function showScene(name){
-    document.getElementById('loginScene').style.display=name==='login'?'flex':'none';
-    document.getElementById('reportScene').style.display=name==='report'?'flex':'none';
-}
-function showLoading(){
-    showScene('login');_setBadge('Analysis Report');
-    document.getElementById('placeholderMsg').style.display='';
-    document.getElementById('inlineLoginArea').style.display='none';
-    document.getElementById('retryArea').style.display='none';
-}
+function showScene(n){document.getElementById('loginScene').style.display=n==='login'?'flex':'none';document.getElementById('reportScene').style.display=n==='report'?'flex':'none';}
+function showLoading(){showScene('login');_setBadge('Analysis Report');document.getElementById('placeholderMsg').style.display='';document.getElementById('inlineLoginArea').style.display='none';document.getElementById('retryArea').style.display='none';}
 function showLoginArea(hint=''){
     showScene('login');_setBadge('Auth Required');
-    document.getElementById('placeholderMsg').style.display='none';
-    document.getElementById('inlineLoginArea').style.display='';
-    document.getElementById('retryArea').style.display='none';
-    const input=document.getElementById('inlineApiKey');
-    const hintEl=document.getElementById('loginHint');
-    if(hint){input.classList.add('error');hintEl.textContent=hint;}
-    else{input.classList.remove('error');hintEl.textContent='';input.placeholder='输入 API 密钥...';}
+    document.getElementById('placeholderMsg').style.display='none';document.getElementById('inlineLoginArea').style.display='';document.getElementById('retryArea').style.display='none';
+    const input=document.getElementById('inlineApiKey'),hintEl=document.getElementById('loginHint');
+    if(hint){input.classList.add('error');hintEl.textContent=hint;}else{input.classList.remove('error');hintEl.textContent='';input.placeholder='输入 API 密钥...';}
     setTimeout(()=>input.focus(),50);
 }
-function showRetryArea(msg,badge='Error'){
-    showScene('login');_setBadge(badge);
-    document.getElementById('placeholderMsg').style.display='none';
-    document.getElementById('inlineLoginArea').style.display='none';
-    document.getElementById('retryArea').style.display='';
-    document.getElementById('retryMsg').textContent=msg;
-}
-function _setBadge(text){document.getElementById('placeholderBadge').textContent=text;}
+function showRetryArea(msg,badge='Error'){showScene('login');_setBadge(badge);document.getElementById('placeholderMsg').style.display='none';document.getElementById('inlineLoginArea').style.display='none';document.getElementById('retryArea').style.display='';document.getElementById('retryMsg').textContent=msg;}
+function _setBadge(t){document.getElementById('placeholderBadge').textContent=t;}
 
 function switchTab(name){
     document.querySelectorAll('.sidebar-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
@@ -629,9 +345,7 @@ function switchTab(name){
 }
 
 async function inlineLogin(){
-    const input=document.getElementById('inlineApiKey');
-    const btn=document.getElementById('inlineLoginBtn');
-    const hintEl=document.getElementById('loginHint');
+    const input=document.getElementById('inlineApiKey'),btn=document.getElementById('inlineLoginBtn'),hintEl=document.getElementById('loginHint');
     const k=input?.value?.trim();
     input.classList.remove('error');hintEl.textContent='';
     if(!k){input.classList.add('error');hintEl.textContent='请输入 API 密钥';input.focus();return;}
@@ -646,14 +360,28 @@ async function inlineLogin(){
     finally{btn.disabled=false;}
 }
 
+// ── FIX 3: 并行加载 report + config，config 独立来源 /api/config ──
 async function loadReport(){
     showLoading();
-    const r=await sfetch('/api/analysis-report');
-    if(!r.ok){if(r.status!==401)showRetryArea(`加载失败（HTTP ${r.status}），请检查服务是否正常。`);return;}
-    if(!r.payload?.report){showRetryArea('尚未生成检测报告，请先在主界面运行一次节点检测。','No Data');return;}
+    const [reportResult,cfgResult]=await Promise.all([sfetch('/api/analysis-report'),sfetch('/api/config')]);
+    if(!reportResult.ok){if(reportResult.status!==401)showRetryArea(`加载失败（HTTP ${reportResult.status}），请检查服务是否正常。`);return;}
+    if(!reportResult.payload?.report){showRetryArea('尚未生成检测报告，请先在主界面运行一次节点检测。','No Data');return;}
     try{
-        const report=YAML.parse(r.payload.report);
-        renderReport(report);showScene('report');
+        const report=YAML.parse(reportResult.payload.report);
+        // /api/config 可能返回两种格式（镜像 admin.js 的处理方式）：
+        // 1) JSON: { content: "yaml string", sub_store_path: "..." }  → payload.content
+        // 2) 纯文本: 直接是 YAML 字符串                             → payload (string)
+        let cfg={};
+        if(cfgResult.ok){
+            try{
+                const rawCfg=typeof cfgResult.payload?.content==='string'
+                    ?cfgResult.payload.content
+                    :(typeof cfgResult.payload==='string'?cfgResult.payload:'');
+                if(rawCfg)cfg=YAML.parse(rawCfg)||{};
+            }catch(e){console.warn('config parse failed:',e);}
+        }
+        renderReport(report,cfg);
+        showScene('report');
     }catch(e){showRetryArea(`报告解析失败：${e.message}`);}
 }
 
@@ -661,74 +389,51 @@ function doLogout(){try{localStorage.removeItem(STORAGE_KEY);}catch{}showLoginAr
 async function initPage(){if(!getKey()){showLoginArea();return;}await loadReport();}
 window.addEventListener('storage',e=>{if(e.key===STORAGE_KEY&&!e.newValue)showLoginArea('已在其他页面退出登录，请重新输入。');});
 
-// ══════════════════════════════════════════════════════════════
-// render
-// ══════════════════════════════════════════════════════════════
+// ── FIX 4: 正确解析格式化数字，支持"万"/"k"以及千分位逗号 ──
+function parseCount(raw){
+    const s=String(raw||'').trim().replace(/,|，/g,'');
+    if(/万/.test(s)){const n=parseFloat(s.replace('万',''));return isNaN(n)?0:Math.round(n*10000);}
+    if(/k$/i.test(s)){const n=parseFloat(s);return isNaN(n)?0:Math.round(n*1000);}
+    const n=parseInt(s,10);return isNaN(n)?0:n;
+}
+
 let _reportData=null;
 
-function renderReport(r){
+function renderReport(r,cfg){
     _reportData=r;
-    const ci=r.check_info||{};
-    const ga=r.global_analysis||{};
-    const sr=r.subs_ranking||[];
-    const sb=r.subs_ranking_bad||[];
+    const ci=r.check_info||{},ga=r.global_analysis||{},sr=r.subs_ranking||[],sb=r.subs_ranking_bad||[];
     document.getElementById('navMeta').textContent=ci.check_time?`${ci.check_time}  ·  耗时 ${ci.check_duration||'-'}`:'分析报告';
-    const geoCount=Object.keys(ga.geography_distribution||{}).length;
-    const protoCount=Object.keys(ga.protocol_distribution||{}).length;
+    const geoCount=Object.keys(ga.geography_distribution||{}).length,protoCount=Object.keys(ga.protocol_distribution||{}).length;
     _sb('sb-geo',geoCount);_sb('sb-proto',protoCount);_sb('sb-subs',sr.length);
     renderOverview(r,ci,ga,sr.length,geoCount,protoCount);
-    renderGeo(ga);renderProto(ga);renderSubs(sr,sb);renderConfig(ci,ga,sr,sb);
+    renderGeo(ga);renderProto(ga);renderSubs(sr,sb);renderConfig(ci,ga,sr,sb,cfg);
 }
 function _sb(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 
-// ── Tab 1: overview ──────────────────────────────────────────
 function renderOverview(r,ci,ga,subCount,geoCount,protoCount){
     const rawSummary=(r.summary||'').trim();
-    document.getElementById('heroSummary').innerHTML=`
-        <div class="hero-summary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <div class="hero-summary-text">${buildHeroSentence(ci,ga)}</div>
-        </div>`;
-
+    document.getElementById('heroSummary').innerHTML=`<div class="hero-summary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="hero-summary-text">${buildHeroSentence(ci,ga)}</div></div>`;
     const minSpeedVal=ci.check_min_speed;
     const minSpeedStr=(minSpeedVal&&String(minSpeedVal)!=='0')?minSpeedVal+' KB/s':'未开启';
-    const total=ga.alive_count||0;
-    const qm=ga.quality_metrics||{};
-    const cfd=qm.cf_details||{};
-    const cfCon=cfd['consistent_\u00b9\u207a']||{};
-    const cfIncon=cfd['inconsistent_\u2070']||{};
-    let vps={};
-    for(const[k,v]of Object.entries(qm)){if(k.startsWith('vps_details')&&typeof v==='object'){vps=v;break;}}
-    const cfConTotal=Object.values(cfCon).reduce((a,b)=>a+b,0);
-    const vpsTotal=Object.values(vps).reduce((a,b)=>a+b,0);
-
+    const total=parseCount(ga.alive_count);
+    const qm=ga.quality_metrics||{},cfd=qm.cf_details||{};
+    const cfCon=cfd['consistent_\u00b9\u207a']||{},cfIncon=cfd['inconsistent_\u2070']||{};
+    let vps={};for(const[k,v]of Object.entries(qm)){if(k.startsWith('vps_details')&&typeof v==='object'){vps=v;break;}}
+    const cfConTotal=Object.values(cfCon).reduce((a,b)=>a+b,0),vpsTotal=Object.values(vps).reduce((a,b)=>a+b,0);
     const chips=[
         {label:'可用节点',value:total,sub:`检测 ${ci.check_count||'-'}`,icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,color:'var(--accent)'},
         {label:'覆盖地区',value:geoCount,sub:'地理分布',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,color:'var(--idle)'},
         {label:'CF 中转',value:cfConTotal,sub:total?Math.round(cfConTotal/total*100)+'%':'0%',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,color:'var(--success)'},
         {label:'独立 VPS',value:vpsTotal,sub:total?Math.round(vpsTotal/total*100)+'%':'0%',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`,color:'var(--warning)'},
         {label:'流量消耗',value:ci.check_traffic||'-',sub:`耗时 ${ci.check_duration||'-'}`,icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,color:'var(--muted)'},
-        {label:'速度下限',value:minSpeedStr,sub:`有效订阅 ${subCount} 个`,icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,color:'var(--muted)'},
+        {label:'速度下限',value:minSpeedStr,sub:ci.check_count?`检测 ${ci.check_count}`:'',icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,color:'var(--muted)'},
     ];
-    document.getElementById('summaryChips').innerHTML=chips.map(c=>`
-        <div class="summary-chip">
-            <div class="chip-icon" style="background:color-mix(in srgb,${c.color} 12%,transparent);color:${c.color}">${c.icon}</div>
-            <div class="chip-value" style="color:${c.color}">${c.value}</div>
-            <div class="chip-label">${c.label}</div>
-            <div class="chip-sub">${c.sub||''}</div>
-        </div>`).join('');
-
+    document.getElementById('summaryChips').innerHTML=chips.map(c=>`<div class="summary-chip"><div class="chip-icon" style="background:color-mix(in srgb,${c.color} 12%,transparent);color:${c.color}">${c.icon}</div><div class="chip-value" style="color:${c.color}">${c.value}</div><div class="chip-label">${c.label}</div><div class="chip-sub">${c.sub||''}</div></div>`).join('');
     const unlockData=parseUnlockFromSummary(rawSummary);
-    document.getElementById('unlockSection').innerHTML=unlockData.length?`
-        <div class="section-title" style="margin-bottom:8px">媒体 &amp; AI 解锁</div>
-        <div class="unlock-row" style="margin-bottom:16px">
-            ${unlockData.map(u=>`<span class="unlock-tag"><span class="ut-dot" style="background:${u.color}"></span>${u.name}<span class="ut-count">${u.count}</span></span>`).join('')}
-        </div>`:'';
-
+    document.getElementById('unlockSection').innerHTML=unlockData.length?`<div class="section-title" style="margin-bottom:8px">媒体 &amp; AI 解锁</div><div class="unlock-row" style="margin-bottom:16px">${unlockData.map(u=>`<span class="unlock-tag"><span class="ut-dot" style="background:${u.color}"></span>${u.name}<span class="ut-count">${u.count}</span></span>`).join('')}</div>`:'';
     const cfRatio=qm.cf_consistent_ratio||`${Math.round(cfConTotal/Math.max(1,total)*100)}%`;
     const vpsRatioStr=`${Math.round(vpsTotal/Math.max(1,total)*100)}%`;
     const cfBlock=cfd['blocked_\u207b\u00b9']||{};
-
     document.getElementById('overviewExtra').innerHTML=`
         <div class="section-title" style="margin-top:4px">线路质量</div>
         <div class="overview-grid">
@@ -747,38 +452,20 @@ function renderOverview(r,ci,ga,subCount,geoCount,protoCount){
             </div>
             <div class="stat-panel">
                 <div class="panel-title">快速导航</div>
-                ${[
-                    ['geo',   '地理分布',`${geoCount} 个地区`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`],
-                    ['proto', '协议分析',`${protoCount} 种协议`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`],
-                    ['subs',  '订阅排名',`${subCount} 个有效`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],
-                    ['cfgana','配置分析','运行参数',`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>`],
-                ].map(([tab,label,sub,icon])=>`
-                    <button class="nav-card" onclick="switchTab('${tab}')">
-                        <div class="nav-card-left">${icon}<span class="nav-card-label">${label}</span></div>
-                        <div class="nav-card-right">${sub}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
-                    </button>`).join('')}
+                ${[['geo','地理分布',`${geoCount} 个地区`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`],['proto','协议分析',`${protoCount} 种协议`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`],['subs','订阅排名',`${subCount} 个有效`,`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],['cfgana','配置分析','运行参数',`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>`]].map(([tab,label,sub,icon])=>`<button class="nav-card" onclick="switchTab('${tab}')"><div class="nav-card-left">${icon}<span class="nav-card-label">${label}</span></div><div class="nav-card-right">${sub}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div></button>`).join('')}
             </div>
         </div>`;
 }
-
 function buildHeroSentence(ci,ga){
-    const total=ga.alive_count||0;
-    const geo=Object.keys(ga.geography_distribution||{}).length;
-    const qm=ga.quality_metrics||{};
-    const cfRatio=qm.cf_consistent_ratio||'';
-    const speed=ci.check_min_speed;
-    const speedStr=(speed&&String(speed)!=='0')?`，速度下限 <span class="hl">${speed} KB/s</span>`:'';
-    return `本次检测耗时 <span class="hl">${ci.check_duration||'-'}</span>，消耗流量 <span class="hl">${ci.check_traffic||'-'}</span>，`+
-           `共检测 <span class="hl">${ci.check_count||'-'}</span> 个节点${speedStr}，`+
-           `获得 <span class="hl-ok">${total}</span> 个可用节点，`+
-           `覆盖 <span class="hl">${geo}</span> 个国家/地区`+
-           (cfRatio?`，CF 中转占比 <span class="hl">${cfRatio}</span>`:'')+'。';
+    const total=ga.alive_count||0,geo=Object.keys(ga.geography_distribution||{}).length;
+    const qm=ga.quality_metrics||{},cfRatio=qm.cf_consistent_ratio||'';
+    const speed=ci.check_min_speed,speedStr=(speed&&String(speed)!=='0')?`，速度下限 <span class="hl">${speed} KB/s</span>`:'';
+    return `本次检测耗时 <span class="hl">${ci.check_duration||'-'}</span>，消耗流量 <span class="hl">${ci.check_traffic||'-'}</span>，共检测 <span class="hl">${ci.check_count||'-'}</span> 个节点${speedStr}，获得 <span class="hl-ok">${total}</span> 个可用节点，覆盖 <span class="hl">${geo}</span> 个国家/地区`+(cfRatio?`，CF 中转占比 <span class="hl">${cfRatio}</span>`:'')+'。';
 }
-
 function parseUnlockFromSummary(text){
     const colors={'Netflix':'#e50914','YouTube':'#ff0000','Disney+':'#113ccf','TikTok':'#010101','GPT+':'#10a37f','GPT':'#10a37f','Gemini':'#4285f4'};
     const result=[];
-    for(const m of [text.match(/流媒体解锁:\s*\[([^\]]*)\]/),text.match(/AI 解锁\[([^\]]*)\]/)]){
+    for(const m of[text.match(/流媒体解锁:\s*\[([^\]]*)\]/),text.match(/AI 解锁\[([^\]]*)\]/)]){
         if(!m)continue;
         for(const item of m[1].split(',').map(s=>s.trim()).filter(Boolean)){
             const[name,count]=item.split(':').map(s=>s.trim());
@@ -787,273 +474,284 @@ function parseUnlockFromSummary(text){
     }
     return result;
 }
-
 function cfGroup(title,obj,color){
-    const entries=Object.entries(obj).sort((a,b)=>b[1]-a[1]);
-    if(!entries.length)return'';
+    const entries=Object.entries(obj).sort((a,b)=>b[1]-a[1]);if(!entries.length)return'';
     return`<div class="cf-group"><span class="cf-group-title" style="color:${color}">${title}</span><span class="cf-tags">${entries.map(([k,v])=>`<span class="cf-tag">${k}<em>${v}</em></span>`).join('')}</span></div>`;
 }
 
-// ── Tab 2: geo ───────────────────────────────────────────────
 function renderGeo(ga){
-    const geo=ga.geography_distribution||{};
-    const entries=Object.entries(geo).sort((a,b)=>b[1]-a[1]);
+    const geo=ga.geography_distribution||{},entries=Object.entries(geo).sort((a,b)=>b[1]-a[1]);
     const maxVal=entries[0]?.[1]||1;
+    const geoTotal=entries.reduce((a,[,v])=>a+v,0)||1;
     if(!entries.length){document.getElementById('geoBars').innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px">暂无地区数据</div>';return;}
     const half=Math.ceil(entries.length/2);
-    const barRow=([k,v])=>`<div class="geo-row"><span class="geo-key">${k}</span><div class="geo-bar-wrap"><div class="geo-bar" style="width:${Math.round(v/maxVal*100)}%"></div></div><span class="geo-val">${v}</span></div>`;
+    const barRow=([k,v])=>{
+        const pct=Math.round(v/geoTotal*100);
+        return`<div class="geo-row"><span class="geo-key">${k}</span><div class="geo-bar-wrap"><div class="geo-bar" style="width:${Math.round(v/maxVal*100)}%"></div></div><span class="geo-val">${v}</span><span class="geo-pct">${pct}%</span></div>`;
+    };
+    const top3=entries.slice(0,3).map(([k,v])=>`<strong>${k}</strong> ${Math.round(v/geoTotal*100)}%`).join('&ensp;·&ensp;');
+    const summary=`<div class="geo-summary"><div class="geo-summary-item">共 <strong>${entries.length}</strong> 个地区</div><div class="geo-summary-item">节点数 <strong>${geoTotal}</strong></div><div class="geo-summary-item" style="flex:1;justify-content:flex-end;flex-wrap:wrap;gap:6px">前三：${top3}</div></div>`;
     document.getElementById('geoBars').innerHTML=`<div class="geo-col">${entries.slice(0,half).map(barRow).join('')}</div><div class="geo-col">${entries.slice(half).map(barRow).join('')}</div>`;
+    // Append summary below geo-view
+    const geoView=document.querySelector('.geo-view');
+    if(geoView){const old=geoView.querySelector('.geo-summary');if(old)old.remove();geoView.insertAdjacentHTML('beforeend',summary);}
 }
 
-// ── Tab 3: proto ─────────────────────────────────────────────
 const PROTO_COLORS={vless:'#0ea5a0',vmess:'#d97706',trojan:'#7c3aed',ss:'#2563eb',ssr:'#1d4ed8',http:'#059669',socks5:'#64748b',hysteria:'#db2777',hy2:'#be185d',tuic:'#0891b2'};
 function getProtoColor(name){return PROTO_COLORS[name.toLowerCase().replace(/[^a-z0-9]/g,'')]||'#94a3b8';}
-
 function renderProto(ga){
-    const proto=ga.protocol_distribution||{};
-    const total=ga.alive_count||1;
+    const proto=ga.protocol_distribution||{},total=ga.alive_count||1;
     const entries=Object.entries(proto).sort((a,b)=>b[1]-a[1]);
     if(!entries.length){document.getElementById('protoContent').innerHTML='<p style="color:var(--muted);font-size:13px">暂无协议数据</p>';return;}
     const bar=entries.map(([k,v])=>`<div class="proto-summary-seg" style="flex:${Math.max(2,Math.round(v/total*100))};background:${getProtoColor(k)}" title="${k}: ${v}"></div>`).join('');
     const legend=entries.map(([k])=>`<div class="proto-legend-item"><span class="proto-legend-dot" style="background:${getProtoColor(k)}"></span>${k}</div>`).join('');
-    const cards=entries.map(([k,v])=>{
-        const pct=Math.round(v/total*100);const color=getProtoColor(k);
-        return`<div class="proto-card proto-${k.toLowerCase().replace(/[^a-z0-9]/g,'')}" style="--proto-color:${color}">
-            <div class="proto-card-header"><span class="proto-card-name" style="color:${color}">${k}</span><span class="proto-card-pct">${pct}%</span></div>
-            <div class="proto-card-count" style="color:${color}">${v}</div>
-            <div class="proto-card-bar-wrap"><div class="proto-card-bar" style="width:${pct}%"></div></div>
-            <div class="proto-card-pct" style="color:var(--muted)">共 ${total} 节点中占 ${v} 个</div>
-        </div>`;
-    }).join('');
-    document.getElementById('protoContent').innerHTML=`
-        <div class="section-title">协议总览（${entries.length} 种 / ${total} 节点）</div>
-        <div class="proto-summary-bar">${bar}</div>
-        <div class="proto-legend">${legend}</div>
-        <div class="proto-grid">${cards}</div>`;
+    const cards=entries.map(([k,v])=>{const pct=Math.round(v/total*100),color=getProtoColor(k);return`<div class="proto-card proto-${k.toLowerCase().replace(/[^a-z0-9]/g,'')}" style="--proto-color:${color}"><div class="proto-card-header"><span class="proto-card-name" style="color:${color}">${k}</span><span class="proto-card-pct">${pct}%</span></div><div class="proto-card-count" style="color:${color}">${v}</div><div class="proto-card-bar-wrap"><div class="proto-card-bar" style="width:${pct}%"></div></div><div class="proto-card-pct" style="color:var(--muted)">共 ${total} 节点中占 ${v} 个</div></div>`;}).join('');
+    const topProto=entries[0];
+    const protoStatRow=`<div class="proto-stat-row"><div class="proto-stat-item"><div class="proto-stat-val">${total}</div><div class="proto-stat-label">节点总量</div></div><div class="proto-stat-item"><div class="proto-stat-val">${entries.length}</div><div class="proto-stat-label">协议种类</div></div>${topProto?`<div class="proto-stat-item"><div class="proto-stat-val" style="color:${getProtoColor(topProto[0])}">${topProto[0].toUpperCase()}</div><div class="proto-stat-label">主力协议 ${Math.round(topProto[1]/total*100)}%</div></div>`:''}</div>`;
+    document.getElementById('protoContent').innerHTML=`<div class="section-title">协议总览</div>${protoStatRow}<div class="proto-summary-bar">${bar}</div><div class="proto-legend">${legend}</div><div class="proto-grid">${cards}</div>`;
 }
 
-// ── Tab 4: subs ──────────────────────────────────────────────
 function renderSubs(subs,subsBad){
-    // 按钮文字用 span.btn-text 包裹，小屏 CSS 隐藏
-    document.getElementById('copyToolbar').innerHTML=subs.length?`
-        <div class="copy-toolbar">
-            <span class="copy-toolbar-label">复制：</span>
-            <button class="copy-btn" id="copyUrlsBtn" onclick="copyUrls(false)" title="每行一个 URL">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                <span class="btn-text">URL 列表</span>
-            </button>
-            <button class="copy-btn" id="copyYamlBtn" onclick="copyUrls(true)" title="可直接替换 sub-urls 配置段">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                <span class="btn-text">YAML 格式</span>
-            </button>
-            <div class="copy-scope">
-                <label title="同时包含失效订阅">
-                    <input type="checkbox" id="copyIncludeBad">
-                    <span class="scope-text">含失效</span>
-                </label>
-            </div>
-        </div>`:'';
-
+    document.getElementById('copyToolbar').innerHTML=subs.length?`<div class="copy-toolbar"><span class="copy-toolbar-label">复制：</span><button class="copy-btn" id="copyUrlsBtn" onclick="copyUrls(false)" title="每行一个 URL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="btn-text">URL 列表</span></button><button class="copy-btn" id="copyYamlBtn" onclick="copyUrls(true)" title="可直接替换 sub-urls 配置段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="btn-text">YAML 格式</span></button><div class="copy-scope"><label title="同时包含失效订阅"><input type="checkbox" id="copyIncludeBad"><span class="scope-text">含失效</span></label></div></div>`:'';
     if(!subs.length){document.getElementById('rankingContent').innerHTML='<p style="color:var(--muted);font-size:13px">暂无有效订阅</p>';}
     else{
-        document.getElementById('rankingContent').innerHTML=`
-            <div class="section-title">订阅排名（${subs.length} 个有效）</div>
-            <div class="sub-list">
-                ${subs.map((s,i)=>{
-                    const stats=s.stats||{};
-                    const rateStr=String(stats.rate||'0%');
-                    const rateNum=parseFloat(rateStr);
-                    const barColor=rateNum>=10?'var(--success)':rateNum>0?'var(--warning)':'var(--danger)';
-                    const locs=Array.isArray(s.top_locations)?s.top_locations.join('').split('|').filter(Boolean):[];
-                    const protos=s.protocols?Object.entries(s.protocols).sort((a,b)=>b[1]-a[1]):[];
-                    return`<div class="sub-item">
-                        <div class="sub-header">
-                            <span class="sub-rank">${i+1}</span>
-                            <span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span>
-                            <span class="sub-rate" style="color:${barColor}">${rateStr}</span>
-                        </div>
-                        <div class="sub-bar-wrap"><div class="sub-bar" style="width:${Math.min(rateNum,100)}%;background:${barColor}"></div></div>
-                        <div class="sub-meta">
-                            <span>${stats.success||0} / ${stats.total||0} 节点</span>
-                            ${locs.map(l=>`<span class="tag-pill">${l}</span>`).join('')}
-                            ${protos.map(([k,v])=>`<span class="tag-pill">${k}:${v}</span>`).join('')}
-                        </div>
-                    </div>`;
-                }).join('')}
-            </div>`;
+        document.getElementById('rankingContent').innerHTML=`<div class="section-title">订阅排名（${subs.length} 个有效）</div><div class="sub-list">${subs.map((s,i)=>{const stats=s.stats||{},rateStr=String(stats.rate||'0%'),rateNum=parseFloat(rateStr),barColor=rateNum>=10?'var(--success)':rateNum>0?'var(--warning)':'var(--danger)';const locs=Array.isArray(s.top_locations)?s.top_locations.join('').split('|').filter(Boolean):[];const protos=s.protocols?Object.entries(s.protocols).sort((a,b)=>b[1]-a[1]):[];const tierClass=rateNum>=20?'tier-s':rateNum>=10?'tier-a':rateNum>=3?'tier-b':'tier-c';const tierLabel=rateNum>=20?'S':rateNum>=10?'A':rateNum>=3?'B':'C';return`<div class="sub-item"><div class="sub-header"><span class="sub-rank">${i+1}</span><span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="sub-tier ${tierClass}">${tierLabel}</span><span class="sub-rate" style="color:${barColor}">${rateStr}</span></div><div class="sub-bar-wrap"><div class="sub-bar" style="width:${Math.min(rateNum,100)}%;background:${barColor}"></div></div><div class="sub-meta"><span>${stats.success||0} / ${stats.total||0} 节点</span>${locs.map(l=>`<span class="tag-pill">${l}</span>`).join('')}${protos.map(([k,v])=>`<span class="tag-pill">${k}:${v}</span>`).join('')}</div></div>`;}).join('')}</div>`;
     }
-
     if(!subsBad.length){document.getElementById('badContent').innerHTML='';return;}
-    document.getElementById('badContent').innerHTML=`
-        <div class="section-title-toggle" onclick="toggleBad()">
-            失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span>
-            <span class="toggle-line"></span>
-            <svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div id="badList" style="display:none">
-            <div class="bad-list">
-                ${subsBad.map(s=>{const st=s.stats||{};return`<div class="bad-item"><span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="bad-count">${st.success||0}/${st.total||0}</span></div>`;}).join('')}
-            </div>
-        </div>`;
+    document.getElementById('badContent').innerHTML=`<div class="section-title-toggle" onclick="toggleBad()">失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span><span class="toggle-line"></span><svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div><div id="badList" style="display:none"><div class="bad-list">${subsBad.map(s=>{const st=s.stats||{};return`<div class="bad-item"><span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="bad-count">${st.success||0}/${st.total||0}</span></div>`;}).join('')}</div></div>`;
 }
 
-// ════════════════════════════════════════════════════════════
-// 复制功能 —— 修复 iOS / HTTP 环境下剪贴板失效
-// ════════════════════════════════════════════════════════════
-/**
- * writeClipboard(text) → Promise<boolean>
- *
- * 优先使用 navigator.clipboard（需 HTTPS / localhost）
- * 降级：构造不可见 textarea，走 selection + execCommand
- * iOS 专项处理：使用 createRange + setSelectionRange
- * （iOS Safari 不支持 position:fixed 元素的 select()）
- */
-async function writeClipboard(text){
-    if(navigator.clipboard&&window.isSecureContext){
-        try{await navigator.clipboard.writeText(text);return true;}
-        catch(e){/* fall through */}
-    }
-    // 降级方案
-    const ta=document.createElement('textarea');
-    ta.value=text;
-    ta.setAttribute('readonly','');
-    // 定位到当前滚动位置内，不影响布局，iOS 不能用 fixed
-    ta.style.cssText=[
-        'position:absolute',
-        'top:'+(window.scrollY||document.documentElement.scrollTop)+'px',
-        'left:0','width:1px','height:1px',
-        'padding:0','border:none','outline:none',
-        'box-shadow:none','background:transparent','opacity:0',
-    ].join(';');
-    document.body.appendChild(ta);
+// ── FIX 2: 复制按钮——独立计时器，状态互不干扰 ──
+const _copyTimers={};
+const _COPY_SVG_URL=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const _COPY_SVG_YML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+const _COPY_SVG_OK =`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const _COPY_SVG_ERR=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
 
-    const isIOS=/ipad|iphone/i.test(navigator.userAgent);
-    if(isIOS){
-        // iOS 需要 createRange + setSelectionRange 才能选中
-        const range=document.createRange();
-        range.selectNodeContents(ta);
-        const sel=window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        ta.setSelectionRange(0,999999);
-    }else{
-        ta.select();
-    }
-
-    let ok=false;
-    try{ok=document.execCommand('copy');}catch(e){}
-    document.body.removeChild(ta);
-    return ok;
+function _resetBtn(id){
+    if(_copyTimers[id]){clearTimeout(_copyTimers[id]);delete _copyTimers[id];}
+    const btn=document.getElementById(id);if(!btn)return;
+    btn.classList.remove('copied');
+    btn.innerHTML=id==='copyUrlsBtn'?`${_COPY_SVG_URL}<span class="btn-text">URL 列表</span>`:`${_COPY_SVG_YML}<span class="btn-text">YAML 格式</span>`;
 }
-
+function _flashBtn(id,ok){
+    if(_copyTimers[id]){clearTimeout(_copyTimers[id]);delete _copyTimers[id];}
+    const btn=document.getElementById(id);if(!btn)return;
+    if(ok){btn.classList.add('copied');btn.innerHTML=`${_COPY_SVG_OK}<span class="btn-text">已复制</span>`;_copyTimers[id]=setTimeout(()=>_resetBtn(id),1800);}
+    else{btn.classList.remove('copied');btn.innerHTML=`${_COPY_SVG_ERR}<span class="btn-text">请手动复制</span>`;_copyTimers[id]=setTimeout(()=>_resetBtn(id),2200);}
+}
 function copyUrls(asYaml){
     if(!_reportData)return;
-    const subs=_reportData.subs_ranking||[];
-    const subsBad=_reportData.subs_ranking_bad||[];
+    const subs=_reportData.subs_ranking||[],subsBad=_reportData.subs_ranking_bad||[];
     const includeBad=document.getElementById('copyIncludeBad')?.checked;
     const btnId=asYaml?'copyYamlBtn':'copyUrlsBtn';
     let text='';
-
     if(asYaml){
-        const fmt=s=>{
-            const st=s.stats||{};
-            const protos=s.protocols?Object.entries(s.protocols).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join('; '):'';
-            return`  - ${s.url} # ${String(st.rate||'0%')} (${st.success||0}/${st.total||0})${protos?' ['+protos+']':''}`;
-        };
+        const fmt=s=>{const st=s.stats||{},protos=s.protocols?Object.entries(s.protocols).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join('; '):'';return`  - ${s.url} # ${String(st.rate||'0%')} (${st.success||0}/${st.total||0})${protos?'['+protos+']':''}`;};
         text=`# 达标订阅列表\nsub-urls:\n`+subs.map(fmt).join('\n');
-        if(includeBad&&subsBad.length){
-            text+=`\n\n# 成功率为 0 的订阅\nsub-urls-bad:\n`+subsBad.map(s=>{const st=s.stats||{};return`  - ${s.url} # 0.0% (${st.success||0}/${st.total||0})`;}).join('\n');
-        }
+        if(includeBad&&subsBad.length)text+=`\n\n# 成功率为 0 的订阅\nsub-urls-bad:\n`+subsBad.map(s=>{const st=s.stats||{};return`  - ${s.url} # 0.0% (${st.success||0}/${st.total||0})`;}).join('\n');
     }else{
         text=subs.map(s=>s.url).join('\n');
         if(includeBad&&subsBad.length)text+='\n\n# 失效订阅\n'+subsBad.map(s=>s.url).join('\n');
     }
-
-    const btn=document.getElementById(btnId);
-    writeClipboard(text).then(ok=>{
-        if(!btn)return;
-        const prev=btn.innerHTML;
-        if(ok){
-            btn.classList.add('copied');
-            btn.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="btn-text">已复制</span>`;
-            setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML=prev;},2000);
-        }else{
-            btn.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span class="btn-text">请手动复制</span>`;
-            setTimeout(()=>{btn.innerHTML=prev;},2500);
-        }
-    });
+    writeClipboard(text).then(ok=>_flashBtn(btnId,ok));
 }
 
-// ── Tab 5: config analysis ───────────────────────────────────
-function renderConfig(ci,ga,sr,sb){
-    const total=ga.alive_count||0;
+// ── FIX 3 + FIX 4: renderConfig uses separate cfg; parseCount for passRate ──
+function renderConfig(ci,ga,sr,sb,cfg){
+    const total    = parseCount(ga.alive_count);
+    const checked  = parseCount(ci.check_count);      // FIX 4: "1.1万" → 11000
+    const speed    = parseInt(String(ci.check_min_speed||'0').replace(/[^0-9]/g,''))||0;
+    const badCnt=sb.length, goodCnt=sr.length;
     const qm=ga.quality_metrics||{};
-    const checked=parseInt(ci.check_count)||0;
-    const speed=parseInt(ci.check_min_speed)||0;
-    const badCnt=sb.length,goodCnt=sr.length;
-    const passRate=checked>0?Math.round(total/checked*100):0;
+    const passRate = checked>0 ? Math.min(100,Math.round(total/checked*100)) : 0;
     const geoCount=Object.keys(ga.geography_distribution||{}).length;
     const protoCount=Object.keys(ga.protocol_distribution||{}).length;
-
-    let vps={};
-    for(const[k,v]of Object.entries(qm)){if(k.startsWith('vps_details')&&typeof v==='object'){vps=v;break;}}
+    let vps={};for(const[k,v]of Object.entries(qm)){if(k.startsWith('vps_details')&&typeof v==='object'){vps=v;break;}}
     const vpsTotal=Object.values(vps).reduce((a,b)=>a+b,0);
 
+    // ── Read all relevant config fields ──
+    // cfg is now properly YAML.parse(r.payload.content) — real config object
+    const ghProxy        = cfg['github-proxy']          || '';
+    const recipientUrl   = cfg['recipient-url'];
+    const speedTestUrl   = cfg['speed-test-url']        || '';
+    const mediaCheck     = cfg['media-check']           !== false;
+    const nodePrefix     = cfg['node-prefix']           || '';
+    const autoUpdate     = cfg['update']                !== false;
+    const keepSuccess    = cfg['keep-success-proxies']  !== false;
+    const minSpeed       = parseInt(cfg['min-speed'])   || 0;
+    const dlTimeout      = parseInt(cfg['download-timeout']) || 0;
+    const dlMb           = parseInt(cfg['download-mb']) || 0;
+    const checkInterval  = parseInt(cfg['check-interval']) || 0;
+    const cronExpr       = cfg['cron-expression']       || '';
+    const aliveCon       = parseInt(cfg['alive-concurrent']) || 0;
+    const speedCon       = parseInt(cfg['speed-concurrent']) || 0;
+    const mediaCon       = parseInt(cfg['media-concurrent']) || 0;
+    const successRate    = parseFloat(cfg['success-rate']) || 0;
+    const successLimit   = parseInt(cfg['success-limit']) || 0;
+    const nodeType       = cfg['node-type'];
+    const ispCheck       = cfg['isp-check'] === true;
+    const saveMethod     = cfg['save-method']           || 'local';
+    const sharePassword  = cfg['share-password']        || '';
+    const dropBadCf      = cfg['drop-bad-cf-nodes']     === true;
+    const systemProxy    = cfg['system-proxy']          || '';
+    const updateOnStart  = cfg['update-on-startup']     !== false;
+
+    // Check if sub-urls contains localhost all.yaml (redundant when keep-success-proxies=true)
+    const subUrls = Array.isArray(cfg['sub-urls']) ? cfg['sub-urls'] : [];
+    const hasLocalhostAll = subUrls.some(u=>typeof u==='string'&&/127\.0\.0\.1.*all\.yaml/i.test(u));
+
+    let hasNotify=false;
+    if(Array.isArray(recipientUrl))hasNotify=recipientUrl.filter(v=>typeof v==='string'&&v.trim()).length>0;
+    else if(typeof recipientUrl==='string')hasNotify=recipientUrl.trim().length>0;
+
+    // ── KV: 本次检测运行参数 ──
     const kvs=[
-        {k:'检测节点数',v:ci.check_count||'-'},
-        {k:'检测耗时',v:ci.check_duration||'-'},
-        {k:'流量消耗',v:ci.check_traffic||'-'},
-        {k:'速度下限',v:speed>0?speed+' KB/s':'未设置',cls:speed>0?'ok':'warn'},
-        {k:'可用节点',v:total,cls:total>0?'ok':'bad'},
-        {k:'通过率',v:passRate+'%',cls:passRate>=20?'ok':passRate>5?'warn':'bad'},
-        {k:'有效订阅',v:goodCnt},
-        {k:'失效订阅',v:badCnt,cls:badCnt>0?(badCnt>goodCnt?'bad':'warn'):'ok'},
-        {k:'检测时间',v:ci.check_time||'-'},
+        {k:'检测节点数',  v:ci.check_count||'-'},
+        {k:'检测耗时',    v:ci.check_duration||'-'},
+        {k:'流量消耗',    v:ci.check_traffic||'-'},
+        {k:'速度下限',    v:speed>0?speed+' KB/s':'未设置',           cls:speed>0?'ok':'warn'},
+        {k:'可用节点',    v:total,                                     cls:total>0?'ok':'bad'},
+        {k:'通过率',      v:checked>0?passRate+'%':'—',               cls:passRate>=1?'ok':passRate>0?'warn':'bad'},
+        {k:'有效订阅',    v:goodCnt+' 个'+(successRate>0?`（≥${successRate}%）`:'')},
+        {k:'失效订阅',    v:badCnt+' 个',                             cls:badCnt>0?(badCnt>goodCnt?'bad':'warn'):'ok'},
+        {k:'检测时间',    v:ci.check_time||'-'},
     ];
 
+    // ── KV: 关键配置项 ──
+    const cfgKvs=[
+        {k:'Github 代理',   v:ghProxy?esc(ghProxy):'未设置',           cls:ghProxy?'ok':'warn', title:ghProxy?ghProxy:undefined},
+        {k:'通知渠道',      v:hasNotify?'已配置':'未配置',              cls:hasNotify?'ok':'warn'},
+        {k:'流媒体检测',    v:mediaCheck?'开启':'关闭',                 cls:mediaCheck?'ok':'warn'},
+        {k:'测速功能',      v:speedTestUrl?'已启用':'关闭',             cls:speedTestUrl?'ok':'warn'},
+        {k:'自动更新',      v:autoUpdate?'开启':'关闭',                 cls:autoUpdate?'ok':'warn'},
+        {k:'保留成功节点',  v:keepSuccess?'开启':'关闭',                cls:keepSuccess?'ok':'warn'},
+        {k:'存储方式',      v:saveMethod,                               cls:saveMethod==='local'?'':'ok'},
+        {k:'节点前缀',      v:nodePrefix?esc(nodePrefix):'无'},
+    ];
+
+    // ── KV: 并发 & 速度参数 ──
+    const concKvs=[
+        {k:'测活并发',      v:aliveCon>0?aliveCon:'自动'},
+        {k:'测速并发',      v:speedCon>0?speedCon:'自动'},
+        {k:'媒体检测并发',  v:mediaCon>0?mediaCon:'自动'},
+        {k:'最低测速',      v:minSpeed>0?minSpeed+' KB/s':'未设置',    cls:minSpeed>0?'ok':'warn'},
+        {k:'测速超时',      v:dlTimeout>0?dlTimeout+'s':'未设置',      cls:dlTimeout>0?'ok':'warn'},
+        {k:'单节点限速',    v:dlMb>0?dlMb+' MB':'不限'},
+        {k:'检测间隔',      v:cronExpr?cronExpr:(checkInterval?checkInterval+'分钟':'未设置')},
+        {k:'节点数上限',    v:successLimit>0?successLimit+'个':'不限'},
+    ];
+
+    // ── Deploy cards (unset / needs attention) ──
+    const deployCards=[];
+    if(!ghProxy)deployCards.push({title:'Github 代理未设置',desc:'国内环境获取 GitHub 订阅源易超时，建议部署自有代理加速（或使用内置 ghproxy-group）。',actions:[{label:'CF-Proxy 一键部署',href:'https://github.com/sinspired/CF-Proxy',primary:true}]});
+    if(!hasNotify)deployCards.push({title:'通知渠道未配置',desc:'配置 Apprise 后，检测完成自动推送到微信、Telegram、邮件等 100+ 渠道。',actions:[{label:'3分钟快速配置',href:'https://sinspired.github.io/apprise_vercel/docs/QuicSet',primary:true},{label:'测试通知渠道',href:'https://apprise.linkpc.dpdns.org',primary:false}]});
+    if(!speedTestUrl)deployCards.push({title:'测速功能已关闭',desc:'设置 <code>speed-test-url</code> 启用真实下载测速，可精确过滤低速节点。建议使用自建测速地址避免被节点屏蔽。',actions:[{label:'自建测速说明',href:'https://github.com/sinspired/subs-check-pro#config',primary:false}]});
+
+    // ── Suggestions ──
     const suggests=[];
-    if(speed===0)suggests.push({l:'warn',t:'未设置速度下限，所有节点（含极慢节点）都被收录。建议设置 <code>check-min-speed: 500</code> 过滤低速节点。'});
-    else if(speed<200)suggests.push({l:'info',t:`速度下限 ${speed} KB/s 较低，慢速节点仍会被收录，可视场景适当提高。`});
-    else suggests.push({l:'good',t:`速度下限 ${speed} KB/s 设置合理，可有效过滤低质量节点。`});
 
-    if(passRate===0&&checked>0)suggests.push({l:'warn',t:'通过率为 0%，未获得任何可用节点。请检查订阅源可用性或网络连接。'});
-    else if(passRate<5&&checked>0)suggests.push({l:'warn',t:`通过率仅 ${passRate}%，远低于正常水平（15–40%）。建议检查网络或订阅源质量。`});
-    else if(passRate>=40)suggests.push({l:'good',t:`通过率 ${passRate}%，节点质量优秀。`});
+    // 1. 通过率
+    if(checked>0){
+        if(passRate===0)suggests.push({l:'warn',t:'通过率为 0%，未获得任何可用节点。请检查订阅源可用性或网络连接。'});
+        else if(passRate<1)suggests.push({l:'warn',t:`通过率仅 ${passRate}%，低于正常水平。建议检查网络质量或订阅源状态。`});
+        else if(passRate>=5)suggests.push({l:'good',t:`通过率 ${passRate}%，节点筛选效果优秀。`});
+    }
 
+    // 2. 订阅有效率（success-rate 影响有效/无效分界线）
     const totalSubs=goodCnt+badCnt;
+    if(successRate>0)suggests.push({l:'info',t:`有效订阅筛选阈值为 <code>success-rate: ${successRate}%</code>，低于此值的订阅归入失效列表。可在"订阅排名"标签查看完整分布。`});
     if(badCnt>0&&totalSubs>0){
         const r=Math.round(badCnt/totalSubs*100);
-        if(r>50)suggests.push({l:'warn',t:`失效订阅占比 ${r}%（${badCnt}/${totalSubs}），超半数失效，建议清理或替换。`});
-        else suggests.push({l:'info',t:`存在 ${badCnt} 个失效订阅（占比 ${r}%），可前往"订阅排名"标签查看。`});
-    }else if(badCnt===0&&goodCnt>0)suggests.push({l:'good',t:'所有订阅源均有效，订阅源状况良好。'});
+        if(r>50)suggests.push({l:'warn',t:`失效订阅占比 ${r}%（${badCnt}/${totalSubs}），超半数失效，建议清理或替换低质订阅源。`});
+        else suggests.push({l:'info',t:`存在 ${badCnt} 个失效订阅（${r}%），可前往"订阅排名"标签查看。`});
+    }else if(badCnt===0&&goodCnt>0){
+        suggests.push({l:'good',t:'所有订阅源均有效，订阅源状态良好。'});
+    }
 
-    const cfNum=parseFloat(qm.cf_consistent_ratio)||0;
-    if(cfNum>80)suggests.push({l:'info',t:`CF 中转节点占比 ${qm.cf_consistent_ratio||cfNum+'%'} 偏高，CF 节点稳定性不及独立 VPS，建议补充直连节点。`});
+    // 3. 速度测试参数
+    if(minSpeed===0)suggests.push({l:'warn',t:'<code>min-speed</code> 未设置，所有节点（含极慢节点）均被收录，建议设为 128–500 KB/s。'});
+    else if(minSpeed>2000)suggests.push({l:'warn',t:`<code>min-speed: ${minSpeed} KB/s</code> 偏高，会对节点造成较大压力，建议降低至 500 KB/s 以内。`});
+    else suggests.push({l:'good',t:`<code>min-speed: ${minSpeed} KB/s</code> 设置合理。`});
+
+    if(!dlTimeout)suggests.push({l:'warn',t:'<code>download-timeout</code> 未设置，测速无时间上限，极慢节点会阻塞测速队列，建议设为 10s。'});
+    if(!dlMb)suggests.push({l:'info',t:'<code>download-mb</code> 未限制单节点下载量，高并发时可能占满带宽，建议设为 20–50 MB。'});
+
+    // 4. 检测间隔
+    if(!cronExpr&&checkInterval>0){
+        if(checkInterval<120)suggests.push({l:'warn',t:`检测间隔 ${checkInterval} 分钟过于频繁，高频检测消耗流量大且易触发运营商阻断，建议设为 720 分钟（每天两次）或使用 <code>cron-expression</code>。`});
+        else if(checkInterval>=480)suggests.push({l:'good',t:`检测间隔 ${checkInterval} 分钟（约 ${Math.round(checkInterval/60)} 小时），频率合理。`});
+    }
+    if(cronExpr)suggests.push({l:'good',t:`使用 cron 表达式 <code>${esc(cronExpr)}</code> 精确调度检测任务，推荐在网络空闲时段（凌晨/早晨）执行。`});
+
+    // 5. keep-success-proxies + localhost all.yaml 冗余
+    if(keepSuccess){
+        suggests.push({l:'good',t:'<code>keep-success-proxies: true</code> 已开启，可避免上游订阅更新时因暂时拉不到节点导致可用节点清空。'});
+        if(hasLocalhostAll)suggests.push({l:'warn',t:'检测到 <code>sub-urls</code> 中包含 <code>127.0.0.1/all.yaml</code>。已启用 <code>keep-success-proxies</code> 时，程序会自动保留历史成功节点，无需再订阅本地 all.yaml，可移除该条目以减少冗余。'});
+    }else{
+        suggests.push({l:'info',t:'<code>keep-success-proxies: false</code>，每次检测不保留历史节点，上游订阅临时失效时可用节点可能清零，建议设为 true。'});
+    }
+
+    // 6. 并发数
+    if(aliveCon>500)suggests.push({l:'warn',t:`测活并发 ${aliveCon} 过高，超出一般路由器芯片处理能力，建议设为 100–300，量力而行。`});
+    else if(aliveCon===0)suggests.push({l:'info',t:'测活并发已设为自动，程序将根据 <code>concurrent</code> 基准自动计算，首次运行后可根据实际情况调整。'});
+    if(speedCon>32)suggests.push({l:'warn',t:`测速并发 ${speedCon} 较高，并发测速会占用大量带宽，建议配合 <code>total-speed-limit</code> 避免拉满出口。`});
+
+    // 7. 节点筛选选项
+    if(Array.isArray(nodeType)&&nodeType.length>0)suggests.push({l:'info',t:`已启用协议筛选：<code>${nodeType.join(' / ')}</code>，仅测试指定协议的节点。若需覆盖更多场景，可注释掉 <code>node-type</code>。`});
+    if(ispCheck)suggests.push({l:'info',t:'<code>isp-check</code> 已开启，检测节点 ISP 类型（原生 / 住宅 / 机房），会增加少量检测耗时。'});
+    if(dropBadCf)suggests.push({l:'info',t:'<code>drop-bad-cf-nodes: true</code> 已开启，无法访问 Cloudflare 的节点会被丢弃，可能导致可用节点明显减少。'});
+
+    // 8. 节点数 & 地理分布
+    const cfNum=parseFloat(String(qm.cf_consistent_ratio||'0'))||0;
+    if(cfNum>80)suggests.push({l:'info',t:`CF 中转节点占比 ${qm.cf_consistent_ratio||cfNum+'%'} 偏高，CF 节点稳定性弱于独立 VPS，建议补充直连节点订阅源。`});
     if(geoCount>=10)suggests.push({l:'good',t:`节点覆盖 ${geoCount} 个国家/地区，地理分布良好。`});
     else if(geoCount>0&&geoCount<5)suggests.push({l:'info',t:`节点仅覆盖 ${geoCount} 个地区，分布较集中，如有多地区需求建议增加订阅源。`});
-    if(protoCount===1)suggests.push({l:'info',t:'所有节点使用同一协议，多协议可提升在不同网络环境下的兼容性。'});
+    if(protoCount===1)suggests.push({l:'info',t:'所有节点使用同一协议，多协议可提升不同网络环境下的兼容性。'});
 
-    const iconOk=()=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-    const iconWarn=()=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
-    const iconInfo=()=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
-    const getIcon=l=>l==='good'?iconOk():l==='warn'?iconWarn():iconInfo();
-    const suggestMap={'good':'good','warn':'warn','info':'info'};
+    // 9. 版本更新
+    if(!autoUpdate)suggests.push({l:'info',t:'<code>update: false</code>，已关闭自动更新。仍会提示新版本，建议保持开启以获取最新修复。'});
+    else if(!updateOnStart)suggests.push({l:'info',t:'<code>update-on-startup: false</code>，启动时不检查更新，版本可能滞后。'});
+
+    // 10. 分享订阅
+    if(!sharePassword)suggests.push({l:'info',t:'未设置 <code>share-password</code>，订阅分享功能未启用。如需对外共享节点文件，设置后可通过 /sub/{password}/all.yaml 访问。'});
+
+    // 11. 存储方式补充
+    if(saveMethod!=='local')suggests.push({l:'info',t:`存储方式为 <code>${esc(saveMethod)}</code>，请确认对应的凭证（gist-id / webdav 等）已正确配置，否则节点文件将无法保存。`});
+
+    if(!suggests.length)suggests.push({l:'good',t:'配置状态良好，暂无优化建议。'});
+
+    // ── SVG helpers ──
+    const SVG_OK  =`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const SVG_WARN=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    const SVG_INFO=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+    const getIcon=l=>l==='good'?SVG_OK:l==='warn'?SVG_WARN:SVG_INFO;
+    const LINK_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+    const WARN_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+
+    const deployHTML=deployCards.length
+        ?`<div class="deploy-cards-col"><div class="section-title" style="margin:0 0 10px">待配置项</div>${deployCards.map(c=>`<div class="deploy-card"><div class="deploy-card-title">${WARN_ICON}${c.title}</div><div class="deploy-card-desc">${c.desc}</div><div class="deploy-card-actions">${c.actions.map(a=>`<a class="deploy-badge${a.primary?' primary':''}" href="${a.href}" target="_blank" rel="noopener">${LINK_ICON}${a.label}</a>`).join('')}</div></div>`).join('')}</div>`
+        :`<div class="deploy-cards-col"><div class="suggest-item good" style="font-size:12px">${SVG_OK}<span>所有关键配置项已就绪。</span></div></div>`;
+
+    const suggestHTML=`<div><div class="section-title" style="margin:0 0 10px">配置建议</div><div class="suggest-list">${suggests.map(s=>`<div class="suggest-item ${s.l}">${getIcon(s.l)}<span>${s.t}</span></div>`).join('')}</div></div>`;
 
     document.getElementById('cfganaContent').innerHTML=`
         <div class="section-title">本次检测参数</div>
         <div class="cfg-analysis-grid">
             <div class="cfg-card">
-                <div class="cfg-card-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    运行参数
-                </div>
+                <div class="cfg-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>运行结果</div>
                 ${kvs.map(kv=>`<div class="cfg-kv"><span class="cfg-k">${kv.k}</span><span class="cfg-v ${kv.cls||''}">${kv.v}</span></div>`).join('')}
             </div>
             <div class="cfg-card">
-                <div class="cfg-card-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                    节点分布概要
-                </div>
+                <div class="cfg-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>关键配置项</div>
+                ${cfgKvs.map(kv=>`<div class="cfg-kv"><span class="cfg-k">${kv.k}</span><span class="cfg-v ${kv.cls||''}"${kv.title?` title="${esc(kv.title)}"`:''}>${kv.v}</span></div>`).join('')}
+            </div>
+            <div class="cfg-card">
+                <div class="cfg-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>并发 &amp; 速度参数</div>
+                ${concKvs.map(kv=>`<div class="cfg-kv"><span class="cfg-k">${kv.k}</span><span class="cfg-v ${kv.cls||''}">${kv.v}</span></div>`).join('')}
+            </div>
+            <div class="cfg-card">
+                <div class="cfg-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>节点分布概要</div>
                 <div class="cfg-kv"><span class="cfg-k">覆盖地区</span><span class="cfg-v">${geoCount} 个</span></div>
                 <div class="cfg-kv"><span class="cfg-k">协议种类</span><span class="cfg-v">${protoCount} 种</span></div>
                 <div class="cfg-kv"><span class="cfg-k">CF 中转占比</span><span class="cfg-v">${qm.cf_consistent_ratio||'-'}</span></div>
@@ -1062,22 +760,24 @@ function renderConfig(ci,ga,sr,sb){
                 <div class="cfg-kv"><span class="cfg-k">最优订阅通过率</span><span class="cfg-v ok">${sr[0]?String(sr[0].stats?.rate||'-'):'-'}</span></div>
             </div>
         </div>
-        <div class="section-title" style="margin-top:8px">优化建议</div>
-        <div class="suggest-list">
-            ${suggests.length
-                ?suggests.map(s=>`<div class="suggest-item ${suggestMap[s.l]}">${getIcon(s.l)}<span>${s.t}</span></div>`).join('')
-                :'<p style="color:var(--muted);font-size:13px">暂无建议，配置状态良好。</p>'}
-        </div>`;
+        <div class="cfg-bottom-grid">${deployHTML}${suggestHTML}</div>`;
 }
 
-function toggleBad(){
-    const list=document.getElementById('badList'),chevron=document.getElementById('badChevron');
-    const open=list.style.display==='none';
-    list.style.display=open?'':'none';
-    chevron.classList.toggle('open',open);
-}
-
+function toggleBad(){const list=document.getElementById('badList'),chevron=document.getElementById('badChevron');const open=list.style.display==='none';list.style.display=open?'':'none';chevron.classList.toggle('open',open);}
 function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+async function writeClipboard(text){
+    if(navigator.clipboard&&window.isSecureContext){try{await navigator.clipboard.writeText(text);return true;}catch(e){}}
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.setAttribute('readonly','');
+    ta.style.cssText='position:absolute;top:'+(window.scrollY||document.documentElement.scrollTop)+'px;left:0;width:1px;height:1px;padding:0;border:none;outline:none;box-shadow:none;background:transparent;opacity:0';
+    document.body.appendChild(ta);
+    const isIOS=/ipad|iphone/i.test(navigator.userAgent);
+    if(isIOS){const range=document.createRange();range.selectNodeContents(ta);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);ta.setSelectionRange(0,999999);}
+    else{ta.select();}
+    let ok=false;try{ok=document.execCommand('copy');}catch(e){}
+    document.body.removeChild(ta);return ok;
+}
 
 initPage();
 </script>
