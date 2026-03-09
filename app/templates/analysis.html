@@ -49,7 +49,7 @@
     .content-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
     .tab-content { display: none; flex: 1; overflow-y: auto; padding: 20px 24px; }
     .tab-content.active { display: block; }
-    .tab-inner { max-width: 1200px; margin: 0 auto; }
+    .tab-inner { max-width: 1100px; margin: 0 auto; }
     @media (max-width: 720px) {
         .sidebar { display: none; } .tab-bar { display: flex; } .topbar-meta { display: none; }
         .tab-btn span { display: none; } .tab-content { padding: 12px; }
@@ -188,6 +188,11 @@
     .suggest-item.warn { background: color-mix(in srgb, var(--warning) 8%, transparent); border-color: color-mix(in srgb, var(--warning) 20%, transparent); }
     .suggest-item.good { background: color-mix(in srgb, var(--success) 8%, transparent); border-color: color-mix(in srgb, var(--success) 20%, transparent); }
     .suggest-item.info svg { color: var(--accent); } .suggest-item.warn svg { color: var(--warning); } .suggest-item.good svg { color: var(--success); }
+    /* 建议项末尾「去配置」跳转链接 */
+    .suggest-item-body { flex: 1; min-width: 0; }
+    .suggest-action { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; font-size: 10px; font-weight: 700; text-decoration: none; opacity: .75; border-radius: 4px; padding: 1px 5px; border: 1px solid currentColor; white-space: nowrap; transition: opacity .15s; color: var(--idle);}
+    .suggest-action:hover { opacity: 1; }
+    .suggest-action svg { width: 10px; height: 10px; }
     .loading-dots::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
     @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
     .page-footer { padding: 10px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 16px; background: var(--glass-bg); flex-shrink: 0; }
@@ -644,9 +649,9 @@ function renderConfig(ci,ga,sr,sb,cfg){
 
     // ── Deploy cards (unset / needs attention) ──
     const deployCards=[];
-    if(!ghProxy)deployCards.push({title:'Github 代理未设置',desc:'国内环境获取 GitHub 订阅源易超时，建议部署自有代理加速（或使用内置 ghproxy-group）。',actions:[{label:'CF-Proxy 一键部署',href:'https://github.com/sinspired/CF-Proxy',primary:true}]});
-    if(!hasNotify)deployCards.push({title:'通知渠道未配置',desc:'配置 Apprise 后，检测完成自动推送到微信、Telegram、邮件等 100+ 渠道。',actions:[{label:'3分钟快速配置',href:'https://sinspired.github.io/apprise_vercel/docs/QuicSet',primary:true},{label:'测试通知渠道',href:'https://apprise.linkpc.dpdns.org',primary:false}]});
-    if(!speedTestUrl)deployCards.push({title:'测速功能已关闭',desc:'设置 <code>speed-test-url</code> 启用真实下载测速，可精确过滤低速节点。建议使用自建测速地址避免被节点屏蔽。',actions:[{label:'自建测速说明',href:'https://github.com/sinspired/subs-check-pro#config',primary:false}]});
+    if(!ghProxy)deployCards.push({tab:'advanced',title:'Github 代理未设置',desc:'国内环境获取 GitHub 订阅源易超时，建议部署自有代理加速（或使用内置 ghproxy-group）。',actions:[{label:'CF-Proxy 一键部署',href:'https://github.com/sinspired/CF-Proxy',primary:true}]});
+    if(!hasNotify)deployCards.push({tab:'notify',title:'通知渠道未配置',desc:'配置 Apprise 后，检测完成自动推送到微信、Telegram、邮件等 100+ 渠道。',actions:[{label:'3分钟快速配置',href:'https://sinspired.github.io/apprise_vercel/docs/QuicSet',primary:true},{label:'测试通知渠道',href:'https://apprise.linkpc.dpdns.org',primary:false}]});
+    if(!speedTestUrl)deployCards.push({tab:'subscriptions',title:'测速功能已关闭',desc:'设置 <code>speed-test-url</code> 启用真实下载测速，可精确过滤低速节点。建议使用自建测速地址避免被节点屏蔽。',actions:[{label:'自建测速说明',href:'https://github.com/sinspired/subs-check-pro#config',primary:false}]});
 
     // ── Suggestions ──
     const suggests=[];
@@ -670,16 +675,16 @@ function renderConfig(ci,ga,sr,sb,cfg){
     }
 
     // 3. 速度测试参数
-    if(minSpeed===0)suggests.push({l:'warn',t:'<code>min-speed</code> 未设置，所有节点（含极慢节点）均被收录，建议设为 128–500 KB/s。'});
-    else if(minSpeed>2000)suggests.push({l:'warn',t:`<code>min-speed: ${minSpeed} KB/s</code> 偏高，会对节点造成较大压力，建议降低至 500 KB/s 以内。`});
+    if(minSpeed===0)suggests.push({l:'warn',tab:'subscriptions',t:'<code>min-speed</code> 未设置，所有节点（含极慢节点）均被收录，建议设为 128–500 KB/s。'});
+    else if(minSpeed>2000)suggests.push({l:'warn',tab:'subscriptions',t:`<code>min-speed: ${minSpeed} KB/s</code> 偏高，会对节点造成较大压力，建议降低至 500 KB/s 以内。`});
     else suggests.push({l:'good',t:`<code>min-speed: ${minSpeed} KB/s</code> 设置合理。`});
 
-    if(!dlTimeout)suggests.push({l:'warn',t:'<code>download-timeout</code> 未设置，测速无时间上限，极慢节点会阻塞测速队列，建议设为 10s。'});
-    if(!dlMb)suggests.push({l:'info',t:'<code>download-mb</code> 未限制单节点下载量，高并发时可能占满带宽，建议设为 20–50 MB。'});
+    if(!dlTimeout)suggests.push({l:'warn',tab:'subscriptions',t:'<code>download-timeout</code> 未设置，测速无时间上限，极慢节点会阻塞测速队列，建议设为 10s。'});
+    if(!dlMb)suggests.push({l:'info',tab:'subscriptions',t:'<code>download-mb</code> 未限制单节点下载量，高并发时可能占满带宽，建议设为 20–50 MB。'});
 
     // 4. 检测间隔
     if(!cronExpr&&checkInterval>0){
-        if(checkInterval<120)suggests.push({l:'warn',t:`检测间隔 ${checkInterval} 分钟过于频繁，高频检测消耗流量大且易触发运营商阻断，建议设为 720 分钟（每天两次）或使用 <code>cron-expression</code>。`});
+        if(checkInterval<120)suggests.push({l:'warn',tab:'schedule',t:`检测间隔 ${checkInterval} 分钟过于频繁，高频检测消耗流量大且易触发运营商阻断，建议设为 720 分钟（每天两次）或使用 <code>cron-expression</code>。`});
         else if(checkInterval>=480)suggests.push({l:'good',t:`检测间隔 ${checkInterval} 分钟（约 ${Math.round(checkInterval/60)} 小时），频率合理。`});
     }
     if(cronExpr)suggests.push({l:'good',t:`使用 cron 表达式 <code>${esc(cronExpr)}</code> 精确调度检测任务，推荐在网络空闲时段（凌晨/早晨）执行。`});
@@ -689,13 +694,13 @@ function renderConfig(ci,ga,sr,sb,cfg){
         suggests.push({l:'good',t:'<code>keep-success-proxies: true</code> 已开启，可避免上游订阅更新时因暂时拉不到节点导致可用节点清空。'});
         if(hasLocalhostAll)suggests.push({l:'warn',t:'检测到 <code>sub-urls</code> 中包含 <code>127.0.0.1/all.yaml</code>。已启用 <code>keep-success-proxies</code> 时，程序会自动保留历史成功节点，无需再订阅本地 all.yaml，可移除该条目以减少冗余。'});
     }else{
-        suggests.push({l:'info',t:'<code>keep-success-proxies: false</code>，每次检测不保留历史节点，上游订阅临时失效时可用节点可能清零，建议设为 true。'});
+        suggests.push({l:'info',tab:'detection',t:'<code>keep-success-proxies: false</code>，每次检测不保留历史节点，上游订阅临时失效时可用节点可能清零，建议设为 true。'});
     }
 
     // 6. 并发数
-    if(aliveCon>500)suggests.push({l:'warn',t:`测活并发 ${aliveCon} 过高，超出一般路由器芯片处理能力，建议设为 100–300，量力而行。`});
+    if(aliveCon>500)suggests.push({l:'warn',tab:'detection',t:`测活并发 ${aliveCon} 过高，超出一般路由器芯片处理能力，建议设为 100–300，量力而行。`});
     else if(aliveCon===0)suggests.push({l:'info',t:'测活并发已设为自动，程序将根据 <code>concurrent</code> 基准自动计算，首次运行后可根据实际情况调整。'});
-    if(speedCon>32)suggests.push({l:'warn',t:`测速并发 ${speedCon} 较高，并发测速会占用大量带宽，建议配合 <code>total-speed-limit</code> 避免拉满出口。`});
+    if(speedCon>32)suggests.push({l:'warn',tab:'detection',t:`测速并发 ${speedCon} 较高，并发测速会占用大量带宽，建议配合 <code>total-speed-limit</code> 避免拉满出口。`});
 
     // 7. 节点筛选选项
     if(Array.isArray(nodeType)&&nodeType.length>0)suggests.push({l:'info',t:`已启用协议筛选：<code>${nodeType.join(' / ')}</code>，仅测试指定协议的节点。若需覆盖更多场景，可注释掉 <code>node-type</code>。`});
@@ -710,11 +715,11 @@ function renderConfig(ci,ga,sr,sb,cfg){
     if(protoCount===1)suggests.push({l:'info',t:'所有节点使用同一协议，多协议可提升不同网络环境下的兼容性。'});
 
     // 9. 版本更新
-    if(!autoUpdate)suggests.push({l:'info',t:'<code>update: false</code>，已关闭自动更新。仍会提示新版本，建议保持开启以获取最新修复。'});
+    if(!autoUpdate)suggests.push({l:'info',tab:'advanced',t:'<code>update: false</code>，已关闭自动更新。仍会提示新版本，建议保持开启以获取最新修复。'});
     else if(!updateOnStart)suggests.push({l:'info',t:'<code>update-on-startup: false</code>，启动时不检查更新，版本可能滞后。'});
 
     // 10. 分享订阅
-    if(!sharePassword)suggests.push({l:'info',t:'未设置 <code>share-password</code>，订阅分享功能未启用。如需对外共享节点文件，设置后可通过 /sub/{password}/all.yaml 访问。'});
+    if(!sharePassword)suggests.push({l:'info',tab:'advanced',t:'未设置 <code>share-password</code>，订阅分享功能未启用。如需对外共享节点文件，设置后可通过 /sub/{password}/all.yaml 访问。'});
 
     // 11. 存储方式补充
     if(saveMethod!=='local')suggests.push({l:'info',t:`存储方式为 <code>${esc(saveMethod)}</code>，请确认对应的凭证（gist-id / webdav 等）已正确配置，否则节点文件将无法保存。`});
@@ -730,10 +735,17 @@ function renderConfig(ci,ga,sr,sb,cfg){
     const WARN_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
 
     const deployHTML=deployCards.length
-        ?`<div class="deploy-cards-col"><div class="section-title" style="margin:0 0 10px">待配置项</div>${deployCards.map(c=>`<div class="deploy-card"><div class="deploy-card-title">${WARN_ICON}${c.title}</div><div class="deploy-card-desc">${c.desc}</div><div class="deploy-card-actions">${c.actions.map(a=>`<a class="deploy-badge${a.primary?' primary':''}" href="${a.href}" target="_blank" rel="noopener">${LINK_ICON}${a.label}</a>`).join('')}</div></div>`).join('')}</div>`
+        ?`<div class="deploy-cards-col"><div class="section-title" style="margin:0 0 10px">待配置项</div>${deployCards.map(c=>`<div class="deploy-card"><div class="deploy-card-title">${WARN_ICON}${c.title}</div><div class="deploy-card-desc">${c.desc}</div><div class="deploy-card-actions">${c.actions.map(a=>`<a class="deploy-badge${a.primary?' primary':''}" href="${a.href}" target="_blank" rel="noopener">${LINK_ICON}${a.label}</a>`).join('')}${c.tab?`<a class="deploy-badge" href="/admin#cfg-tab-${c.tab}" target="_blank" rel="noopener">${ARROW_ICON}配置入口</a>`:''}</div></div>`).join('')}</div>`
         :`<div class="deploy-cards-col"><div class="suggest-item good" style="font-size:12px">${SVG_OK}<span>所有关键配置项已就绪。</span></div></div>`;
 
-    const suggestHTML=`<div><div class="section-title" style="margin:0 0 10px">配置建议</div><div class="suggest-list">${suggests.map(s=>`<div class="suggest-item ${s.l}">${getIcon(s.l)}<span>${s.t}</span></div>`).join('')}</div></div>`;
+    // 带「去配置」跳转的建议项渲染（tab 字段对应 config-form.js 的 tab ID）
+    const CFG_ADMIN_URL='/admin';
+    const ARROW_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+    const renderSuggest=s=>{
+        const actionHtml=s.tab?`<div><a class="suggest-action" href="${CFG_ADMIN_URL}#cfg-tab-${s.tab}" target="_blank" rel="noopener">${ARROW_ICON}去配置</a></div>`:'';
+        return`<div class="suggest-item ${s.l}">${getIcon(s.l)}<div class="suggest-item-body"><div>${s.t}</div>${actionHtml}</div></div>`;
+    };
+    const suggestHTML=`<div><div class="section-title" style="margin:0 0 10px">配置建议</div><div class="suggest-list">${suggests.map(renderSuggest).join('')}</div></div>`;
 
     document.getElementById('cfganaContent').innerHTML=`
         <div class="section-title">本次检测参数</div>
