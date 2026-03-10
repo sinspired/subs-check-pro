@@ -679,8 +679,8 @@ function applyPanels() {
 
   /* 双栏按钮状态同步：active 状态 + aria-pressed */
   if (splitBtn) {
-    splitBtn.classList.toggle('split-active', isSplit);
-    splitBtn.setAttribute('aria-pressed', String(isSplit));
+    splitBtn.classList.toggle('split-active', _splitOn && _canSplit());
+    splitBtn.setAttribute('aria-pressed', String(_splitOn && _canSplit()));
   }
 }
 
@@ -724,7 +724,7 @@ export function initConfigForm() {
   }
 
   /* ── Tab 点击 ─────────────────────────────────────────── */
-function activateTab(id) {
+  function activateTab(id) {
     if (!_built.has(id)) buildPanel(id);
 
     if (!_splitOn || !_canSplit()) {
@@ -873,19 +873,51 @@ function activateTab(id) {
 
   if (splitBtn) splitBtn.addEventListener('click', toggleSplit);
 
-  /* resize 防抖 */
-  let _resizeTimer;
+  // YAML 按钮点击 → 立即隐藏双栏按钮并退出双栏
+  document.querySelector('#cfgModeBar [data-mode="yaml"]')
+    ?.addEventListener('click', () => {
+      if (splitBtn) splitBtn.style.display = 'none';
+      if (_splitOn) {
+        _splitOn = false;
+        _leftTab = _lastTab ?? _leftTab ?? allTabIds()[0];
+        _rightTab = null;
+        _pendingSlot = null;
+        applyPanels();
+      }
+    });
+
+  // 按宽度恢复双栏按钮
+  document.querySelector('#cfgModeBar [data-mode="form"]')
+    ?.addEventListener('click', () => {
+      if (_canSplit() && splitBtn) splitBtn.style.display = '';
+      applyPanels();
+    });
+
+
+  //  宽度不足时关闭双栏，宽度恢复时自动开启双栏
   window.addEventListener('resize', () => {
     clearTimeout(_resizeTimer);
     _resizeTimer = setTimeout(() => {
       const isYaml = editorContainer?.classList.contains('editor-mode-yaml') ?? false;
 
       if (!_canSplit() && _splitOn) {
-        /* 宽度不足，强制关闭双栏 */
+        // 宽度不足 → 强制关闭
         _splitOn = false;
         _leftTab = _lastTab ?? _leftTab ?? allTabIds()[0];
         _rightTab = null;
         _pendingSlot = null;
+      } else if (_canSplit() && !_splitOn && !isYaml) {
+        // 宽度恢复且不在 YAML 模式 → 自动开启
+        const ids = allTabIds();
+        const cur = _leftTab ?? ids[0];
+        const curIdx = ids.indexOf(cur);
+        _leftTab = cur;
+        _rightTab = ids[(curIdx + 1) % ids.length];
+        _pendingSlot = null;
+        _lastTab = _leftTab;
+        _splitOn = true;
+        if (!_built.has(_leftTab)) buildPanel(_leftTab);
+        if (!_built.has(_rightTab)) buildPanel(_rightTab);
       }
 
       updateSplitBtnVisibility();
@@ -893,10 +925,12 @@ function activateTab(id) {
     }, 150);
   }, { passive: true });
 
+
   /* 初始化 */
   updateSplitBtnVisibility();
   _updateModeToggle('form'); /* 默认表单模式 */
   autoInit();
+  updateSplitBtnVisibility();
 }
 
 

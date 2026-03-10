@@ -86,16 +86,19 @@
 }
 
 /* 双栏激活态 */
-.cfg-mode-btn.split-active {
+.cfg-mode-btn.split-active,
+#splitViewBtn.split-active {
   background: color-mix(in srgb, var(--accent) 13%, var(--bg));
   color: var(--accent);
   box-shadow: 0 1px 4px rgba(0,0,0,.08),
               0 0 0 .5px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 /* 双栏激活时图标微动画 */
-.cfg-mode-btn.split-active svg {
+.cfg-mode-btn.split-active svg,
+#splitViewBtn.split-active svg {
   animation: splitPulse .3s ease-out;
 }
+
 @keyframes splitPulse {
   0%   { transform: scaleX(1); }
   50%  { transform: scaleX(1.18); }
