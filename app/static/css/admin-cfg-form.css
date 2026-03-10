@@ -951,9 +951,9 @@
   gap: 4px;
   padding: 2px 8px 2px 6px;
   border-radius: 99px;
-  border: 1px solid var(--border);
-  background: var(--glass-bg);
-  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--glass-bg));
+  color: color-mix(in srgb, var(--accent) 60%, var(--muted));
   font-size: 10px;
   font-weight: 600;
   font-family: inherit;
