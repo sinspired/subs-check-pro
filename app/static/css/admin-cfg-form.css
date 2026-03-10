@@ -234,16 +234,19 @@
   /* 留出滚动条位置，避免右侧空白过多 */
   padding: 0 6px 14px 14px;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--border) 80%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--border) 80%, transparent)
+    transparent;
   background: transparent;
   border-radius: 0 0 12px 12px;
   box-shadow: inset 0 0 12px var(--edit-shadow, rgba(0, 0, 0, 0.06));
   transition: box-shadow 0.2s ease;
 }
 .cfg-panels-wrap:hover {
-  box-shadow: inset 0 0 12px var(--edit-shadow-hover, rgba(0,0,0,.10));
+  box-shadow: inset 0 0 12px var(--edit-shadow-hover, rgba(0, 0, 0, 0.1));
 }
-.cfg-panels-wrap::-webkit-scrollbar { width: 4px; }
+.cfg-panels-wrap::-webkit-scrollbar {
+  width: 4px;
+}
 .cfg-panels-wrap::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--scroll-bg) 80%, transparent);
   border-radius: 4px;
@@ -358,10 +361,9 @@
   display: grid;
   grid-template-columns: 1fr 1.15fr;
   column-gap: 10px;
-  row-gap: 3px;
+  row-gap: 1px; /* 3px → 1px，label 与 hint 更紧凑 */
   align-items: center;
-  /* 水平增加呼吸感，左侧与 .cfg-section::before 的竖线保持节奏感 */
-  padding: 8px 8px 8px 12px;
+  padding: 6px 8px 6px 10px; /* 上下 8px → 6px */
   border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
   border-radius: 6px;
   transition: background 0.12s, margin 0.12s, padding 0.12s;
@@ -373,7 +375,7 @@
   background: color-mix(in srgb, var(--accent) 4.5%, transparent);
   /* 悬停时视觉稍微内缩，营造"卡片"呼吸感 */
   margin: 0 -2px;
-  padding: 8px 10px 8px 14px;
+  padding: 6px 8px 6px 10px; /* 与上方对齐 */
 }
 
 /* ── 普通字段：cfg-label-col（col1/row1）── */
@@ -417,10 +419,12 @@
 .cfg-field:not(.full-width) .cfg-label-hint {
   grid-column: 1 / -1;
   grid-row: 2;
-  font-size: 11px;
+  font-size: 10.5px; /* 11px → 10.5px */
   color: var(--muted);
-  line-height: 1.4;
+  line-height: 1.35;
+  opacity: 0.85;
 }
+
 .cfg-field:not(.full-width) .cfg-inline-hint {
   grid-column: 1 / -1;
   grid-row: 3;
@@ -490,22 +494,41 @@
   width: 100%;
 }
 
-/* ════════════════════════════════════════════════════════════
-   数字步进器
-   ─────────────────────────────────────────────────────────
-   统一 min/max 宽度；单栏宽屏时随容器自适应到 50%
-════════════════════════════════════════════════════════════ */
+/* 数字步进器：内容宽度，min/max 两端约束 */
 .cfg-ctrl .cfg-number-wrap {
-  min-width: 100px;
-  max-width: 150px;
   width: auto;
+  min-width: 120px;
+  max-width: 500px;
 }
+
+/* 选择器 / 文本框 / 密码框：保持 width:100%，仅限制上限 */
+.cfg-ctrl .cfg-sel-wrap,
+.cfg-field:not(.full-width) .cfg-ctrl .cfg-input,
+.cfg-field:not(.full-width) .cfg-ctrl .cfg-pw-wrap {
+  min-width: 120px;
+  max-width: 500px;
+  /* width: 100% 已在各自规则中设置，此处不覆盖 */
+}
+
+/* 单栏宽屏：统一收缩到 50% */
 @media (min-width: 900px) {
   .cfg-panels-wrap:not(.split-mode)
     .cfg-field:not(.full-width)
     .cfg-ctrl
-    .cfg-number-wrap {
-    max-width: clamp(110px, 50%, 200px);
+    .cfg-number-wrap,
+  .cfg-panels-wrap:not(.split-mode)
+    .cfg-field:not(.full-width)
+    .cfg-ctrl
+    .cfg-sel-wrap,
+  .cfg-panels-wrap:not(.split-mode)
+    .cfg-field:not(.full-width)
+    .cfg-ctrl
+    .cfg-input,
+  .cfg-panels-wrap:not(.split-mode)
+    .cfg-field:not(.full-width)
+    .cfg-ctrl
+    .cfg-pw-wrap {
+    max-width: clamp(120px, 50%, 500px);
   }
 }
 
@@ -558,28 +581,6 @@
 .cfg-step-btn:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
-}
-
-/* ════════════════════════════════════════════════════════════
-   下拉选择器宽度控制
-   ─────────────────────────────────────────────────────────
-   与数字步进器保持相同的尺寸策略：
-   · 默认 min 100px / max 150px
-   · 单栏宽屏：自适应到 ctrl 容器的 50%（最大 200px）
-   · 可通过字段定义的 selectWidth 属性覆盖 max-width
-════════════════════════════════════════════════════════════ */
-.cfg-ctrl .cfg-sel-wrap {
-  min-width: 100px;
-  max-width: 150px;
-  width: auto;
-}
-@media (min-width: 900px) {
-  .cfg-panels-wrap:not(.split-mode)
-    .cfg-field:not(.full-width)
-    .cfg-ctrl
-    .cfg-sel-wrap {
-    max-width: clamp(110px, 50%, 200px);
-  }
 }
 
 /* ════════════════════════════════════════════════════════════

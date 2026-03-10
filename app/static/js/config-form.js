@@ -25,6 +25,7 @@ const SCHEMA = [
       {
         title: '获取参数',
         fields: [
+          { key: 'concurrent', label: '基准线程', type: 'number', min: 1, max: 100, placeholder: '20', hint: '影响获取订阅任务，最大 100' },
           { key: 'sub-urls-retry', label: '重试次数', type: 'number', min: 1, max: 5, placeholder: '3', hint: '获取订阅失败后的重试次数' },
           { key: 'sub-urls-timeout', label: '请求超时 (s)', type: 'number', min: 5, max: 60, placeholder: '10', hint: '网络差可调大，建议 10–60' },
           { key: 'success-rate', label: '成功率阈值 (%)', type: 'number', min: 0, max: 100, placeholder: '0', hint: '低于此值将把订阅标记为失效' },
@@ -61,11 +62,15 @@ const SCHEMA = [
           { key: 'alive-concurrent', label: '测活并发', type: 'number', min: 0, max: 1000, placeholder: '200', hint: '0 = 自动；建议 10–300' },
           { key: 'speed-concurrent', label: '测速并发', type: 'number', min: 0, max: 64, placeholder: '8', hint: '0 = 自动；建议 4–32' },
           { key: 'media-concurrent', label: '媒体并发', type: 'number', min: 0, max: 200, placeholder: '50', hint: '0 = 自动；建议 10–200' },
-          { key: 'concurrent', label: '基准线程', type: 'number', min: 1, max: 100, placeholder: '20', hint: '影响获取订阅任务，最大 100' },
         ],
       },
       {
-        /* 修复：原来与"测速参数"合并在同一对象导致键覆盖，现拆分为两个独立 section */
+        title: '节点要求',
+        fields: [
+          { key: 'success-limit', label: '节点保存上限', type: 'number', min: 0, placeholder: '200', hint: '0 = 不限制' },
+        ],
+      },
+      {
         title: '延迟参数',
         fields: [
           { key: 'timeout', label: '超时时间 (ms)', type: 'number', min: 1000, max: 15000, placeholder: '6000', hint: '节点延迟上限，建议 3000–10000' },
@@ -99,10 +104,21 @@ const SCHEMA = [
         title: '功能开关',
         fields: [
           { key: 'keep-success-proxies', label: '保留历次成功节点', type: 'toggle', hint: '防上游更新丢失节点，强烈建议开启' },
+          { key: 'rename-node', label: '重命名节点', type: 'toggle', hint: '根据节点 IP 归属地自动重命名' },
           { key: 'enhanced-tag', label: '增强位置标签', type: 'toggle' },
           { key: 'isp-check', label: 'ISP 类型检测', type: 'toggle' },
           { key: 'drop-bad-cf-nodes', label: '丢弃 CF 不可达', type: 'toggle', hint: '可能误杀，谨慎开启' },
           { key: 'ipv6', label: '启用 IPv6', type: 'toggle' },
+        ],
+      },
+      {
+        title: '协议筛选',
+        fields: [
+          {
+            key: 'node-type', label: '协议筛选', type: 'chips',
+            hint: '留空 = 检测全部协议',
+            options: ['ss', 'vmess', 'vless', 'trojan', 'hysteria', 'hy2', 'tuic'],
+          },
         ],
       },
     ],
@@ -120,7 +136,7 @@ const SCHEMA = [
           { key: 'print-progress', label: '终端显示进度', type: 'toggle' },
           {
             key: 'progress-mode', label: '进度条模式', type: 'select',
-            selectWidth: '160px',
+            selectWidth: '500px',
             options: [
               { value: 'auto', label: '自动 (auto)' },
               { value: 'stage', label: '分阶段 (stage)' },
@@ -131,10 +147,9 @@ const SCHEMA = [
       {
         title: '节点输出控制',
         fields: [
-          { key: 'success-limit', label: '节点保存上限', type: 'number', min: 0, placeholder: '200', hint: '0 = 不限制' },
           {
             key: 'threshold', label: '相似度阈值', type: 'select', numericOptions: true,
-            selectWidth: '160px',
+            selectWidth: '500px',
             hint: '按网段乱序去重',
             options: [
               { value: '1.00', label: '1.00 — /32' },
@@ -142,13 +157,6 @@ const SCHEMA = [
               { value: '0.50', label: '0.50 — /16' },
               { value: '0.25', label: '0.25 — /8' },
             ],
-          },
-          { key: 'rename-node', label: '重命名节点', type: 'toggle', hint: '根据节点 IP 归属地自动重命名' },
-          { key: 'node-prefix', label: '节点前缀', type: 'text', placeholder: '🌟 ', hint: '依赖"重命名节点"开关' },
-          {
-            key: 'node-type', label: '协议筛选', type: 'chips',
-            hint: '留空 = 检测全部协议',
-            options: ['ss', 'vmess', 'vless', 'trojan', 'hysteria', 'hy2', 'tuic'],
           },
         ],
       },
@@ -179,6 +187,7 @@ const SCHEMA = [
       {
         title: 'Apprise 通知',
         fields: [
+          { key: 'notify-title', label: '通知标题', type: 'text', placeholder: '🔔 节点状态更新' },
           {
             key: 'apprise-api-server', label: 'Apprise API 地址', type: 'text', fullWidth: true,
             placeholder: 'https://apprise.example.com/notify',
@@ -190,7 +199,6 @@ const SCHEMA = [
             hint: '支持 tgram:// bark:// mailto:// ntfy:// 等 Apprise 协议',
             links: [{ label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' }],
           },
-          { key: 'notify-title', label: '通知标题', type: 'text', placeholder: '🔔 节点状态更新' },
         ],
       },
     ],
@@ -203,10 +211,9 @@ const SCHEMA = [
       {
         title: '存储方式',
         fields: [
-          { key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output', hint: '留空 = 程序目录 /output' },
           {
             key: 'save-method', label: '存储方式', type: 'select',
-            selectWidth: '170px',
+            selectWidth: '500px',
             options: [
               { value: 'local', label: '本地 (local)' },
               { value: 'webdav', label: 'WebDAV' },
@@ -214,6 +221,7 @@ const SCHEMA = [
               { value: 's3', label: 'S3 / MinIO / R2' },
             ],
           },
+          { key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output', hint: '留空 = 程序目录 /output' },
         ],
       },
       {
@@ -242,13 +250,19 @@ const SCHEMA = [
           { key: 's3-use-ssl', label: '使用 SSL', type: 'toggle' },
           {
             key: 's3-bucket-lookup', label: 'Bucket 寻址', type: 'select',
-            selectWidth: '160px',
+            selectWidth: '500px',
             options: [
               { value: 'auto', label: '自动 (auto)' },
               { value: 'path', label: 'Path 寻址' },
               { value: 'dns', label: 'DNS 寻址' },
             ],
           },
+        ],
+      },
+      {
+        title: '节点处理',
+        fields: [
+          { key: 'node-prefix', label: '节点前缀', type: 'text', placeholder: 'Ubuntu-', hint: '依赖"重命名节点"开关' },
         ],
       },
     ],
@@ -794,15 +808,15 @@ export function initConfigForm() {
   }
 
   /* ── splitBtn / 模式切换按钮可见性 ──────────────────────── */
-function updateSplitBtnVisibility() {
-  if (!splitBtn) return;
-  const isYaml = editorContainer?.classList.contains('editor-mode-yaml') ?? false;
-  const show = !isYaml && _canSplit();
-  splitBtn.style.display = show ? '' : 'none';
-  // 分隔线与双栏按钮同步显隐
-  const divider = document.getElementById('splitDivider');
-  if (divider) divider.style.display = show ? '' : 'none';
-}
+  function updateSplitBtnVisibility() {
+    if (!splitBtn) return;
+    const isYaml = editorContainer?.classList.contains('editor-mode-yaml') ?? false;
+    const show = !isYaml && _canSplit();
+    splitBtn.style.display = show ? '' : 'none';
+    // 分隔线与双栏按钮同步显隐
+    const divider = document.getElementById('splitDivider');
+    if (divider) divider.style.display = show ? '' : 'none';
+  }
 
   /* ── 模式切换：单按钮逻辑 ─────────────────────────────────
    * 1. 直接切换 class（保证始终生效）
