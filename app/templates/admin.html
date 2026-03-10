@@ -406,7 +406,6 @@
 
               <!-- 模式切换 + 双栏按钮（同一 seg 容器，语义一致） -->
               <div class="cfg-mode-seg" id="cfgModeBar" role="group" aria-label="编辑模式">
-
                 <!-- 表单模式 -->
                 <button class="cfg-mode-btn active" data-mode="form" title="表单模式">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -431,32 +430,18 @@
                   </svg>
                   <span>YAML</span>
                 </button>
-
-                <!-- 分隔线 -->
-                <!-- <div class="seg-divider" aria-hidden="true"></div> -->
-
-                <!-- ★ 双栏按钮 — 置于 mode-seg 内，与表单/YAML 语义统一
-           SVG：两个面板并排 + 各自内容线，明显区别于暂停键
-           style="display:none" 初始隐藏，JS 按宽度控制显隐 -->
-                <!-- <button class="cfg-mode-btn" id="splitViewBtn" title="双栏对比（宽屏可用）" style="display:none"
-                  aria-pressed="false">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                    stroke-linejoin="round">
-
-                    <rect x="2" y="4" width="9" height="16" rx="1.5" />
-                    <line x1="4.5" y1="8" x2="8.5" y2="8" />
-                    <line x1="4.5" y1="11" x2="8.5" y2="11" />
-                    <line x1="4.5" y1="14" x2="7" y2="14" />
-   
-                    <rect x="13" y="4" width="9" height="16" rx="1.5" />
-                    <line x1="15.5" y1="8" x2="19.5" y2="8" />
-                    <line x1="15.5" y1="11" x2="19.5" y2="11" />
-                    <line x1="15.5" y1="14" x2="18" y2="14" />
-                  </svg>
-                  <span>双栏</span>
-                </button> -->
-
               </div>
+
+              <button id="splitViewBtn" class="btn btn-round" title="双栏对比（宽屏可用）" style="display:none;"
+                aria-pressed="false">
+                <svg viewBox="0 0 1024 1024" fill="currentColor" width="13" height="13" style="flex-shrink:0">
+                  <path d="M509 1020c-22.09 0-40-17.91-40-40V42c0-22.09 17.91-40 40-40s40 17.91 40 40v938c0 22.09-17.91 40-40 40z
+               M970 915H665c-22.09 0-40-17.91-40-40s17.91-40 40-40h277V204H665c-22.09 0-40-17.91-40-40s17.91-40 40-40h305
+               c28.67 0 52 22.7 52 50.6v689.8c0 27.9-23.33 50.6-52 50.6z
+               M397 875c0 22.09-17.91 40-40 40H52c-28.67 0-52-22.7-52-50.6V174.6C0 146.7 23.33 124 52 124h305
+               c22.09 0 40 17.91 40 40s-17.91 40-40 40H80v631h277c22.09 0 40 17.91 40 40z" />
+                </svg>
+              </button>
             </div>
 
             <!-- 右：文件操作按钮 -->
@@ -468,23 +453,6 @@
                   stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              </button>
-
-              <button id="splitViewBtn" class="btn btn-round" title="双栏对比（宽屏可用）" style="display:none;"
-                aria-pressed="false">
-                <svg class="btn-icon icon-md-btn" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <!-- 左面板 -->
-                  <rect x="2" y="4" width="9" height="16" rx="1.5" />
-                  <line x1="4.5" y1="8" x2="8.5" y2="8" />
-                  <line x1="4.5" y1="11" x2="8.5" y2="11" />
-                  <line x1="4.5" y1="14" x2="7" y2="14" />
-                  <!-- 右面板 -->
-                  <rect x="13" y="4" width="9" height="16" rx="1.5" />
-                  <line x1="15.5" y1="8" x2="19.5" y2="8" />
-                  <line x1="15.5" y1="11" x2="19.5" y2="11" />
-                  <line x1="15.5" y1="14" x2="18" y2="14" />
                 </svg>
               </button>
 

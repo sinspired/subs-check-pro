@@ -1,5 +1,5 @@
 /**
- * config-form.js  v3
+ * config-form.js  v4
  *
  * 双栏逻辑：
  *   · 初始化时根据编辑器可用宽度自动决定是否开启双栏
@@ -8,7 +8,12 @@
  *   · 双栏中点击已显示的 tab：清空该槽，等待用户选择替换项
  *   · 双栏中点击未显示的 tab：填入空槽（或最近清空的槽）
  *   · 关闭双栏：_lastTab 恢复为单栏激活值
- *   · YAML 模式：隐藏双栏按钮，自动退出双栏
+ *   · YAML 模式：自动退出双栏，模式切换按钮更新外观
+ *
+ * 模式切换按钮（#cfgModeToggle）：
+ *   · 单按钮设计，点击在表单/YAML 间切换
+ *   · 内部通过点击隐藏的 [data-mode] 按钮，保持与 admin.js 的兼容性
+ *   · MutationObserver 监听 editorContainer class 变化，同步按钮外观
  */
 
 const SCHEMA = [
@@ -60,10 +65,13 @@ const SCHEMA = [
         ],
       },
       {
+        /* 修复：原来与"测速参数"合并在同一对象导致键覆盖，现拆分为两个独立 section */
         title: '延迟参数',
         fields: [
           { key: 'timeout', label: '超时时间 (ms)', type: 'number', min: 1000, max: 15000, placeholder: '6000', hint: '节点延迟上限，建议 3000–10000' },
         ],
+      },
+      {
         title: '测速参数',
         fields: [
           {
@@ -112,6 +120,7 @@ const SCHEMA = [
           { key: 'print-progress', label: '终端显示进度', type: 'toggle' },
           {
             key: 'progress-mode', label: '进度条模式', type: 'select',
+            selectWidth: '160px',
             options: [
               { value: 'auto', label: '自动 (auto)' },
               { value: 'stage', label: '分阶段 (stage)' },
@@ -125,6 +134,7 @@ const SCHEMA = [
           { key: 'success-limit', label: '节点保存上限', type: 'number', min: 0, placeholder: '200', hint: '0 = 不限制' },
           {
             key: 'threshold', label: '相似度阈值', type: 'select', numericOptions: true,
+            selectWidth: '160px',
             hint: '按网段乱序去重',
             options: [
               { value: '1.00', label: '1.00 — /32' },
@@ -196,6 +206,7 @@ const SCHEMA = [
           { key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output', hint: '留空 = 程序目录 /output' },
           {
             key: 'save-method', label: '存储方式', type: 'select',
+            selectWidth: '170px',
             options: [
               { value: 'local', label: '本地 (local)' },
               { value: 'webdav', label: 'WebDAV' },
@@ -231,6 +242,7 @@ const SCHEMA = [
           { key: 's3-use-ssl', label: '使用 SSL', type: 'toggle' },
           {
             key: 's3-bucket-lookup', label: 'Bucket 寻址', type: 'select',
+            selectWidth: '160px',
             options: [
               { value: 'auto', label: '自动 (auto)' },
               { value: 'path', label: 'Path 寻址' },
@@ -301,18 +313,7 @@ const FIELD_VALIDATORS = {
 };
 
 
-/* ═══════════════════════════ 模块级共享状态 ═══════════════════════════
- *
- * 在 initConfigForm / renderConfigForm / collectConfigForm 之间共享，
- * 避免闭包导致的生命周期问题。
- *
- * 双栏槽位：
- *   _leftTab     — 左槽 tab id（null = 槽已清空，待填入）
- *   _rightTab    — 右槽 tab id（null = 单栏 or 右槽空）
- *   _splitOn     — 双栏开关状态
- *   _pendingSlot — 'left' | 'right' | null：最近被清空的槽
- *   _lastTab     — 最后一次激活过的 tab；关闭双栏时用于恢复
- * ═══════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════ 模块级共享状态 ═══════════════════════════ */
 let _cfg = {};
 const _built = new Set();
 
@@ -323,17 +324,12 @@ let _pendingSlot = null;
 let _lastTab = null;
 
 
-/* ════════════════════ 宽度计算 ══════════════════════
- *
- * 三列布局：侧栏 ≈ 200px，日志列 + 编辑器列各占剩余一半
- *   编辑器宽 ≈ (窗口宽 − SIDEBAR_W − gap×2) / 2
- *
- * 双栏需求：每个子面板 ≥ MIN_PANEL_W px
- *   → 编辑器宽 ≥ MIN_PANEL_W × 2
- * ═══════════════════════════════════════════════════ */
-const SIDEBAR_W = 200;   // 侧栏近似宽度 px
-const LAYOUT_GAPS = 16;    // 布局间距总量 px
-const MIN_PANEL_W = 280;   // 每个双栏子面板最低宽度 px
+/* ════════════════════════════════════════════════════════════
+   宽度计算
+════════════════════════════════════════════════════════════ */
+const SIDEBAR_W = 200;
+const LAYOUT_GAPS = 16;
+const MIN_PANEL_W = 280;
 
 function _editorW() { return (window.innerWidth - SIDEBAR_W - LAYOUT_GAPS) / 2; }
 function _canSplit() { return _editorW() >= MIN_PANEL_W * 2; }
@@ -390,6 +386,10 @@ const LINK_ICONS = {
 const _SVG_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const _SVG_EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
+/* 模式切换按钮：表单 / YAML 的 SVG 内容 */
+const _SVG_MODE_FORM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="flex-shrink:0"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>`;
+const _SVG_MODE_YAML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="flex-shrink:0"><polyline points="7 8 3 12 7 16"/><line x1="13" y1="6" x2="11" y2="18"/><polyline points="17 8 21 12 17 16"/></svg>`;
+
 function mkLinks(links) {
   const wrap = el('div', { class: 'cfg-links' });
   for (const lk of links) {
@@ -437,8 +437,6 @@ function mkNumber(field, value) {
   const wrap = el('div', { class: 'cfg-number-wrap' });
   const inp = el('input', {
     type: 'number', 'data-key': field.key,
-    // 传递min和max，将导致宽度异常
-    // min: String(field.min ?? ''), max: String(field.max ?? ''),
     step: String(field.step ?? 1), placeholder: field.placeholder ?? '',
   });
   inp.value = (value !== undefined && value !== null && value !== '') ? value : '';
@@ -508,6 +506,8 @@ function mkSelect(field, value) {
   }
 
   const wrap = el('div', { class: 'cfg-sel-wrap' });
+  /* 字段级 selectWidth 覆盖 CSS 默认 max-width */
+  if (field.selectWidth) wrap.style.maxWidth = field.selectWidth;
   wrap.append(native, trigger, dropdown);
 
   const openDropdown = () => { dropdown.style.display = ''; trigger.setAttribute('aria-expanded', 'true'); trigger.classList.add('open'); dropdown.querySelector('.cfg-sel-option.selected')?.scrollIntoView({ block: 'nearest' }); };
@@ -562,38 +562,20 @@ function mkUrlList(field, values) {
 
 /* ═══════════════════════════════════════════════════════════════
    字段行构建
-
-   【普通字段（两列）】
-     .cfg-field
-       .cfg-label-col         ← col1/row1：flex 包装器（标签 + links）
-       .cfg-ctrl              ← col2/row1
-       span.cfg-label-hint    ← col1/-1/row2
-       div.cfg-inline-hint    ← col1/-1/row3
-
-   【全宽字段（url-list / chips / fullWidth=true）】
-     .cfg-field.full-width
-       span.cfg-label-text    ← row1
-       span.cfg-label-hint    ← row2（标签下方、ctrl 上方）
-       div.cfg-links          ← row3
-       .cfg-ctrl              ← row4
-       div.cfg-inline-hint    ← row5
 ═══════════════════════════════════════════════════════════════ */
 function mkField(fieldDef, value) {
   const isFull = fieldDef.type === 'url-list' || fieldDef.type === 'chips' || !!fieldDef.fullWidth;
   const row = el('div', { class: `cfg-field${isFull ? ' full-width' : ''}`, 'data-key': fieldDef.key });
 
   if (!isFull) {
-    /* 两列：标签 + links 收入 cfg-label-col flex 容器 */
     const labelCol = el('div', { class: 'cfg-label-col' });
     labelCol.appendChild(el('span', { class: 'cfg-label-text', textContent: fieldDef.label }));
     if (fieldDef.links?.length) labelCol.appendChild(mkLinks(fieldDef.links));
     row.appendChild(labelCol);
   } else {
-    /* 全宽：标签单独 row1 */
     row.appendChild(el('span', { class: 'cfg-label-text', textContent: fieldDef.label }));
   }
 
-  /* 控件容器 */
   const ctrlWrap = el('div', { class: 'cfg-ctrl' });
   if (fieldDef.ctrlWidth) ctrlWrap.style.maxWidth = fieldDef.ctrlWidth;
   let ctrl;
@@ -609,7 +591,6 @@ function mkField(fieldDef, value) {
   row.appendChild(ctrlWrap);
 
   if (fieldDef.hint) row.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
-  /* 全宽字段的 links 追加在 hint 之后（row3） */
   if (isFull && fieldDef.links?.length) row.appendChild(mkLinks(fieldDef.links));
 
   _attachValidator(row, fieldDef);
@@ -648,19 +629,38 @@ function buildPanel(tabId) {
 }
 
 
-/* ════════════════════ 模块级 DOM 同步 ════════════════════
- *
- * 命名约定（与 CSS 一致）：
- *   .active       — 单栏激活 OR 双栏左槽
- *   .active-right — 双栏右槽
- * ══════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   模式切换按钮外观同步
+   ─────────────────────────────────────────────────────────
+   · form 模式：按钮显示表单图标 + "表单"，使用 .active 样式
+   · yaml 模式：按钮显示 YAML 图标 + "YAML"，使用 .active-yaml 样式
+════════════════════════════════════════════════════════════ */
+function _updateModeToggle(mode) {
+  const btn = document.getElementById('cfgModeToggle');
+  if (!btn) return;
+  const isYaml = mode === 'yaml';
+  btn.innerHTML = isYaml
+    ? `${_SVG_MODE_FORM}<span>表单</span>`
+    : `${_SVG_MODE_YAML}<span>YAML</span>`;
+  btn.classList.toggle('active', !isYaml);
+  btn.classList.toggle('active-yaml', isYaml);
+  btn.title = isYaml ? '切换到表单模式' : '切换到 YAML 编辑器';
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   DOM 状态同步
+════════════════════════════════════════════════════════════ */
 function applyPanels() {
   const tabBar = document.getElementById('cfgTabBar');
   const panelsWrap = document.getElementById('cfgPanels');
   const splitBtn = document.getElementById('splitViewBtn');
   if (!tabBar) return;
 
-  const isSplit = _splitOn && _canSplit();
+  /* 只有双槽均有内容时才真正进入 split-mode；
+     单槽时保持 _splitOn=true 但视觉上铺满单列，
+     防止 split-mode 的 flex 布局让空面板撑开空白 */
+  const isSplit = _splitOn && _canSplit() && Boolean(_leftTab) && Boolean(_rightTab);
 
   tabBar.querySelectorAll('.cfg-tab[data-tab]').forEach(t => {
     const id = t.dataset.tab;
@@ -677,9 +677,10 @@ function applyPanels() {
 
   panelsWrap?.classList.toggle('split-mode', isSplit);
 
+  /* 双栏按钮状态同步：active 状态 + aria-pressed */
   if (splitBtn) {
-    splitBtn.classList.toggle('split-active', _splitOn && _canSplit());
-    splitBtn.setAttribute('aria-pressed', String(_splitOn && _canSplit()));
+    splitBtn.classList.toggle('split-active', isSplit);
+    splitBtn.setAttribute('aria-pressed', String(isSplit));
   }
 }
 
@@ -690,11 +691,6 @@ function applyPanels() {
 
 /**
  * initConfigForm()
- *
- * 页面加载后调用一次。负责：
- *   1. 按编辑器可用宽度自动决定初始单/双栏
- *   2. 绑定 Tab 点击 / 双栏按钮 / resize 事件
- *   3. 通过 MutationObserver 监听 YAML 模式切换
  */
 export function initConfigForm() {
   const tabBar = document.getElementById('cfgTabBar');
@@ -702,14 +698,10 @@ export function initConfigForm() {
   const editorContainer = document.getElementById('editorContainer');
   if (!tabBar) return;
 
-  /* 所有 tab id（DOM 顺序） */
   const allTabIds = () =>
     [...tabBar.querySelectorAll('.cfg-tab[data-tab]')].map(t => t.dataset.tab);
 
-  /* ── 初始布局 ─────────────────────────────────────────
-   *   宽屏：双栏，tab[0] + tab[1]
-   *   窄屏：单栏，tab[0]
-   * ─────────────────────────────────────────────────── */
+  /* ── 初始布局 ─────────────────────────────────────────── */
   function autoInit() {
     const ids = allTabIds();
     if (ids.length === 0) return;
@@ -731,39 +723,28 @@ export function initConfigForm() {
     applyPanels();
   }
 
-  /* ── Tab 点击 ─────────────────────────────────────────
-   *
-   * 单栏：直接切换激活面板。
-   *
-   * 双栏：
-   *   · 已显示的 tab → 清空该槽，_pendingSlot 记录待填槽位
-   *   · 未显示的 tab → 填入 _pendingSlot 所指槽（默认右槽）
-   * ─────────────────────────────────────────────────── */
+  /* ── Tab 点击 ─────────────────────────────────────────── */
   function activateTab(id) {
     if (!_built.has(id)) buildPanel(id);
 
     if (!_splitOn || !_canSplit()) {
-      /* 单栏 */
       _leftTab = id;
       _lastTab = id;
       applyPanels();
       return;
     }
 
-    /* 双栏 */
     const isLeft = id === _leftTab;
     const isRight = id === _rightTab;
 
     if (isLeft || isRight) {
-      /* 清空该槽，标记等待替换 */
       if (isLeft) { _leftTab = null; _pendingSlot = 'left'; }
       else { _rightTab = null; _pendingSlot = 'right'; }
     } else {
-      /* 填入空槽 */
       const slot = _pendingSlot
         ?? (_leftTab === null ? 'left' : null)
         ?? (_rightTab === null ? 'right' : null)
-        ?? 'right';   /* 两槽均满时默认替换右槽 */
+        ?? 'right';
 
       if (slot === 'left') _leftTab = id;
       else _rightTab = id;
@@ -775,11 +756,7 @@ export function initConfigForm() {
     applyPanels();
   }
 
-  /* ── 双栏按钮 ─────────────────────────────────────────
-   *
-   * 开启：左=当前激活，右=下一个 tab（循环）
-   * 关闭：_lastTab 作为单栏激活值
-   * ─────────────────────────────────────────────────── */
+  /* ── 双栏按钮 ─────────────────────────────────────────── */
   function toggleSplit() {
     if (!_canSplit()) {
       window.showToast?.('当前窗口宽度不足以开启双栏', 'info', 2000);
@@ -809,31 +786,79 @@ export function initConfigForm() {
     applyPanels();
   }
 
-  /* ── splitBtn 可见性 ─────────────────────────────────
-   *   YAML 模式 或 宽度不足 → 隐藏
-   * ─────────────────────────────────────────────────── */
+  /* ── splitBtn / 模式切换按钮可见性 ──────────────────────── */
   function updateSplitBtnVisibility() {
     if (!splitBtn) return;
     const isYaml = editorContainer?.classList.contains('editor-mode-yaml') ?? false;
     splitBtn.style.display = (isYaml || !_canSplit()) ? 'none' : '';
   }
 
-  /* 监听 YAML/表单模式切换（editorContainer 的 class 变化） */
+  /* ── 模式切换：单按钮逻辑 ─────────────────────────────────
+   * 1. 直接切换 class（保证始终生效）
+   * 2. 仅切换到 YAML 时触发 compat click（CodeMirror init 等副作用）
+   *    切换回表单时不触发——admin.js 可能再次切换 class 造成状态污染
+   * 3. 后续由 MutationObserver 统一处理 UI / 双栏状态
+   * ─────────────────────────────────────────────────────── */
+  const modeToggle = document.getElementById('cfgModeToggle');
+  if (modeToggle && editorContainer) {
+    modeToggle.addEventListener('click', () => {
+      const isYaml = editorContainer.classList.contains('editor-mode-yaml');
+      const targetMode = isYaml ? 'form' : 'yaml';
+      editorContainer.classList.remove('editor-mode-yaml', 'editor-mode-form');
+      editorContainer.classList.add(`editor-mode-${targetMode}`);
+      if (!isYaml) {
+        requestAnimationFrame(() => {
+          const yamlBtn = document.getElementById('_cfgBtnYaml');
+          if (yamlBtn) yamlBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        });
+      }
+    });
+  }
+
+  /* ── MutationObserver：监听 YAML/表单 class 切换 ─────────────
+   * 进入 YAML → 退出双栏，隐藏双栏按钮
+   * 返回表单 → 按当前宽度重新计算双栏状态，恢复按钮显隐
+   * ─────────────────────────────────────────────────────────── */
   if (editorContainer) {
     new MutationObserver(() => {
+      const isYaml = editorContainer.classList.contains('editor-mode-yaml');
+      _updateModeToggle(isYaml ? 'yaml' : 'form');
       updateSplitBtnVisibility();
-      /* 进入 YAML 模式时自动退出双栏 */
-      if (editorContainer.classList.contains('editor-mode-yaml') && _splitOn) {
-        _splitOn = false;
-        _leftTab = _lastTab ?? _leftTab ?? allTabIds()[0];
-        _rightTab = null;
-        _pendingSlot = null;
+
+      if (isYaml) {
+        if (_splitOn) {
+          _splitOn = false;
+          _leftTab = _lastTab ?? _leftTab ?? allTabIds()[0];
+          _rightTab = null;
+          _pendingSlot = null;
+          applyPanels();
+        }
+      } else {
+        /* 返回表单：按当前宽度重新决定双栏状态（不依赖历史意图） */
+        const shouldSplit = _canSplit();
+        if (shouldSplit && !_splitOn) {
+          const ids = allTabIds();
+          const cur = _leftTab ?? ids[0];
+          const curIdx = ids.indexOf(cur);
+          _leftTab = cur;
+          _rightTab = ids[(curIdx + 1) % ids.length];
+          _pendingSlot = null;
+          _lastTab = _leftTab;
+          _splitOn = true;
+          if (!_built.has(_leftTab)) buildPanel(_leftTab);
+          if (!_built.has(_rightTab)) buildPanel(_rightTab);
+        } else if (!shouldSplit && _splitOn) {
+          _splitOn = false;
+          _leftTab = _lastTab ?? _leftTab ?? allTabIds()[0];
+          _rightTab = null;
+          _pendingSlot = null;
+        }
         applyPanels();
       }
     }).observe(editorContainer, { attributes: true, attributeFilter: ['class'] });
   }
 
-  /* ── 事件绑定 ─────────────────────────────────────── */
+  /* ── 事件绑定 ─────────────────────────────────────────── */
   tabBar.addEventListener('click', e => {
     const btn = e.target.closest('.cfg-tab[data-tab]');
     if (btn) activateTab(btn.dataset.tab);
@@ -841,17 +866,21 @@ export function initConfigForm() {
 
   if (splitBtn) splitBtn.addEventListener('click', toggleSplit);
 
-  /* resize 防抖：宽度不足时自动退出双栏 */
+  /* resize 防抖 */
   let _resizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(_resizeTimer);
     _resizeTimer = setTimeout(() => {
+      const isYaml = editorContainer?.classList.contains('editor-mode-yaml') ?? false;
+
       if (!_canSplit() && _splitOn) {
+        /* 宽度不足，强制关闭双栏 */
         _splitOn = false;
         _leftTab = _lastTab ?? _leftTab ?? allTabIds()[0];
         _rightTab = null;
         _pendingSlot = null;
       }
+
       updateSplitBtnVisibility();
       applyPanels();
     }, 150);
@@ -859,24 +888,20 @@ export function initConfigForm() {
 
   /* 初始化 */
   updateSplitBtnVisibility();
+  _updateModeToggle('form'); /* 默认表单模式 */
   autoInit();
 }
 
 
 /**
  * renderConfigForm(configObj)
- *
- * 登录成功后调用，传入后端返回的配置对象。
- * 清空已构建缓存并重新渲染当前显示的面板，保留双栏状态。
  */
 export function renderConfigForm(configObj) {
   _cfg = configObj ?? {};
   _built.clear();
 
-  /* 重建所有当前正在显示的面板 */
   const toRebuild = new Set([_leftTab, _rightTab].filter(Boolean));
   if (toRebuild.size === 0) {
-    /* 兜底：initConfigForm 尚未运行时 */
     _leftTab = SCHEMA[0].tab;
     toRebuild.add(_leftTab);
   }
@@ -888,8 +913,6 @@ export function renderConfigForm(configObj) {
 
 /**
  * collectConfigForm()
- *
- * 收集所有已构建面板的字段值，合并到原始配置后返回。
  */
 export function collectConfigForm() {
   const result = { ..._cfg };
@@ -899,7 +922,6 @@ export function collectConfigForm() {
   return result;
 }
 
-/* 内部：收集单个面板 */
 function collectPanel(tabId) {
   const panel = document.getElementById(`panel-${tabId}`); if (!panel || !_built.has(tabId)) return {};
   const schema = SCHEMA.find(s => s.tab === tabId); if (!schema) return {};

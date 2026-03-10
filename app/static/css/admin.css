@@ -325,9 +325,9 @@ main {
   gap: var(--gap);
   min-height: 0;
   height: 100%;
-  grid-template-columns: minmax(200px, max-content) minmax(300px, 1fr) minmax(
+  grid-template-columns: minmax(160px, max-content) minmax(300px, 1fr) minmax(
       300px,
-      1fr
+      1.5fr
     );
 }
 

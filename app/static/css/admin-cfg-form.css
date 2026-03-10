@@ -1,18 +1,15 @@
-/* admin-cfg-form.css  v2 */
+/* admin-cfg-form.css  v3 */
 
 /* ════════════════════════════════════════════════════════════
    标题区：齿轮图标 + "配置" 文字
-   置于 .cfg-mode-seg 胶囊左侧，用细竖线隔开，视觉分层清晰
 ════════════════════════════════════════════════════════════ */
 .title-with-icon {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  /* 右侧加细分隔线，与胶囊视觉隔开 */
   padding-right: 10px;
   border-right: 1px solid var(--border);
-  /* 保持与胶囊的间距 */
   margin-right: 2px;
 }
 .title-with-icon .title-text {
@@ -28,7 +25,8 @@
 
 
 /* ════════════════════════════════════════════════════════════
-   模式切换胶囊（表单 / YAML / 双栏）
+   模式切换胶囊
+   布局：[模式切换按钮] [seg-divider] [双栏按钮]
 ════════════════════════════════════════════════════════════ */
 .cfg-mode-seg {
   display: flex;
@@ -72,17 +70,36 @@
 }
 .cfg-mode-btn:hover { color: var(--fg); }
 
+/* 表单模式：默认激活态 */
 .cfg-mode-btn.active {
   background: var(--bg);
   color: var(--fg);
   box-shadow: 0 1px 4px rgba(0,0,0,.10), 0 0 0 .5px rgba(0,0,0,.06);
 }
 
+/* YAML 模式激活态 — 用 accent 色区分，与表单的 fg 形成对比 */
+.cfg-mode-btn.active-yaml {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.08),
+              0 0 0 .5px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* 双栏激活态 */
 .cfg-mode-btn.split-active {
   background: color-mix(in srgb, var(--accent) 13%, var(--bg));
   color: var(--accent);
   box-shadow: 0 1px 4px rgba(0,0,0,.08),
               0 0 0 .5px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+/* 双栏激活时图标微动画 */
+.cfg-mode-btn.split-active svg {
+  animation: splitPulse .3s ease-out;
+}
+@keyframes splitPulse {
+  0%   { transform: scaleX(1); }
+  50%  { transform: scaleX(1.18); }
+  100% { transform: scaleX(1); }
 }
 
 @media (max-width: 540px) {
@@ -166,7 +183,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   margin: 0 -12px -12px;
-  padding: 0 14px 14px;
+  /* 留出滚动条位置，避免右侧空白过多 */
+  padding: 0 6px 14px 14px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--border) 80%, transparent) transparent;
   background: transparent;
@@ -199,13 +217,16 @@
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
-    padding: 0 14px 14px;
+    padding: 0 8px 14px 14px;
     scrollbar-width: thin;
   }
   .cfg-panels-wrap.split-mode .cfg-panel.active-right {
     border-left: 1px solid var(--border);
   }
-  .cfg-panels-wrap:not(.split-mode) .cfg-panel.active { max-width: 560px; }
+  /* 单栏：面板铺满容器，不限制最大宽度 */
+  .cfg-panels-wrap:not(.split-mode) .cfg-panel.active {
+    width: 100%;
+  }
 }
 
 .cfg-panel {
@@ -262,24 +283,10 @@
 /* ════════════════════════════════════════════════════════════
    字段行
    ─────────────────────────────────────────────────────────
-   DOM 结构（由 mkField v3 生成）
-
-   【普通字段（两列）】
-     .cfg-field
-       .cfg-label-col         ← col1/row1：flex 包装器，含 label + links
-         span.cfg-label-text
-         div.cfg-links
-       .cfg-ctrl              ← col2/row1
-       span.cfg-label-hint    ← col1-2/row2
-       div.cfg-inline-hint    ← col1-2/row3（validator 动态追加）
-
-   【全宽字段（url-list / chips / fullWidth）】
-     .cfg-field.full-width
-       span.cfg-label-text    ← row1
-       span.cfg-label-hint    ← row2（标签下方、ctrl 上方）
-       div.cfg-links          ← row3
-       .cfg-ctrl              ← row4（铺满）
-       div.cfg-inline-hint    ← row5
+   修复：
+   · 统一 border-radius 为 6px（去掉悬停时的跳变）
+   · 增大水平 padding，与左侧 accent 竖线视觉呼吸
+   · 悬停时轻微内缩 margin 产生"浮起"感
 ════════════════════════════════════════════════════════════ */
 .cfg-field {
   display: grid;
@@ -287,15 +294,18 @@
   column-gap: 10px;
   row-gap: 3px;
   align-items: center;
-  padding: 8px 10px;
+  /* 水平增加呼吸感，左侧与 .cfg-section::before 的竖线保持节奏感 */
+  padding: 8px 8px 8px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
-  border-radius: 20px;
-  transition: background .1s;
+  border-radius: 6px;
+  transition: background .12s, margin .12s, padding .12s;
 }
 .cfg-field:last-child { border-bottom: none; }
 .cfg-field:hover {
-  background: color-mix(in srgb, var(--accent) 4%, transparent);
-  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 4.5%, transparent);
+  /* 悬停时视觉稍微内缩，营造"卡片"呼吸感 */
+  margin: 0 -2px;
+  padding: 8px 10px 8px 14px;
 }
 
 
@@ -310,7 +320,6 @@
   min-width: 0;
   align-self: center;
 }
-/* label-text 在 flex 容器内：不需要 grid 定位 */
 .cfg-label-col .cfg-label-text {
   grid-column: unset;
   grid-row: unset;
@@ -320,7 +329,6 @@
   flex-shrink: 0;
   max-width: 100%;
 }
-/* links 在 flex 容器内自然排列 */
 .cfg-label-col .cfg-links {
   grid-column: unset;
   grid-row: unset;
@@ -330,7 +338,7 @@
   margin-top: 0;
 }
 
-/* 普通字段：ctrl（col2/row1）、hint/inline-hint（全宽 row2/row3） */
+/* 普通字段：ctrl / hint / inline-hint */
 .cfg-field:not(.full-width) .cfg-ctrl {
   grid-column: 2;
   grid-row: 1;
@@ -359,7 +367,6 @@
   align-items: start;
 }
 
-/* label：row1 */
 .cfg-field.full-width .cfg-label-text {
   grid-row: 1;
   grid-column: 1;
@@ -371,7 +378,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* hint：row2（标签下方、ctrl 上方） */
 .cfg-field.full-width .cfg-label-hint {
   grid-row: 2;
   grid-column: 1;
@@ -379,7 +385,6 @@
   color: var(--muted);
   line-height: 1.4;
 }
-/* links：row3 */
 .cfg-field.full-width .cfg-links {
   grid-row: 3;
   grid-column: 1;
@@ -388,7 +393,6 @@
   gap: 5px;
   margin-top: 0;
 }
-/* ctrl：row4（铺满） */
 .cfg-field.full-width .cfg-ctrl {
   grid-row: 4;
   grid-column: 1;
@@ -400,13 +404,12 @@
   width: 100%;
   max-width: 100%;
 }
-/* validator：row5 */
 .cfg-field.full-width .cfg-inline-hint {
   grid-row: 5;
   grid-column: 1;
 }
 
-/* 全局 label-text 基础样式（作为 fallback / 全宽字段共用） */
+/* 全局 label-text 基础样式 */
 .cfg-label-text {
   font-size: 13px;
   font-weight: 500;
@@ -419,18 +422,17 @@
 .cfg-ctrl .cfg-sel-wrap,
 .cfg-ctrl .cfg-pw-wrap { width: 100%; }
 
+
 /* ════════════════════════════════════════════════════════════
    数字步进器
    ─────────────────────────────────────────────────────────
    统一 min/max 宽度；单栏宽屏时随容器自适应到 50%
 ════════════════════════════════════════════════════════════ */
 .cfg-ctrl .cfg-number-wrap {
-  /* 统一基准尺寸 */
   min-width: 100px;
   max-width: 150px;
   width: auto;
 }
-/* 单栏 + 宽屏：允许扩展至 ctrl 容器的 50% */
 @media (min-width: 900px) {
   .cfg-panels-wrap:not(.split-mode) .cfg-field:not(.full-width) .cfg-ctrl .cfg-number-wrap {
     max-width: clamp(110px, 50%, 200px);
@@ -484,6 +486,26 @@
 .cfg-step-btn:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   下拉选择器宽度控制
+   ─────────────────────────────────────────────────────────
+   与数字步进器保持相同的尺寸策略：
+   · 默认 min 100px / max 150px
+   · 单栏宽屏：自适应到 ctrl 容器的 50%（最大 200px）
+   · 可通过字段定义的 selectWidth 属性覆盖 max-width
+════════════════════════════════════════════════════════════ */
+.cfg-ctrl .cfg-sel-wrap {
+  min-width: 100px;
+  max-width: 150px;
+  width: auto;
+}
+@media (min-width: 900px) {
+  .cfg-panels-wrap:not(.split-mode) .cfg-field:not(.full-width) .cfg-ctrl .cfg-sel-wrap {
+    max-width: clamp(110px, 50%, 200px);
+  }
 }
 
 
@@ -717,11 +739,6 @@
 
 /* ════════════════════════════════════════════════════════════
    URL 列表
-   ─────────────────────────────────────────────────────────
-   样式逻辑与全宽文本输入（如 Apprise API）对齐：
-   · 背景、边框、圆角与 .cfg-input 一致
-   · 字体略小（mono），padding 与标准输入相同
-   · 删除按钮右对齐，hover 变危险色
 ════════════════════════════════════════════════════════════ */
 .cfg-url-list {
   display: flex;
@@ -736,7 +753,6 @@
   align-items: center;
   width: 100%;
 }
-/* URL 输入框：与标准 .cfg-input 视觉一致，字体改为 mono */
 .cfg-url-item .cfg-url-input {
   flex: 1;
   min-width: 0;
