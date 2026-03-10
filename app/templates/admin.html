@@ -345,7 +345,7 @@
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                     <line x1="10" y1="9" x2="8" y2="9"></line>
                   </svg>
-                  <span class="title-text">最近日志</span>
+                  <span class="title-text">日志</span>
                 </div>
 
                 <div class="muted title-status status-idle" id="status">
@@ -381,29 +381,33 @@
 
         <!-- 卡片头部 -->
         <div class="card-header">
+
           <div class="title-line">
 
-            <!-- 左：标题 + 模式选择器 -->
+            <!-- 左：标题 + 模式选择器（含双栏按钮） -->
             <div class="title-wrap">
               <div class="title-with-icon">
                 <svg class="title-icon icon-md" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="3"></circle>
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06
-                    a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09
-                    a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83
-                    l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09
-                    a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83
-                    l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09
-                    a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83
-                    l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4
-                    h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09
+          a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83
+          l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09
+          a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83
+          l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09
+          a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83
+          l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4
+          h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                 </svg>
-                <span class="title-text">配置管理</span>
+                <!-- ★ 标题缩短 -->
+                <span class="title-text">配置</span>
               </div>
 
-              <!-- 模式选择器：与标题同行，有一定间距 -->
+              <!-- 模式切换 + 双栏按钮（同一 seg 容器，语义一致） -->
               <div class="cfg-mode-seg" id="cfgModeBar" role="group" aria-label="编辑模式">
+
+                <!-- 表单模式 -->
                 <button class="cfg-mode-btn active" data-mode="form" title="表单模式">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                     stroke-linejoin="round">
@@ -416,6 +420,8 @@
                   </svg>
                   <span>表单</span>
                 </button>
+
+                <!-- YAML 模式 -->
                 <button class="cfg-mode-btn" data-mode="yaml" title="YAML 编辑器">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                     stroke-linejoin="round">
@@ -425,14 +431,38 @@
                   </svg>
                   <span>YAML</span>
                 </button>
+
+                <!-- 分隔线 -->
+                <!-- <div class="seg-divider" aria-hidden="true"></div> -->
+
+                <!-- ★ 双栏按钮 — 置于 mode-seg 内，与表单/YAML 语义统一
+           SVG：两个面板并排 + 各自内容线，明显区别于暂停键
+           style="display:none" 初始隐藏，JS 按宽度控制显隐 -->
+                <!-- <button class="cfg-mode-btn" id="splitViewBtn" title="双栏对比（宽屏可用）" style="display:none"
+                  aria-pressed="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                    stroke-linejoin="round">
+
+                    <rect x="2" y="4" width="9" height="16" rx="1.5" />
+                    <line x1="4.5" y1="8" x2="8.5" y2="8" />
+                    <line x1="4.5" y1="11" x2="8.5" y2="11" />
+                    <line x1="4.5" y1="14" x2="7" y2="14" />
+   
+                    <rect x="13" y="4" width="9" height="16" rx="1.5" />
+                    <line x1="15.5" y1="8" x2="19.5" y2="8" />
+                    <line x1="15.5" y1="11" x2="19.5" y2="11" />
+                    <line x1="15.5" y1="14" x2="18" y2="14" />
+                  </svg>
+                  <span>双栏</span>
+                </button> -->
+
               </div>
             </div>
 
-            <!-- 右：文件操作 + 搜索（搜索仅 YAML 模式显示） -->
+            <!-- 右：文件操作按钮 -->
             <div class="card-action">
 
-
-              <!-- 搜索：默认隐藏，YAML 模式时由 JS 显示 -->
+              <!-- 搜索：YAML 模式时由 JS 显示 -->
               <button id="searchBtn" class="btn btn-round" title="搜索" style="display:none;" disabled>
                 <svg class="btn-icon icon-md-btn" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -441,6 +471,24 @@
                 </svg>
               </button>
 
+              <button id="splitViewBtn" class="btn btn-round" title="双栏对比（宽屏可用）" style="display:none;"
+                aria-pressed="false">
+                <svg class="btn-icon icon-md-btn" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <!-- 左面板 -->
+                  <rect x="2" y="4" width="9" height="16" rx="1.5" />
+                  <line x1="4.5" y1="8" x2="8.5" y2="8" />
+                  <line x1="4.5" y1="11" x2="8.5" y2="11" />
+                  <line x1="4.5" y1="14" x2="7" y2="14" />
+                  <!-- 右面板 -->
+                  <rect x="13" y="4" width="9" height="16" rx="1.5" />
+                  <line x1="15.5" y1="8" x2="19.5" y2="8" />
+                  <line x1="15.5" y1="11" x2="19.5" y2="11" />
+                  <line x1="15.5" y1="14" x2="18" y2="14" />
+                </svg>
+              </button>
+
+              <!-- 快速预览 -->
               <button id="cfgPreviewBtn" class="btn btn-round" disabled title="快速预览关键配置">
                 <svg class="btn-icon icon-md-btn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -473,15 +521,26 @@
             </div>
           </div>
 
+
           <div class="card-tip muted" title="{{.configPath}}">{{.configPath}}</div>
         </div>
 
         <!-- ══ 表单视图（默认显示）══ -->
 
         <!-- Tab 导航栏 -->
+
         <nav class="cfg-tab-bar" id="cfgTabBar" role="tablist" aria-label="配置分类">
 
-          <button class="cfg-tab active" data-tab="detection" role="tab" aria-selected="true">
+          <button class="cfg-tab active" data-tab="subscriptions" role="tab" aria-selected="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            <span>订阅</span>
+          </button>
+
+          <button class="cfg-tab" data-tab="detection" role="tab" aria-selected="false">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-linecap="round" stroke-linejoin="round">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -496,15 +555,6 @@
               <polyline points="12 6 12 12 16 14" />
             </svg>
             <span>任务</span>
-          </button>
-
-          <button class="cfg-tab" data-tab="subscriptions" role="tab" aria-selected="false">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-            <span>订阅</span>
           </button>
 
           <button class="cfg-tab" data-tab="notify" role="tab" aria-selected="false">
@@ -544,9 +594,11 @@
 
         </nav>
 
-        <!-- 表单面板容器（懒渲染） -->
+        <!-- 表单面板容器（对应 6 个 tab） -->
+
         <div class="cfg-panels-wrap" id="cfgPanels">
-          <div class="cfg-panel active" id="panel-detection" role="tabpanel">
+          <!-- 订阅 — 初始激活，含 loading 占位 -->
+          <div class="cfg-panel active" id="panel-subscriptions" role="tabpanel">
             <div class="cfg-loading">
               <svg class="cfg-loading-spin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -555,13 +607,12 @@
               <span>登录后加载配置…</span>
             </div>
           </div>
+          <div class="cfg-panel" id="panel-detection" role="tabpanel"></div>
           <div class="cfg-panel" id="panel-schedule" role="tabpanel"></div>
-          <div class="cfg-panel" id="panel-subscriptions" role="tabpanel"></div>
           <div class="cfg-panel" id="panel-notify" role="tabpanel"></div>
           <div class="cfg-panel" id="panel-storage" role="tabpanel"></div>
           <div class="cfg-panel" id="panel-advanced" role="tabpanel"></div>
         </div>
-
         <!-- ══ YAML 编辑器视图（默认隐藏）══ -->
         <div class="editor-wrapper" id="editorWrapper" style="display:none; flex:1 1 auto; min-height:0;">
           <div id="configEditor" aria-label="配置编辑" spellcheck="false" aria-placeholder="# 配置将于登录后加载..."></div>
