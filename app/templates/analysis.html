@@ -2022,6 +2022,11 @@
         }
 
         @media (max-width: 720px) {
+            .auth-input {
+                /* 移动设备保证 16px 以避免 iOS 放大 */
+                font-size: 16px;
+            }
+
             .sidebar {
                 display: none;
             }
@@ -2054,9 +2059,9 @@
                 grid-template-columns: 1fr !important;
             }
 
-            .copy-btn .btn-text {
+            /* .copy-btn .btn-text {
                 display: none;
-            }
+            } */
 
             .copy-btn {
                 padding: 6px 8px;

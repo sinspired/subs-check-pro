@@ -124,6 +124,13 @@
             font-family: inherit;
         }
 
+        @media (max-width: 720px) {
+            .auth-input {
+                /* 移动设备保证 16px 以避免 iOS 放大 */
+                font-size: 16px;
+            }
+        }
+
         .auth-input:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
@@ -363,7 +370,7 @@
         {{/* 验证输入区（仅需要输入时显示） */}}
         {{ if .ShowInput }}
         <div class="auth-area">
-            <input class="auth-input" type="password" id="shareCode" placeholder="输入访问码..."
+            <input class="auth-input" type="password" id="shareCode" placeholder="输入分享码..."
                 autocomplete="current-password" onkeydown="if(event.keyCode===13)go()" autofocus>
             <button class="btn-auth" onclick="go()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
