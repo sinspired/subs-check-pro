@@ -387,10 +387,10 @@ function _parseCronValue(v) {
   const commented = raw.startsWith('#');
   const expr = commented ? raw.replace(/^#\s*/, '').trim() : raw;
   const parts = expr ? expr.split(/\s+/) : [];
-  const valid = parts.length === 5 && parts.every(p => p.length > 0 && /^[0-9*,\-/]+$/.test(p));
+  // 统一使用增强版 _isValidCron，避免两处重复逻辑
+  const valid = _isValidCron(expr);
   return { raw, commented, expr, parts, valid };
 }
-
 
 /* ═══════════════════════════ 模块级共享状态 ═══════════════════════════ */
 let _cfg = {};
@@ -722,14 +722,17 @@ function mkCronInput(field, value) {
     const { raw, commented, parts, valid } = _parseCronValue(inp.value);
     display.className = 'cfg-cron-display';
     display.innerHTML = '';
-    labelsRow.style.visibility = 'hidden'; // 占位不折叠
+    // 默认先重置 display，再设 visibility 占位
+    labelsRow.style.display = '';
+    labelsRow.style.visibility = 'hidden';
 
     if (!raw) {
+      // 暂停/空值时完全隐藏标签行，不占空间，display 层自然上移
+      labelsRow.style.display = 'none';
       display.appendChild(el('span', { class: 'cfg-cron-placeholder', textContent: field.placeholder ?? '0 4,16 * * *' }));
       return;
     }
     if (commented) {
-      /* 用窄空格让 # 与段之间有视觉呼吸感 */
       display.appendChild(el('span', { class: 'cfg-cron-comment-mark', textContent: '#\u2009' }));
     }
     if (valid) {
@@ -740,10 +743,12 @@ function mkCronInput(field, value) {
           title: _CRON_SEGMENTS[i].title,
         }));
       });
-      labelsRow.style.visibility = '';
+      labelsRow.style.visibility = '';  // 有效时显示标签行
     } else {
       display.classList.add('cfg-cron-display--raw');
       display.appendChild(el('span', { class: 'cfg-cron-raw-text', textContent: inp.value }));
+      // 非法输入时标签行也隐藏
+      labelsRow.style.display = 'none';
     }
   }
 
@@ -791,6 +796,8 @@ function mkField(fieldDef, value) {
   if (!isFull) {
     const labelCol = el('div', { class: 'cfg-label-col' });
     labelCol.appendChild(el('span', { class: 'cfg-label-text', textContent: fieldDef.label }));
+    // hint 移入 label 列，与标签纵向排列
+    if (fieldDef.hint) labelCol.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
     if (fieldDef.links?.length) labelCol.appendChild(mkLinks(fieldDef.links));
     row.appendChild(labelCol);
   } else {
@@ -806,26 +813,58 @@ function mkField(fieldDef, value) {
     case 'select': ctrl = mkSelect(fieldDef, displayValue); break;
     case 'chips': ctrl = mkChips(fieldDef, displayValue); break;
     case 'url-list': ctrl = mkUrlList(fieldDef, displayValue); break;
+    case 'cron': ctrl = mkCronInput(fieldDef, displayValue); break;  // ← 补全，否则分段渲染永不触发
     default: ctrl = mkInput(fieldDef, displayValue); break;
   }
   ctrlWrap.appendChild(ctrl);
   row.appendChild(ctrlWrap);
 
-  if (fieldDef.hint) row.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
+  // full-width 字段的 hint 仍挂在 row 上（跨全列）
+  // 非 full-width 的 hint 已在上方 labelCol 内添加，此处跳过
+  if (fieldDef.hint && isFull) row.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
   if (isFull && fieldDef.links?.length) row.appendChild(mkLinks(fieldDef.links));
 
   _attachValidator(row, fieldDef);
   return row;
 }
 
-/* ═══════════════════════════ Cron 表达式校验 ═══════════════════════════
- * 简单验证：5 个字段，每个字段仅含 数字  字符
- * 满足绝大多数 Unix cron 格式（含步进、范围、列表）
- * ─────────────────────────────────────────────────────────────────── */
+/**
+ * _isValidCron — Cron 表达式校验（增强版）
+ * 支持：* / 数字 / 范围(n-m) / 列表(n,m) / 步进(*\/n, n-m/n)
+ * 各字段数值范围：分(0-59) 时(0-23) 日(1-31) 月(1-12) 周(0-7)
+ */
 function _isValidCron(expr) {
   if (!expr?.trim()) return false;
   const parts = expr.trim().split(/\s+/);
-  return parts.length === 5 && parts.every(p => p.length > 0 && /^[0-9*,\-/]+$/.test(p));
+  if (parts.length !== 5) return false;
+
+  // 各字段的合法数值范围 [min, max]
+  const RANGES = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+
+  // 校验单个原子值（纯数字）是否在范围内
+  const inRange = (n, i) => { const v = Number(n); return Number.isInteger(v) && v >= RANGES[i][0] && v <= RANGES[i][1]; };
+
+  // 校验单个段（不含逗号）：* | n | n-m | */step | n/step | n-m/step
+  const validSegment = (seg, i) => {
+    const stepMatch = seg.match(/^(.+?)\/(\d+)$/);
+    const base = stepMatch ? stepMatch[1] : seg;
+    const step = stepMatch ? Number(stepMatch[2]) : null;
+    if (step !== null && (step < 1)) return false;                   // 步进值必须 ≥ 1
+
+    if (base === '*') return true;                                    // * 或 */n
+    const rangeMatch = base.match(/^(\d+)-(\d+)$/);
+    if (rangeMatch) {                                                  // n-m 或 n-m/step
+      const [, lo, hi] = rangeMatch;
+      return inRange(lo, i) && inRange(hi, i) && Number(lo) <= Number(hi);
+    }
+    if (/^\d+$/.test(base)) return inRange(base, i);                 // 纯数字
+    return false;
+  };
+
+  // 每个字段可以是逗号分隔的列表
+  return parts.every((p, i) =>
+    p.split(',').every(seg => seg.length > 0 && validSegment(seg, i))
+  );
 }
 
 
@@ -849,32 +888,37 @@ function _bindCronInterval(panel) {
     class: 'cfg-cron-badge',
     role: 'button',
     tabindex: '0',
-    title: '点击暂停 / 恢复定时计划',
   });
   cronRow.after(badge);
 
-  /* 需要禁用的控件：数字输入框 + 步进按钮 */
+  /* 需要禁用的控件 */
   const intervalControls = [
     ...intervalRow.querySelectorAll('input[type="number"]'),
     ...intervalRow.querySelectorAll('button.cfg-step-btn'),
   ];
 
   function update() {
-    const { commented, valid } = _parseCronValue(cronInput.value);
-    const active = valid && !commented;
-    const paused = valid && commented;
+    const val = cronInput.value.trim();
+    const isValid = _isValidCron(val);
+    // 暂停态：值为空 且 存有上次的合法值
+    const isPaused = val === '' && !!cronInput.dataset.pausedValue;
 
-    if (active) {
+    if (isValid) {
+      /* ── 启用态：绿色 ── */
       badge.className = 'cfg-cron-badge cfg-cron-badge--active';
+      badge.title = '点击暂停定时计划';
       badge.innerHTML = `${_SVG_CLOCK}<span>定时计划已启用 · 检测间隔不生效</span>`;
       intervalControls.forEach(c => { c.disabled = true; });
       intervalRow.classList.add('cfg-field--muted');
-    } else if (paused) {
+    } else if (isPaused) {
+      /* ── 暂停态：橙色 ── */
       badge.className = 'cfg-cron-badge cfg-cron-badge--active cfg-cron-badge--paused';
+      badge.title = '点击恢复定时计划';
       badge.innerHTML = `${_SVG_CLOCK}<span>定时计划已暂停 · 检测间隔生效</span>`;
       intervalControls.forEach(c => { c.disabled = false; });
       intervalRow.classList.remove('cfg-field--muted');
     } else {
+      /* ── 隐藏：无合法 Cron ── */
       badge.className = 'cfg-cron-badge';
       badge.innerHTML = '';
       intervalControls.forEach(c => { c.disabled = false; });
@@ -883,21 +927,36 @@ function _bindCronInterval(panel) {
   }
 
   function toggleCron() {
-    const { commented, valid, expr } = _parseCronValue(cronInput.value);
-    if (!valid) return;
-    cronInput.value = commented ? expr : ``;
+    const val = cronInput.value.trim();
+    if (_isValidCron(val)) {
+      /* 启用 → 暂停：保存当前值，清空输入框 */
+      cronInput.dataset.pausedValue = val;
+      cronInput.value = '';
+    } else if (val === '' && cronInput.dataset.pausedValue) {
+      /* 暂停 → 恢复：从 dataset 取回上次合法值 */
+      cronInput.value = cronInput.dataset.pausedValue;
+      delete cronInput.dataset.pausedValue;
+    } else {
+      return; // 其他状态（非法输入）不响应点击
+    }
     cronInput.dispatchEvent(new Event('input'));
-    /* 通知 mkCronInput 重绘着色层（不切换到编辑模式） */
     cronInput.dispatchEvent(new Event('cfg-cron-refresh'));
     requestAnimationFrame(update);
   }
 
   badge.addEventListener('click', toggleCron);
-  badge.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCron(); } });
-  cronInput.addEventListener('input', update);
+  badge.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCron(); }
+  });
+
+  cronInput.addEventListener('input', () => {
+    // 用户手动输入时，若非空则清除暂停存储，防止误恢复到旧值
+    if (cronInput.value.trim() !== '') delete cronInput.dataset.pausedValue;
+    update();
+  });
+
   requestAnimationFrame(update);
 }
-
 
 /* ═══════════════════════════ 面板构建 ═══════════════════════════ */
 function buildPanel(tabId) {

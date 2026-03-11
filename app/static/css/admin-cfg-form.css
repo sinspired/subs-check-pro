@@ -1,5 +1,4 @@
 /* admin-cfg-form.css  v4 */
-*/
 
 /* ════════════════════════════════════════════════════════════
    标题区
@@ -258,6 +257,11 @@
   .cfg-panels-wrap:not(.split-mode) .cfg-panel.active {
     width: 100%;
   }
+
+  /* 双栏时右侧控件列缩窄，防止标签被挤压 */
+  .cfg-panels-wrap.split-mode .cfg-field {
+    grid-template-columns: 1fr 0.8fr;
+  }
 }
 
 .cfg-panel {
@@ -340,6 +344,10 @@
   border-radius: 6px;
   transition: background 0.12s, margin 0.12s;
 }
+
+.cfg-field.split-active {
+  grid-template-columns: 1fr 0.2fr;
+}
 .cfg-field:last-child {
   border-bottom: none;
 }
@@ -352,11 +360,11 @@
   grid-column: 1;
   grid-row: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
-  align-self: center;
+  align-self: flex-start;
 }
 .cfg-label-col .cfg-label-text {
   white-space: nowrap;
@@ -364,7 +372,20 @@
   text-overflow: ellipsis;
   flex-shrink: 0;
   max-width: 100%;
+  align-items: flex-start;
+  align-self: flex-start;
 }
+
+/* hint 在 label 列内的样式 */
+.cfg-label-col .cfg-label-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.35;
+  opacity: 0.82;
+  white-space: normal; /* 允许换行 */
+  word-break: break-word;
+}
+
 .cfg-label-col .cfg-links {
   display: flex;
   flex-wrap: wrap;
@@ -1180,6 +1201,7 @@
   background: color-mix(in srgb, var(--warning, #f59e0b) 9%, transparent);
   border-color: color-mix(in srgb, var(--warning, #f59e0b) 25%, transparent);
 }
+
 .cfg-cron-badge--paused:hover {
   background: color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent);
   border-color: color-mix(in srgb, var(--warning, #f59e0b) 40%, transparent);
