@@ -322,18 +322,18 @@ const SCHEMA = [
 const FIELD_VALIDATORS = {
   'alive-concurrent': v => { const n = Number(v); if (n > 500) return { level: 'warn', msg: `并发 ${n} 过高，超出多数路由器处理能力，建议 100–300` }; if (n > 300) return { level: 'info', msg: `并发 ${n} 偏高，请确认机器性能` }; if (n === 0) return { level: 'ok', msg: '自动模式：根据 concurrent 基准自动计算' }; return null; },
   'speed-concurrent': v => { const n = Number(v); if (n > 32) return { level: 'warn', msg: `并发 ${n} 较高，测速会占用大量带宽，建议配合 total-speed-limit` }; if (n === 0) return { level: 'ok', msg: '自动模式' }; return null; },
-  'timeout': v => { const n = Number(v); if (n < 1000) return { level: 'warn', msg: `超时 ${n}ms 过短，可能大量误杀正常节点` }; if (n > 30000) return { level: 'info', msg: `超时 ${n}ms 较长，单次检测耗时会明显增加` }; return null; },
+  'timeout': v => { const n = Number(v); if (n < 3000) return { level: 'warn', msg: `超时 ${n}ms 过短，可能大量误杀正常节点` }; if (n > 15000) return { level: 'info', msg: `超时 ${n}ms 较长，单次检测耗时会明显增加` }; return null; },
   'check-interval': v => { const n = Number(v); if (!n) return null; if (n < 120) return { level: 'warn', msg: `间隔 ${n} 分钟过于频繁，易触发运营商阻断，建议 ≥ 720` }; if (n < 360) return { level: 'info', msg: `间隔 ${n} 分钟偏短，建议 720+` }; if (n >= 720) return { level: 'ok', msg: `间隔 ${n} 分钟（约 ${Math.round(n / 60)} 小时），频率合理` }; return null; },
   'min-speed': v => { const n = Number(v); if (n === 0) return { level: 'info', msg: '未设置最低速度，极慢节点均会保留' }; if (n > 2000) return { level: 'warn', msg: `${n} KB/s 偏高，建议 ≤ 500` }; return null; },
   'download-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，极慢节点会阻塞测速队列，建议设为 10s' }; return null; },
   'download-mb': v => { if (Number(v) === 0) return { level: 'info', msg: '未限制单节点下载量，高并发时可能消耗大量流量，建议 20 MB' }; return null; },
-  'success-limit': v => { const n = Number(v); if (n > 0 && n < 30) return { level: 'info', msg: `保存上限 ${n} 较少，建议 ≥ 100` }; return null; },
+  'success-limit': v => { const n = Number(v); if (n > 0 && n < 30) return { level: 'info', msg: `保存上限 ${n} 较少，建议 100-200` }; return null; },
   /* success-rate 校验：入参为界面显示值（0–100%），存储值为其 ÷100 */
   'success-rate': v => {
     const n = Number(v);
     if (n === 0) return { level: 'info', msg: '0 = 不过滤，所有订阅均保留' };
-    if (n > 0 && n < 5) return { level: 'info', msg: `阈值 ${n}% 极低，仅过滤几乎完全失效的订阅源` };
-    if (n > 80) return { level: 'warn', msg: `阈值 ${n}% 过高，可能误删大量正常订阅` };
+    if (n > 0 && n < 0.1) return { level: 'info', msg: `阈值 ${n}% 合理，仅过滤几乎完全失效的订阅源` };
+    if (n > 20) return { level: 'warn', msg: `阈值 ${n}% 过高，可能误删大量正常订阅` };
     return null;
   },
 };
