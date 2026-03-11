@@ -136,7 +136,7 @@ jobs:
               - 新增检测结果分析报告（`http://localhost:8199/analysis`）
               - 重构配置编辑器，支持预览、配置分析
               - 代理节点地理位置可视化
-              - 重构分享页面与报告页面布局
               - 重构代码,大幅提升 WebUI 使用体验
+              - 支持分栏编辑配置表单，优化样式和体验
               
             🔗 [查看详情](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
