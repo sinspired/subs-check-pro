@@ -81,6 +81,9 @@ High-performance proxy subscription checker.
 ![login](./doc/images/login-white.png)
 ![WebUI](./doc/images/WebUI.png)
 
+### 📊 检测结果分析报告
+![analysis](./doc/images/analysis.png)
+
 ### ⚡新增分享菜单项，自动生成singbox订阅，支持一键分享
 
 |                                  |                                        |                                        |
