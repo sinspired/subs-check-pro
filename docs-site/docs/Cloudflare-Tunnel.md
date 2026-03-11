@@ -31,12 +31,13 @@
 | `sub.你的域名.com/admin`              | `localhost:8199`| 配置管理主页       |
 | `sub.你的域名.com/static`             | `localhost:8199`| ico, js, css 文件 |
 | `sub.你的域名.com/api`                | `localhost:8199`| 软件运行状态       |
+| `sub.你的域名.com/analysis`           | `localhost:8199`| 检测结果分析报告   |
+| `sub.你的域名.com/files`              | `localhost:8199`| 内置文件服务      |
+| `sub.你的域名.com/sub`                | `localhost:8199`| 🔒分享码分享         |
+| `sub.你的域名.com/more`               | `localhost:8199`| 🔒无密码分享         |
 | `sub_store_for_subs_check.你的域名.com/*` | `localhost:8299`| ❗必须               |
 | `sub.你的域名.com/{sub-store-path}`   | `localhost:8299`| sub-store 后端     |
 | `sub.你的域名.com/share`              | `localhost:8299`| sub-store 分享     |
-| ⚠️ 如无暴露需求，以下不建议设置 | | |
-| `sub.你的域名.com/sub`                | `localhost:8199`| 🔒分享码分享         |
-| `sub.你的域名.com/more`               | `localhost:8199`| 🔒无密码分享         |
 
 ### 🌐 使用子域映射端口
 
