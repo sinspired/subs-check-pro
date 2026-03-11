@@ -55,19 +55,19 @@ const SCHEMA = [
       {
         title: '获取参数',
         fields: [
-          { key: 'concurrent', label: '基准线程', type: 'number', min: 1, max: 100, placeholder: '20', hint: '影响获取订阅任务，最大 100' },
-          { key: 'sub-urls-retry', label: '重试次数', type: 'number', min: 1, max: 5, placeholder: '3', hint: '获取订阅失败后的重试次数' },
-          { key: 'sub-urls-timeout', label: '请求超时 (s)', type: 'number', min: 5, max: 60, placeholder: '10', hint: '网络差可调大，建议 10–60' },
-          { key: 'success-rate', label: '成功率阈值 (%)', type: 'number', min: 0.01, max: 100, placeholder: '0', hint: '低于此值将把订阅标记为失效（存储值 0–1，界面显示 0–100%）' },
+          { key: 'concurrent', label: '拉取线程', type: 'number', min: 1, max: 100, placeholder: '20', hint: '自适应高并发的线程基准' },
+          { key: 'sub-urls-retry', label: '重试次数', type: 'number', min: 1, max: 5, placeholder: '3', hint: '获取订阅失败重试次数' },
+          { key: 'sub-urls-timeout', label: '下载超时 (s)', type: 'number', min: 5, max: 30, placeholder: '10', hint: '建议 10–60' },
+          { key: 'success-rate', label: '成功率阈值 (%)', type: 'number', min: 0.01, max: 100, placeholder: '0', hint: '低于此值将标记订阅失效' },
         ],
       },
       {
         title: '订阅处理',
         fields: [
           {
-            key: 'threshold', label: '相似度阈值', type: 'select', numericOptions: true,
+            key: 'threshold', label: '节点乱序', type: 'select', numericOptions: true,
             selectWidth: '500px',
-            hint: '按网段乱序去重',
+            hint: '按网段智能乱序',
             options: [
               { value: '1.00', label: '1.00 — /32' },
               { value: '0.75', label: '0.75 — /24' },
@@ -113,7 +113,7 @@ const SCHEMA = [
       {
         title: '节点要求',
         fields: [
-          { key: 'success-limit', label: '节点保存上限', type: 'number', min: 0, placeholder: '200', hint: '0 = 不限制' },
+          { key: 'success-limit', label: '节点数量上限', type: 'number', min: 0, placeholder: '200', hint: '0 = 不限制，建议 100-200' },
         ],
       },
       {
@@ -137,7 +137,7 @@ const SCHEMA = [
         ],
       },
       {
-        title: '流媒体检测',
+        title: '解锁检测',
         fields: [
           { key: 'media-check', label: '流媒体检测', type: 'toggle', hint: '检测流媒体和 AI 服务解锁情况' },
           {
@@ -149,12 +149,12 @@ const SCHEMA = [
       {
         title: '功能开关',
         fields: [
-          { key: 'keep-success-proxies', label: '保留历次成功节点', type: 'toggle', hint: '防上游更新丢失节点，强烈建议开启' },
+          { key: 'keep-success-proxies', label: '保留历次成功节点', type: 'toggle', hint: '防上游更新丢失节点，建议开启' },
           { key: 'rename-node', label: '重命名节点', type: 'toggle', hint: '根据节点 IP 归属地自动重命名' },
-          { key: 'enhanced-tag', label: '增强位置标签', type: 'toggle' },
-          { key: 'isp-check', label: 'ISP 类型检测', type: 'toggle' },
+          { key: 'enhanced-tag', label: '增强位置标签', type: 'toggle', hint: '添加形如 KR¹-US⁰，SG² 的角标，精确位置' },
+          { key: 'isp-check', label: 'ISP 类型检测', type: 'toggle', hint: '检测 isp 类型，比如: [原生|住宅]、[广播|机房]' },
           { key: 'drop-bad-cf-nodes', label: '丢弃 CF 不可达', type: 'toggle', hint: '可能误杀，谨慎开启' },
-          { key: 'ipv6', label: '启用 IPv6', type: 'toggle' },
+          { key: 'ipv6', label: '启用 IPv6', type: 'toggle', hint: '建议关闭' },
         ],
       },
       {
@@ -178,7 +178,7 @@ const SCHEMA = [
         title: '存储方式',
         fields: [
           {
-            key: 'save-method', label: '存储方式', type: 'select',
+            key: 'save-method', label: '存储方式', type: 'select', hint: '支持上传 webdav，GitHub gist，s3',
             selectWidth: '500px',
             options: [
               { value: 'local', label: '本地 (local)' },
@@ -187,7 +187,7 @@ const SCHEMA = [
               { value: 's3', label: 'S3 / MinIO / R2' },
             ],
           },
-          { key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output', hint: '留空 = 程序目录 /output' },
+          { key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output', hint: '留空 = 程序目录 /output / sub' },
         ],
       },
       {
@@ -203,7 +203,7 @@ const SCHEMA = [
         fields: [
           { key: 'github-gist-id', label: 'Gist ID', type: 'text', placeholder: 'a1b2c3d4e5f6...' },
           { key: 'github-token', label: 'GitHub Token', type: 'password', placeholder: 'ghp_xxxxxxxxxxxx' },
-          { key: 'github-api-mirror', label: 'API 镜像', type: 'text', placeholder: 'https://ghproxy.com/', hint: '可选，留空使用 api.github.com' },
+          { key: 'github-api-mirror', label: 'API 镜像', type: 'text', placeholder: 'https://api.github.com/', hint: '可选，留空使用 api.github.com' },
         ],
       },
       {
@@ -228,7 +228,7 @@ const SCHEMA = [
       {
         title: '节点处理',
         fields: [
-          { key: 'node-prefix', label: '节点前缀', type: 'text', placeholder: 'Ubuntu-', hint: '依赖"重命名节点"开关' },
+          { key: 'node-prefix', label: '节点前缀', type: 'text', placeholder: 'Ubuntu-', hint: '依赖"检测 - 重命名节点"开关' },
         ],
       },
     ],
@@ -241,18 +241,18 @@ const SCHEMA = [
       {
         title: 'Apprise 通知',
         fields: [
-          { key: 'notify-title', label: '通知标题', type: 'text', placeholder: '🔔 节点状态更新' },
           {
             key: 'apprise-api-server', label: 'Apprise API 地址', type: 'text', fullWidth: true,
             placeholder: 'https://apprise.example.com/notify',
-            hint: '内置服务或自建实例的 notify 接口',
+            hint: '内置服务或自建实例的 notify 接口，配置后可向 100+ 渠道发送通知',
             links: [{ label: '部署通知服务', href: 'https://github.com/sinspired/apprise_vercel', icon: 'github' }],
           },
           {
             key: 'recipient-url', label: '通知渠道', type: 'url-list',
-            hint: '支持 tgram:// bark:// mailto:// ntfy:// 等 Apprise 协议',
+            hint: '支持 tgram:// bark:// mailto:// ntfy:// 等 Apprise 协议，覆盖版本更新、节点状态和内置数据库更新通知，建议配置！',
             links: [{ label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' }],
           },
+          { key: 'notify-title', label: '通知标题', type: 'text', placeholder: '🔔 节点状态更新' },
         ],
       },
     ],
@@ -267,7 +267,7 @@ const SCHEMA = [
         fields: [
           { key: 'print-progress', label: '终端显示进度', type: 'toggle' },
           {
-            key: 'progress-mode', label: '进度条模式', type: 'select',
+            key: 'progress-mode', label: '进度条模式', type: 'select', hint: '默认自动模式,分阶段=当前阶段进度完成后显示下一阶段进度',
             selectWidth: '500px',
             options: [
               { value: 'auto', label: '自动 (auto)' },
@@ -291,7 +291,7 @@ const SCHEMA = [
           { key: 'update', label: '自动更新', type: 'toggle', hint: '关闭时仅提醒新版本' },
           { key: 'update-on-startup', label: '启动时检查更新', type: 'toggle' },
           { key: 'prerelease', label: '使用预发布版本', type: 'toggle', hint: '包含 beta / rc 版本' },
-          { key: 'cron-check-update', label: '检查更新 Cron', type: 'cron', fullWidth: true, placeholder: '0 9,21 * * *' },
+          { key: 'cron-check-update', label: '检查更新 Cron', type: 'cron', fullWidth: true, placeholder: '0 9,21 * * *', hint: '# 定时检查版本更新' },
           { key: 'update-timeout', label: '下载超时 (分钟)', type: 'number', min: 1, placeholder: '2' },
         ],
       },
@@ -300,17 +300,17 @@ const SCHEMA = [
         fields: [
           { key: 'sub-store-port', label: '监听端口', type: 'text', placeholder: ':8299' },
           { key: 'sub-store-path', label: '访问路径', type: 'text', placeholder: '/sub-store-path', hint: '建议设置以避免泄露；留空自动生成随机路径' },
-          { key: 'mihomo-overwrite-url', label: 'Mihomo 覆写 URL', type: 'text', fullWidth: true, placeholder: 'http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml' },
-          { key: 'sub-store-sync-cron', label: '同步 Gist Cron', type: 'cron', fullWidth: true, placeholder: '55 5-23/2 * * *' },
-          { key: 'sub-store-produce-cron', label: '更新订阅 Cron', type: 'cron', fullWidth: true, placeholder: '0 */2 * * *,sub,sub' },
-          { key: 'sub-store-push-service', label: 'Push 推送服务', type: 'text', placeholder: 'https://push.example.com' },
+          { key: 'mihomo-overwrite-url', label: 'Mihomo 覆写 URL', type: 'text', fullWidth: true, placeholder: 'http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml', hint: '用于生成带指定规则的mihomo/clash.meta订阅链接', },
+          { key: 'sub-store-sync-cron', label: '同步 Gist Cron', type: 'cron', fullWidth: true, placeholder: '55 5-23/2 * * *', hint: '定时将订阅/文件上传到私有 Gist. 在前端, 叫做 同步 或 同步配置.', },
+          { key: 'sub-store-produce-cron', label: '更新订阅 Cron', type: 'text', fullWidth: true, placeholder: '0 */2 * * *,sub,sub', hint: ' 0 */2 * * *,sub,sub_A;0 */3 * * *,col,col_B = 每 2 小时处理一次单条订阅 sub_A，每 3 小时处理一次组合订阅 col_B。', },
+          { key: 'sub-store-push-service', label: 'Push 推送服务', type: 'text', placeholder: 'https://push.example.com', hint: '例如：Bark: https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]', },
         ],
       },
       {
         title: '其他',
         fields: [
           { key: 'maxmind-db-path', label: 'MaxMind DB 路径', type: 'text', placeholder: '/data/GeoLite2-City.mmdb', hint: '留空则使用内置数据库' },
-          { key: 'callback-script', label: '回调脚本路径', type: 'text', placeholder: '/data/scripts/notify.sh', hint: '检测完成后执行' },
+          { key: 'callback-script', label: '回调脚本路径', type: 'text', placeholder: '/data/scripts/notify.sh', hint: '检测完成后执行的回调脚本路径', },
         ],
       },
     ],
