@@ -2,6 +2,7 @@
 package save
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	proxyutils "github.com/sinspired/subs-check-pro/proxy"
 
@@ -262,7 +264,7 @@ func mergeMihomoTemplate(templateData []byte, proxies []map[string]any) ([]byte,
 func loadMihomoTemplate() ([]byte, error) {
 	source := strings.TrimSpace(config.GlobalConfig.MihomoOverwriteURL)
 	if source == "" {
-		source = "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml"
+		source = "http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml"
 	}
 
 	if !strings.Contains(source, "://") {
@@ -273,13 +275,29 @@ func loadMihomoTemplate() ([]byte, error) {
 		return data, nil
 	}
 
+	// 本地 URL
 	if utils.IsLocalURL(source) {
 		if data, err := readLocalMihomoTemplate(source); err == nil && len(data) > 0 {
 			return data, nil
 		}
 	}
 
-	resp, err := http.Get(source)
+	// github地址添加代理前缀
+	warpedSource := utils.WarpURL(source, utils.IsGhProxyAvailable)
+
+	// 设置 30 秒超时
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, warpedSource, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	// 添加 User-Agent
+	req.Header.Set("User-Agent", "clash.meta")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("获取 mihomo 覆写模板失败: %w", err)
 	}
