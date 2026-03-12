@@ -567,7 +567,7 @@
                         <span class="file-name">{{ .Name }}</span>
                         <span class="file-path">{{ .Route }}</span>
                     </a>
-                    <button class="copy-btn" title="复制链接" data-route="{{ .Route }}" onclick="copyItem(this)">
+                    <button class="copy-btn" title="复制链接" data-route="{{ .Route }}" onclick="copyRoute(this)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             stroke-linecap="round" stroke-linejoin="round">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -631,15 +631,10 @@
         applyTheme(savedTheme);
 
         // ── 复制公共文件直链 ──────────────────────────────────────
-        // ── 复制订阅链接（通过 data-* 属性取值，安全无注入） ─────
-        function copyItem(btn) {
-            const name = btn.dataset.name;
-            const code = btn.dataset.code;
-            const url = window.location.origin
-                + (code ? '/sub/' + encodeURIComponent(code) + '/' : '/more/')
-                + encodeURIComponent(name);
+        function copyRoute(btn) {
+            const route = btn.dataset.route;
+            const url = window.location.origin + route;
 
-            // 优先使用 Clipboard API
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(url).then(() => {
                     showSuccess(btn);
@@ -647,7 +642,6 @@
                     fallbackCopy(url, btn);
                 });
             } else {
-                // 非 HTTPS 或不支持 clipboard 时，走降级方案
                 fallbackCopy(url, btn);
             }
         }
