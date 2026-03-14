@@ -536,20 +536,20 @@ function mkInput(field, value) {
   badge.style.display = 'none';
   wrap.append(inp, badge);
 
-const checkSpecial = () => {
-  const v = inp.value.trim();
-  const spec = specialDefs.find(s => s.value === v);
-  inp.classList.toggle('cfg-input--special', !!spec);
-  if (spec) {
-    badge.textContent = spec.label;
-    badge.title = spec.hint;
-    badge.style.display = '';
-    inp.placeholder = spec.hint;
-  } else {
-    badge.style.display = 'none';
-    inp.placeholder = originalPlaceholder;
-  }
-};
+  const checkSpecial = () => {
+    const v = inp.value.trim();
+    const spec = specialDefs.find(s => s.value === v);
+    inp.classList.toggle('cfg-input--special', !!spec);
+    if (spec) {
+      badge.textContent = spec.label;
+      badge.title = spec.hint;
+      badge.style.display = '';
+      inp.placeholder = spec.hint;
+    } else {
+      badge.style.display = 'none';
+      inp.placeholder = originalPlaceholder;
+    }
+  };
 
   inp.addEventListener('input', checkSpecial);
   requestAnimationFrame(checkSpecial);
@@ -669,21 +669,73 @@ function mkChips(field, values) {
 function mkUrlList(field, values) {
   const list = Array.isArray(values) ? values : (values ? [values] : []);
   const wrap = el('div', { class: 'cfg-url-list', 'data-key': field.key });
+
+  /* ── 标签行：label + 折行切换按钮 ── */
+  // 注意：label 由外层 mkField 渲染，这里只在列表内部顶部插入按钮
+  const toolbar = el('div', { class: 'cfg-url-toolbar' });
+  const wrapToggle = el('button', {
+    type: 'button',
+    class: 'cfg-url-wrap-toggle',
+    title: '切换折行',
+    textContent: '↵ 折行',
+  });
+  let wrapOn = false;
+
+  wrapToggle.addEventListener('click', () => {
+    wrapOn = !wrapOn;
+    wrap.classList.toggle('wrap-mode', wrapOn);
+    wrapToggle.classList.toggle('active', wrapOn);
+    wrapToggle.textContent = wrapOn ? '→ 单行' : '↵ 折行';
+    /* 切换后重算所有行高 */
+    wrap.querySelectorAll('.cfg-url-input').forEach(t => {
+      if (wrapOn) {
+        t.style.height = 'auto';
+        t.style.height = Math.min(t.scrollHeight, 300) + 'px';
+      } else {
+        t.style.height = '';
+      }
+    });
+  });
+
+  toolbar.appendChild(wrapToggle);
+  wrap.appendChild(toolbar);
+
   const addBtn = el('button', { class: 'cfg-url-add', type: 'button', textContent: '+ 添加' });
   wrap.appendChild(addBtn);
+
   function addRow(val = '') {
     const row = el('div', { class: 'cfg-url-item' });
-    const inp = el('input', { class: 'cfg-input cfg-url-input', type: 'text', placeholder: 'https://' });
+    const inp = el('textarea', {
+      class: 'cfg-input cfg-url-input',
+      placeholder: 'https://',
+      spellcheck: 'false',
+      autocomplete: 'off',
+      autocorrect: 'off',
+      autocapitalize: 'none',
+    });
     inp.value = val;
+
+    /* 自动撑高：field-sizing 不支持时的兜底 */
+    const autoResize = () => {
+      if (!inp.matches(':focus') && !wrap.classList.contains('wrap-mode')) return;
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(inp.scrollHeight, 300) + 'px';
+    };
+    inp.addEventListener('input', autoResize);
+    inp.addEventListener('focus', autoResize);
+    inp.addEventListener('blur', () => { inp.style.height = ''; });
+
     const del = el('button', { class: 'cfg-url-del', type: 'button', title: '删除', textContent: '×' });
     del.addEventListener('click', () => row.remove());
     row.append(inp, del);
     wrap.insertBefore(row, addBtn);
   }
+
   addBtn.addEventListener('click', () => addRow());
   list.forEach(v => addRow(v));
   return wrap;
 }
+
 /* ═══════════════════════════════════════════════════════════════
    Cron 高亮输入控件  mkCronInput
    ───────────────────────────────────────────────────────────────
@@ -1476,7 +1528,10 @@ function collectPanel(tabId) {
         }
         case 'url-list': {
           const w = panel.querySelector(`.cfg-url-list[data-key="${key}"]`);
-          if (w) out[key] = Array.from(w.querySelectorAll('.cfg-url-item input')).map(i => i.value.trim()).filter(Boolean);
+          if (w) out[key] = Array.from(w.querySelectorAll('.cfg-url-item .cfg-url-input'))
+            .flatMap(t => t.value.split('\n'))
+            .map(s => s.trim())
+            .filter(Boolean);
           break;
         }
         default: {
