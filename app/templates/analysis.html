@@ -525,11 +525,10 @@
         }
 
         .hero-summary {
-            padding: 14px 18px;
-            background: color-mix(in srgb, var(--accent) 6%, transparent);
-            border-radius: 10px;
-            border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-            border-left: 3px solid var(--accent);
+            padding: 12px 16px;
+            background: color-mix(in srgb, var(--accent) 10%, transparent);
+            border-radius: 8px;
+            border: 1px solid var(--border);
             margin-bottom: 16px;
             display: flex;
             align-items: flex-start;
@@ -541,7 +540,7 @@
             height: 14px;
             flex-shrink: 0;
             margin-top: 2px;
-            color: var(--accent);
+            color: var(--muted);
         }
 
         .hero-summary-text {
@@ -2473,6 +2472,26 @@
 
                 this._ro = new ResizeObserver(() => { this.resize(); this.buildArcs(); this.t0 = null; });
                 this._ro.observe(container);
+
+                // hover 检测
+                this._hoveredCode = null;
+                this._onMouseMove = (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const mx = (e.clientX - rect.left) * (this.W / rect.width);
+                    const my = (e.clientY - rect.top) * (this.H / rect.height);
+                    let found = null;
+                    for (const arc of this.arcs) {
+                        const dist = Math.hypot(mx - arc.x2, my - arc.y2);
+                        if (dist < 16 * (this.scale || 1)) { found = arc.code; break; }
+                    }
+                    if (found !== this._hoveredCode) {
+                        this._hoveredCode = found;
+                        this.canvas.style.cursor = found ? 'pointer' : '';
+                    }
+                };
+                this._onMouseLeave = () => { this._hoveredCode = null; this.canvas.style.cursor = ''; };
+                this.canvas.addEventListener('mousemove', this._onMouseMove);
+                this.canvas.addEventListener('mouseleave', this._onMouseLeave);
             }
 
             // 图例 & 提示 overlay
@@ -2821,15 +2840,17 @@
                 ctx.fill();
 
                 // 标签只在宽屏且比例足够大时显示
-                if (ratio > 0.25 && !this.isMobile) {
-                    const fs = Math.round((8 + ratio * 4) * sc);
-                    ctx.font = `700 ${fs}px system-ui,sans-serif`;
+                const isHovered = this._hoveredCode === code;
+                // 常驻显示：ratio 较高才显示，字体固定小号
+                if ((ratio > 0.25 && !this.isMobile) || isHovered) {
+                    const fs = Math.round((isHovered ? 9 : 7 + ratio * 2) * sc);
+                    ctx.font = `600 ${fs}px system-ui,sans-serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
                     ctx.shadowBlur = 4;
                     ctx.shadowColor = 'rgba(0,0,0,0.9)';
-                    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-                    ctx.fillText(code, x2, y2 - r - 3 * sc);
+                    ctx.fillStyle = isHovered ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.75)';
+                    ctx.fillText(code, x2, y2 - r - 2 * sc);
                 }
                 ctx.restore();
             }
@@ -2888,6 +2909,8 @@
             destroy() {
                 if (this.raf) cancelAnimationFrame(this.raf);
                 if (this._ro) this._ro.disconnect();
+                this.canvas.removeEventListener('mousemove', this._onMouseMove);
+                this.canvas.removeEventListener('mouseleave', this._onMouseLeave);
             }
         }
 
