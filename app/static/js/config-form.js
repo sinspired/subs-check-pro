@@ -372,6 +372,7 @@ const SPECIAL_INPUT_VALUES = {
   ],
   'system-proxy': [
     { value: 'direct', label: '直连', hint: '强制直连，不使用任何系统代理' },
+    { value: '', label: '自动', hint: '留空则自动检测系统代理' }, 
   ],
 };
 
@@ -1040,6 +1041,8 @@ function _bindCronInterval(panel) {
     cronInput.dispatchEvent(new Event('input'));
     cronInput.dispatchEvent(new Event('cfg-cron-refresh'));
     requestAnimationFrame(update);
+
+    requestAnimationFrame(() => window.saveConfigWithValidation?.());
   }
 
   badge.addEventListener('click', toggleCron);

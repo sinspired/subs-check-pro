@@ -14,8 +14,9 @@ progress-mode: "auto"
 # "*/30 * * * *" 表示每30分钟执行一次
 # "0 4,16 * * *" 表示每天凌晨4点和16点执行一次
 
-# cron表达式，如果配置了此项，将忽略check-interval
-# cron-expression: "0 4,16 * * *"
+# cron表达式，如果正确配置此项，将忽略check-interval
+# 建议使用：0 4,16 * * *
+cron-expression: ""
 
 # 检查间隔(分钟)
 # 建议使用 cron-expression 表达式，每天凌晨4点和16点执行一次
