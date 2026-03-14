@@ -581,7 +581,7 @@
 /* ── 匹配特殊值时：输入框仅做轻微着色，不加粗，重心让给徽章 ── */
 .cfg-input--special {
   color: var(--accent);
-   background: color-mix(in srgb, var(--accent) 6%, var(--input-bg));
+  background: color-mix(in srgb, var(--accent) 6%, var(--input-bg));
   border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
   font-weight: 600;
   /* placeholder 弱化：特殊态的 hint 文字不抢眼 */
@@ -1066,11 +1066,70 @@
   color: var(--fg);
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+  display: block;
+  resize: none;
+  height: 32px;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  white-space: nowrap; /* 默认不折行 */
+  word-break: break-all;
+  /* 细滚动条 */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border) 80%, transparent)
+    transparent;
 }
-.cfg-url-item .cfg-url-input:focus {
-  border-color: var(--accent-light);
-  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
+
+.cfg-url-item .cfg-url-input::-webkit-scrollbar {
+  height: 2px; /* 水平滚动条高度 */
 }
+.cfg-url-item .cfg-url-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cfg-url-item .cfg-url-input::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 120%, transparent);
+  border-radius: 99px;
+}
+
+.cfg-url-item .cfg-url-input:focus,
+.cfg-url-list.wrap-mode .cfg-url-input {
+  white-space: pre-wrap;
+  overflow-x: hidden;
+  overflow-y: hidden; /* 不需要滚动条，内容撑高 */
+  height: auto;
+  min-height: 32px;
+  max-height: 300px;
+  field-sizing: content; /* 现代浏览器自动撑高 */
+}
+
+.cfg-url-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+
+.cfg-url-wrap-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.cfg-url-wrap-toggle:hover,
+.cfg-url-wrap-toggle.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 .cfg-url-item .cfg-url-input::placeholder {
   color: var(--muted);
   opacity: 0.45;
