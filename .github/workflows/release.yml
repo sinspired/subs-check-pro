@@ -132,11 +132,8 @@ jobs:
             项目: `${{ github.repository }}`
 
             说明:
-              - 新增内置文件管理页面（`http://localhost:8199/files`）
-              - 新增检测结果分析报告（`http://localhost:8199/analysis`）
-              - 重构配置编辑器，支持预览、配置分析
-              - 代理节点地理位置可视化
-              - 重构代码,大幅提升 WebUI 使用体验
-              - 支持分栏编辑配置表单，优化样式和体验
+              - 为订阅节点添加流量和过期信息
+              - 可使用 [sub-store脚本](https://raw.githubusercontent.com/sinspired/sub-store-scripts/main/surge/modules/sub-store-scripts/sub-info/node.js#showLastUpdate) 注入一个订阅信息节点
+              - 错误修复和优化
               
             🔗 [查看详情](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
