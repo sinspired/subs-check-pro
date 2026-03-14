@@ -2843,7 +2843,7 @@
                 // 标签只在宽屏且比例足够大时显示
                 const isHovered = this._hoveredCode === code;
                 // 常驻显示：ratio 较高才显示，字体固定小号
-                if ((ratio > 0.25 && !this.isMobile) || isHovered) {
+                if ((ratio > 0.4 && !this.isMobile) || isHovered) {
                     const fs = Math.round((isHovered ? 9 : 7 + ratio * 2) * sc);
                     ctx.font = `600 ${fs}px system-ui,sans-serif`;
                     ctx.textAlign = 'center';
