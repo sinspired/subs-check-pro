@@ -880,6 +880,7 @@ main {
   font-size: 14px;
   font-weight: 600;
   gap: var(--gap);
+  margin-top: 6px;
 }
 
 #progressPercent {
@@ -909,14 +910,14 @@ main {
 }
 
 .progress-bar-wrap progress::-webkit-progress-value {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, var(--accent), var(--success));
   border-radius: 2px;
   transition: width 0.3s ease;
   animation: progressShimmer 2s ease-in-out infinite;
 }
 
 .progress-bar-wrap progress::-moz-progress-bar {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, var(--accent), var(--success));
   border-radius: 2px;
   transition: width 0.3s ease;
 }
@@ -989,6 +990,7 @@ main {
   font-weight: 800;
   font-size: 14px;
   color: var(--muted);
+  margin-top: 4px;
 }
 
 /* 默认小屏显示精简版 */
@@ -2118,6 +2120,20 @@ main {
   }
 }
 
+@media (max-width: 375px) {
+  .history-line {
+    width: 100%; /* 跟随 project-name 宽度 */
+    text-align: justify; /* ← 两端对齐 */
+    text-align-last: justify; /* 末行也强制两端对齐（单行时必须） */
+    white-space: nowrap; /* 保持单行，否则 justify 按换行分布 */
+  }
+
+  .mobileBtns {
+    position: relative;
+    right: -10px;
+  }
+}
+
 @media (max-width: 899px) {
   .logo {
     width: 38px;
@@ -2164,6 +2180,10 @@ main {
   /* 历史检测结果 */
   .history-placeholder {
     margin: 0;
+  }
+
+  .history-title {
+    margin-top: 0;
   }
 
   /* 小屏显示退出和分享按钮 */
