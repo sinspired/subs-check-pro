@@ -3,14 +3,22 @@ package app
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-yaml"
 	"github.com/sinspired/subs-check-pro/check"
 	"github.com/sinspired/subs-check-pro/config"
 )
+
+// reportFallback 从分析报告中提取的兜底数据
+type reportFallback struct {
+	trafficRaw   uint64    // check_info.check_traffic_raw（字节）
+	checkEndTime time.Time // check_info.check_end_time_raw
+}
 
 const (
 	// totalBytes = 1024 GiB，以字节计
@@ -55,28 +63,38 @@ func buildSubscriptionInfo() string {
 	upload := check.UP.Load()
 	download := check.DOWN.Load()
 
+	// 兜底：程序重启后原子计数器归零，从历史报告中补充
+	var fb reportFallback
+	if upload == 0 && download == 0 || check.CheckEndTime.IsZero() {
+		fb = loadReportFallback()
+	}
+
+	// 流量：有实时值用实时值，否则用报告中的历史总流量（全部计入 download）
+	if upload == 0 && download == 0 && fb.trafficRaw > 0 {
+		download = fb.trafficRaw
+	}
+
+	// last_update：有检测结束时间用检测结束时间，否则从报告中取，再否则用当前时间占位
+	var lastUpdate string
+	switch {
+	case !check.CheckEndTime.IsZero():
+		lastUpdate = check.CheckEndTime.Format(LogTimeFormat)
+	case !fb.checkEndTime.IsZero():
+		lastUpdate = fb.checkEndTime.Format(LogTimeFormat)
+	default:
+		lastUpdate = now.Format(LogTimeFormat)
+	}
+
 	next := calcNextResetTime(now)
 	remaining := next.Sub(now)
-
-	// next_update 始终显示
 	nextUpdate := next.Format(LogTimeFormat)
 
-	// reset_hour / reset_day 二选一：
-	//   remaining < 24h → 只显示 reset_hour（具体几点重置）
-	//   remaining ≥ 24h → 只显示 reset_day（还剩整天数）
 	var resetField string
 	if remaining < 24*time.Hour {
 		resetField = fmt.Sprintf("reset_hour=%d", next.Hour())
 	} else {
 		resetDays := int(remaining.Hours() / 24)
 		resetField = fmt.Sprintf("reset_day=%d", resetDays)
-	}
-
-	// last_update 以上次检测完成时间为准；若尚未检测过则用当前时间占位
-	// FIXMEL: 如检测过应使用上次检测完成时间
-	lastUpdate := now.Format(LogTimeFormat)
-	if !check.CheckEndTime.IsZero() {
-		lastUpdate = check.CheckEndTime.Format(LogTimeFormat)
 	}
 
 	return fmt.Sprintf(
@@ -269,4 +287,39 @@ func intIn(v int, list []int) bool {
 		}
 	}
 	return false
+}
+
+// loadReportFallback 读取最新分析报告，提取流量与结束时间。
+func loadReportFallback() reportFallback {
+	reportPath, err := AnalysisReportPath()
+	if err != nil {
+		return reportFallback{}
+	}
+
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		return reportFallback{}
+	}
+
+	// 只解析用到的字段，避免引入完整结构体
+	var doc struct {
+		CheckInfo struct {
+			TrafficRaw      uint64 `yaml:"check_traffic_raw"`
+			CheckEndTimeRaw string `yaml:"check_end_time_raw"`
+		} `yaml:"check_info"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return reportFallback{}
+	}
+
+	fb := reportFallback{
+		trafficRaw: doc.CheckInfo.TrafficRaw,
+	}
+	if raw := doc.CheckInfo.CheckEndTimeRaw; raw != "" {
+		// check_end_time_raw 为 RFC3339 格式：2026-03-17T02:18:17+08:00
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			fb.checkEndTime = t
+		}
+	}
+	return fb
 }
