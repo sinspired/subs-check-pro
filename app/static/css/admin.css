@@ -154,7 +154,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 8px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -162,14 +162,24 @@ header {
 .hdr-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .logo {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 6px;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .site-title {
@@ -178,39 +188,130 @@ header {
   flex-direction: column;
   align-items: flex-start;
   width: max-content;
-  /* 保证内部宽度自适应 */
 }
 
-/* 标题行布局 */
 .title-row {
   display: flex;
   align-items: baseline;
-  /* 让版本号对齐标题文字基线 */
-  gap: 8px;
+  gap: 6px;
+}
+
+.title-col {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: max-content;
 }
 
 .project-name {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   color: var(--accent);
-  line-height: 1.2;
-  display: inline-block;
+  white-space: nowrap; /* 单行 */
 }
 
 .slogan {
-  font-weight: normal;
+  font-weight: 400;
   color: var(--fg);
-  font-size: 11.5px;
   opacity: 0.8;
-  width: 100%;
-  /* 与 project-name 保持一致宽度 */
+  font-size: 11px;
+  width: 100%; /* 跟随 project-name 宽度 */
+  display: block;
+  text-align: justify; /* ← 两端对齐 */
+  text-align-last: justify; /* 末行也强制两端对齐（单行时必须） */
+  white-space: nowrap; /* 保持单行，否则 justify 按换行分布 */
+  padding-right: 2px;
 }
 
-/* 基础版本号样式 */
+.pro-plus-wrap {
+  width: 0; /* 在 flex 行中占零宽，不影响任何元素 */
+  overflow: visible; /* 允许内容溢出显示 */
+  position: relative; /* 作为 pro-plus 的定位基准 */
+  align-self: flex-start; /* 不参与行高撑开 */
+  margin-left: -4px;
+}
+
+.pro-plus {
+  display: inline-block;
+  position: absolute;
+  top: -8px;
+  /* left: -2px;                */
+  font-weight: 700;
+  font-size: 20px;
+  color: #00c5b7;
+  text-shadow: 0 0 5px rgba(14, 165, 160, 0.8), 0 0 10px rgba(14, 165, 160, 0.4);
+  transform: skewX(-10deg);
+  animation: neon-glow 2s infinite alternate;
+  white-space: nowrap;
+}
+
+/* 如果是深色模式，微调阴影色 */
+[data-theme='dark'] .pro-plus {
+  filter: drop-shadow(0 0 2px rgba(0, 255, 136, 0.3));
+}
+
+@keyframes neon-glow {
+  from {
+    opacity: 0.8;
+    filter: brightness(1);
+  }
+  to {
+    opacity: 1;
+    filter: brightness(1.3);
+    text-shadow: 0 0 12px rgba(0, 255, 242, 0.68);
+  }
+}
+
+/* Pro 会员金色样式 */
+.pro-plus-golden {
+  display: inline-block;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1.1em;
+  margin-left: 2px;
+  vertical-align: super;
+  /* 确保它是上标 */
+
+  /* 金属渐变色 */
+  background: linear-gradient(
+    135deg,
+    #fff5c3 0%,
+    /* 高光 */ #ffd700 25%,
+    /* 标准金 */ #fdb931 50%,
+    /* 暖金 */ #b8860b 100% /* 深金/古铜 */
+  );
+
+  /* 将背景裁剪到文字 */
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  /* 增强质感的投影 */
+  filter: drop-shadow(0 0 1px rgba(184, 134, 11, 0.5));
+
+  /* 防止选中时变色 */
+  user-select: none;
+
+  /* 微弱的呼吸效果（可选，增加高级感） */
+  animation: gold-shimmer 3s infinite ease-in-out;
+}
+
+@keyframes gold-shimmer {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px rgba(253, 185, 49, 0.4));
+  }
+
+  50% {
+    filter: drop-shadow(0 0 3px rgba(253, 185, 49, 0.8));
+    transform: scale(1.05);
+  }
+}
+
 .version {
   font-size: 11px;
   color: var(--muted);
-  margin-left: -10px;
+  margin-left: 1px;
   padding: 1px 6px;
   border-radius: 6px;
   transition: all 0.3s ease;
@@ -1792,86 +1893,6 @@ main {
   /* 容器宽度收缩到文字 */
 }
 
-/* Pro 会员金色样式 */
-.pro-plus-golden {
-  display: inline-block;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 800;
-  font-size: 1.1em;
-  margin-left: 2px;
-  vertical-align: super;
-  /* 确保它是上标 */
-
-  /* 金属渐变色 */
-  background: linear-gradient(
-    135deg,
-    #fff5c3 0%,
-    /* 高光 */ #ffd700 25%,
-    /* 标准金 */ #fdb931 50%,
-    /* 暖金 */ #b8860b 100% /* 深金/古铜 */
-  );
-
-  /* 将背景裁剪到文字 */
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-
-  /* 增强质感的投影 */
-  filter: drop-shadow(0 0 1px rgba(184, 134, 11, 0.5));
-
-  /* 防止选中时变色 */
-  user-select: none;
-
-  /* 微弱的呼吸效果（可选，增加高级感） */
-  animation: gold-shimmer 3s infinite ease-in-out;
-}
-
-@keyframes gold-shimmer {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 1px rgba(253, 185, 49, 0.4));
-  }
-
-  50% {
-    filter: drop-shadow(0 0 3px rgba(253, 185, 49, 0.8));
-    transform: scale(1.05);
-  }
-}
-
-/* 如果是深色模式，微调阴影色 */
-[data-theme='dark'] .pro-plus {
-  filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.3));
-}
-
-.pro-plus {
-  display: inline-block;
-  font-weight: 600;
-  vertical-align: super;
-  margin-left: 2px;
-
-  /* 使用比主题色更亮、更通透的青蓝色 */
-  color: #00fff2;
-
-  /* 核心：多层青色外发光，营造一种“能量充盈”的 Pro 感 */
-  text-shadow: 0 0 5px rgba(14, 165, 160, 0.8), 0 0 10px rgba(14, 165, 160, 0.4);
-
-  /* 稍微倾斜，增加动感 */
-  transform: skewX(-10deg);
-  animation: neon-glow 2s infinite alternate;
-}
-
-@keyframes neon-glow {
-  from {
-    opacity: 0.8;
-    filter: brightness(1);
-  }
-  to {
-    opacity: 1;
-    filter: brightness(1.3);
-    text-shadow: 0 0 12px rgba(0, 255, 242, 0.8);
-  }
-}
-
 .login-card h3 {
   margin: 0 0 8px 0;
   font-size: 22px;
@@ -1880,6 +1901,9 @@ main {
   text-align: center;
 }
 
+.login-text {
+  margin-left: 10px;
+}
 /* 版本号 */
 /* 基础样式 */
 .version-badge {
@@ -2095,14 +2119,20 @@ main {
 }
 
 @media (max-width: 899px) {
+  .logo {
+    width: 38px;
+    height: 38px;
+    /* margin-bottom: 4px; */
+  }
   .project-name {
-    font-size: 21px;
+    margin-bottom: -1px;
   }
 
   .slogan {
-    font-size: 13px;
+    font-weight: 300;
+    opacity: 0.8;
+    padding-right: 1px;
   }
-
   .toast {
     border-radius: 6px;
     border-left: 6px solid transparent;
