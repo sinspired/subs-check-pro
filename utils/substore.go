@@ -307,6 +307,7 @@ func checkResource(endpoint, name string) error {
 }
 
 // createResource 创建资源
+//TODO: 应避免覆盖用户设置的脚本
 func createResource(endpoint string, data any, name string) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {

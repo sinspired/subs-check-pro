@@ -1071,7 +1071,8 @@ main {
 
 /* 内容布局 */
 .tip-content {
-  padding: 0 18px 12px 18px;
+  border-top: 1px solid var(--border);
+  padding: 10px 18px 6px 18px;
   display: flex;
   flex-direction: column;
   gap: 2px;

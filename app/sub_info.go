@@ -73,6 +73,7 @@ func buildSubscriptionInfo() string {
 	}
 
 	// last_update 以上次检测完成时间为准；若尚未检测过则用当前时间占位
+	// FIXMEL: 如检测过应使用上次检测完成时间
 	lastUpdate := now.Format(LogTimeFormat)
 	if !check.CheckEndTime.IsZero() {
 		lastUpdate = check.CheckEndTime.Format(LogTimeFormat)
