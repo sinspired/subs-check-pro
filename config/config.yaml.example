@@ -288,11 +288,13 @@ github-token: ""
 # github api mirror
 github-api-mirror: ""
 
-# 将测速结果推送到Worker的地址
+# r2
+# 将测速结果推送到 Cloudflare Worker的地址
 worker-url: "https://example.worker.dev"
 # Worker令牌
 worker-token: 1234567890
 
+# s3
 # 将测速结果推送到S3/Minio的地址
 s3-endpoint: "127.0.0.1:9000"
 # S3的访问凭证

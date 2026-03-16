@@ -39,7 +39,7 @@ const SCHEMA = [
           {
             key: 'github-proxy', label: 'GitHub 代理', type: 'text', fullWidth: true,
             placeholder: 'https://ghfast.top/',
-            hint: '加速 GitHub Release 下载；国内强烈建议配置',
+            hint: '加速 GitHub Release 下载；建议配置',
             links: [{ label: '自建 CF 代理', href: 'https://github.com/sinspired/CF-Proxy', icon: 'github' }],
           },
           { key: 'ghproxy-group', label: 'GitHub 代理列表', type: 'url-list', hint: '程序自动筛选可用代理，优先级低于 github-proxy' },
@@ -55,7 +55,7 @@ const SCHEMA = [
       {
         title: '获取参数',
         fields: [
-          { key: 'concurrent', label: '拉取线程', type: 'number', min: 1, max: 100, placeholder: '20', hint: '自适应高并发的线程基准' },
+          { key: 'concurrent', label: '拉取线程', type: 'number', min: 1, max: 100, placeholder: '20', hint: '拉取订阅的并发数，也是自适应高并发的线程基准' },
           { key: 'sub-urls-retry', label: '重试次数', type: 'number', min: 1, max: 5, placeholder: '3', hint: '获取订阅失败重试次数' },
           { key: 'sub-urls-timeout', label: '下载超时 (s)', type: 'number', min: 5, max: 30, placeholder: '10', hint: '建议 10–60' },
           { key: 'success-rate', label: '成功率阈值 (%)', type: 'number', min: 0.01, max: 100, placeholder: '0', hint: '低于此值将标记订阅失效' },
@@ -178,16 +178,21 @@ const SCHEMA = [
         title: '存储方式',
         fields: [
           {
-            key: 'save-method', label: '存储方式', type: 'select', hint: '支持上传 webdav，GitHub gist，s3',
+            key: 'save-method', label: '存储方式', type: 'select', hint: '支持上传 webdav，GitHub gist，R2，s3',
             selectWidth: '500px',
             options: [
               { value: 'local', label: '本地 (local)' },
               { value: 'webdav', label: 'WebDAV' },
               { value: 'gist', label: 'GitHub Gist' },
-              { value: 's3', label: 'S3 / MinIO / R2' },
+              { value: 'r2', label: 'R2存储' },
+              { value: 's3', label: 'S3 / MinIO' },
             ],
           },
-          { key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output', hint: '留空 = 程序目录 /output / sub' },
+          {
+            key: 'output-dir', label: '输出目录', type: 'text', placeholder: '/data/output',
+            hint: '留空 = 程序目录 /output',
+            links: [{ label: '内置文件服务', href: '/files', icon: 'files' }],
+          },
         ],
       },
       {
@@ -204,6 +209,13 @@ const SCHEMA = [
           { key: 'github-gist-id', label: 'Gist ID', type: 'text', placeholder: 'a1b2c3d4e5f6...' },
           { key: 'github-token', label: 'GitHub Token', type: 'password', placeholder: 'ghp_xxxxxxxxxxxx' },
           { key: 'github-api-mirror', label: 'API 镜像', type: 'text', placeholder: 'https://api.github.com/', hint: '可选，留空使用 api.github.com' },
+        ],
+      },
+      {
+        title: 'R2', conditional: 'r2',
+        fields: [
+          { key: 'worker-url', label: 'Woker 地址', type: 'text', placeholder: 'https://example.worker.dev', hint: "将测速结果推送到 Cloudflare Worker的地址" },
+          { key: 'worker-token', label: 'Worker令牌', type: 'password', placeholder: '1234567890' },
         ],
       },
       {
@@ -244,15 +256,18 @@ const SCHEMA = [
           {
             key: 'apprise-api-server', label: 'Apprise API 地址', type: 'text', fullWidth: true,
             placeholder: 'https://apprise.example.com/notify',
-            hint: '内置服务或自建实例的 notify 接口，配置后可向 100+ 渠道发送通知',
+            hint: '填写搭建的apprise API server 地址，配置后可向 100+ 渠道发送通知',
             links: [{ label: '部署通知服务', href: 'https://github.com/sinspired/apprise_vercel', icon: 'github' }],
           },
           {
             key: 'recipient-url', label: '通知渠道', type: 'url-list',
-            hint: '支持 tgram:// bark:// mailto:// ntfy:// 等 Apprise 协议，覆盖版本更新、节点状态和内置数据库更新通知，建议配置！',
+            hint: '支持 tgram:// bark:// mailto:// ntfy:// dingtalk:// 等 Apprise 协议，覆盖版本更新、节点状态和内置数据库更新通知，建议配置！',
             links: [{ label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' }],
           },
-          { key: 'notify-title', label: '通知标题', type: 'text', placeholder: '🔔 节点状态更新' },
+          {
+            key: 'notify-title', label: '通知标题', type: 'text', fullWidth: true, placeholder: '🔔 节点状态更新',
+            hint: '自定义检测完成后发送可用节点数量的通知标题'
+          },
         ],
       },
     ],
@@ -267,7 +282,7 @@ const SCHEMA = [
         fields: [
           { key: 'print-progress', label: '终端显示进度', type: 'toggle' },
           {
-            key: 'progress-mode', label: '进度条模式', type: 'select', hint: '默认自动模式,分阶段=当前阶段进度完成后显示下一阶段进度',
+            key: 'progress-mode', label: '进度条模式', type: 'select', hint: '分阶段 = 当前阶段进度完成后显示下一阶段进度',
             selectWidth: '500px',
             options: [
               { value: 'auto', label: '自动 (auto)' },
@@ -279,10 +294,13 @@ const SCHEMA = [
       {
         title: 'WebUI',
         fields: [
-          { key: 'listen-port', label: '监听端口', type: 'text', placeholder: ':8199' },
+          { key: 'listen-port', label: '监听端口', type: 'text', placeholder: ':8199', hint: '监听端口，用于 WebUI，直接返回节点信息等' },
           { key: 'enable-web-ui', label: '启用 Web 控制面板', type: 'toggle' },
-          { key: 'api-key', label: 'API 密钥', type: 'password', placeholder: '留空自动生成', hint: '留空则启动时自动生成，在终端查看' },
-          { key: 'share-password', label: '分享密码', type: 'password', placeholder: '输入密码', hint: '访问 /sub/{password}/all.yaml 分享订阅' },
+          { key: 'api-key', label: 'API 密钥', type: 'password', placeholder: '留空自动生成', hint: '留空则启动时自动生成，需在终端查看' },
+          {
+            key: 'share-password', label: '分享密码', type: 'password', placeholder: '输入密码', hint: '访问 /sub/{password}/all.yaml 分享订阅',
+            links: [{ label: '加密分享', href: '/share', icon: 'files' }],
+          },
         ],
       },
       {
@@ -292,18 +310,18 @@ const SCHEMA = [
           { key: 'update-on-startup', label: '启动时检查更新', type: 'toggle' },
           { key: 'prerelease', label: '使用预发布版本', type: 'toggle', hint: '包含 beta / rc 版本' },
           { key: 'cron-check-update', label: '检查更新 Cron', type: 'cron', fullWidth: true, placeholder: '0 9,21 * * *', hint: '# 定时检查版本更新' },
-          { key: 'update-timeout', label: '下载超时 (分钟)', type: 'number', min: 1, placeholder: '2' },
+          { key: 'update-timeout', label: '下载超时 (分钟)', type: 'number', min: 1, placeholder: '2', hint: '下载更新文件的最大时间，如更新失败或网络环境恶劣，可适当调大' },
         ],
       },
       {
         title: 'Sub-Store',
         fields: [
-          { key: 'sub-store-port', label: '监听端口', type: 'text', placeholder: ':8299' },
+          { key: 'sub-store-port', label: '监听端口', type: 'text', placeholder: ':8299', hint: 'sub-store的启动端口，为空则不启动sub-store' },
           { key: 'sub-store-path', label: '访问路径', type: 'text', placeholder: '/sub-store-path', hint: '建议设置以避免泄露；留空自动生成随机路径' },
-          { key: 'mihomo-overwrite-url', label: 'Mihomo 覆写 URL', type: 'text', fullWidth: true, placeholder: 'http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml', hint: '用于生成带指定规则的mihomo/clash.meta订阅链接', },
+          { key: 'mihomo-overwrite-url', label: 'Mihomo 覆写 URL', type: 'text', fullWidth: true, placeholder: 'http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml', hint: '用于生成带指定规则的 mihomo/clash.meta 订阅链接', },
           { key: 'sub-store-sync-cron', label: '同步 Gist Cron', type: 'cron', fullWidth: true, placeholder: '55 5-23/2 * * *', hint: '定时将订阅/文件上传到私有 Gist. 在前端, 叫做 同步 或 同步配置.', },
           { key: 'sub-store-produce-cron', label: '更新订阅 Cron', type: 'text', fullWidth: true, placeholder: '0 */2 * * *,sub,sub', hint: ' 0 */2 * * *,sub,sub_A;0 */3 * * *,col,col_B = 每 2 小时处理一次单条订阅 sub_A，每 3 小时处理一次组合订阅 col_B。', },
-          { key: 'sub-store-push-service', label: 'Push 推送服务', type: 'text', fullWidth: true, placeholder: 'https://push.example.com', hint: '例如：Bark: https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]', },
+          { key: 'sub-store-push-service', label: 'Push 推送服务', type: 'text', fullWidth: true, placeholder: 'https://push.example.com', hint: '例如：Bark: https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]，在拉取失败时发送通知', },
         ],
       },
       {
@@ -322,12 +340,13 @@ const SCHEMA = [
 const FIELD_VALIDATORS = {
   'alive-concurrent': v => { const n = Number(v); if (n > 500) return { level: 'warn', msg: `并发 ${n} 过高，超出多数路由器处理能力，建议 100–300` }; if (n > 300) return { level: 'info', msg: `并发 ${n} 偏高，请确认机器性能` }; if (n === 0) return { level: 'ok', msg: '自动模式：根据 concurrent 基准自动计算' }; return null; },
   'speed-concurrent': v => { const n = Number(v); if (n > 32) return { level: 'warn', msg: `并发 ${n} 较高，测速会占用大量带宽，建议配合 total-speed-limit` }; if (n === 0) return { level: 'ok', msg: '自动模式' }; return null; },
+  'media-concurrent': v => { const n = Number(v); if (n === 0) return { level: 'ok', msg: '自动模式' }; if (n > 0 && n <= 100) return { level: 'info', msg: `并发 ${n} 合理` }; if (n > 200) return { level: 'warn', msg: `并发 ${n} 较高，建议不超过200` }; return null; },
   'timeout': v => { const n = Number(v); if (n < 3000) return { level: 'warn', msg: `超时 ${n}ms 过短，可能大量误杀正常节点` }; if (n > 15000) return { level: 'info', msg: `超时 ${n}ms 较长，单次检测耗时会明显增加` }; return null; },
   'check-interval': v => { const n = Number(v); if (!n) return null; if (n < 120) return { level: 'warn', msg: `间隔 ${n} 分钟过于频繁，易触发运营商阻断，建议 ≥ 720` }; if (n < 360) return { level: 'info', msg: `间隔 ${n} 分钟偏短，建议 720+` }; if (n >= 720) return { level: 'ok', msg: `间隔 ${n} 分钟（约 ${Math.round(n / 60)} 小时），频率合理` }; return null; },
   'min-speed': v => { const n = Number(v); if (n === 0) return { level: 'info', msg: '未设置最低速度，极慢节点均会保留' }; if (n > 2000) return { level: 'warn', msg: `${n} KB/s 偏高，建议 ≤ 500` }; return null; },
-  'download-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，极慢节点会阻塞测速队列，建议设为 10s' }; return null; },
-  'download-mb': v => { if (Number(v) === 0) return { level: 'info', msg: '未限制单节点下载量，高并发时可能消耗大量流量，建议 20 MB' }; return null; },
-  'success-limit': v => { const n = Number(v); if (n > 0 && n < 30) return { level: 'info', msg: `保存上限 ${n} 较少，建议 100-200` }; return null; },
+  'download-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，极慢节点会阻塞测速队列，建议设为 10s' }; if (Number(v) > 15) return { level: 'warn', msg: '下载超时不宜设置过高，节点易被测死' }; return null; },
+  'download-mb': v => { if (Number(v) === 0) return { level: 'info', msg: '未限制单节点下载量，高并发时可能消耗大量流量，建议 20 MB' }; if (Number(v) >= 100) return { level: 'warn', msg: '过大的下载量将对代理节点造成较大压力，建议 20 MB' }; return null; },
+  'success-limit': v => { const n = Number(v); if (n > 0 && n < 5) return { level: 'info', msg: `保存上限 ${n} 较少，建议 100-200` }; if (n >= 100 && n < 200) return { level: 'info', msg: `保存上限 ${n}，视手机性能，mihomo 类 VPN 超过 100 个节点会增加分组切换压力` }; if (n > 200) return { level: 'warn', msg: `保存上限 ${n} 较多，建议不超过 200` }; return null; },
   /* success-rate 校验：入参为界面显示值（0–100%），存储值为其 ÷100 */
   'success-rate': v => {
     const n = Number(v);
@@ -375,6 +394,9 @@ const SPECIAL_INPUT_VALUES = {
     { value: 'direct', label: '直连', hint: '强制直连，不使用任何系统代理' },
     { value: '', label: '自动', hint: '当前留空，自动检测系统代理' },
   ],
+  'sub-store-port': [
+    { value: '', label: '禁用 Sub Store 服务', hint: '未设置端口，Sub Store 服务禁用' },
+  ]
 };
 
 /* ═══════════════════════════ Cron 段元数据 ═══════════════════════════ */
@@ -468,6 +490,7 @@ const LINK_ICONS = {
   github: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>`,
   docs: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
   link: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+  files: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width=2 ><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>`,
 };
 
 const _SVG_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -1144,7 +1167,7 @@ function buildPanel(tabId) {
     const sel = panel.querySelector('select.cfg-select-native[data-key="save-method"]');
     if (sel) {
       const sync = m => panel.querySelectorAll('.cfg-cond-group[data-cond]').forEach(g => {
-        g.style.display = (g.dataset.cond === m || (m === 'r2' && g.dataset.cond === 's3')) ? '' : 'none';
+        g.style.display = (g.dataset.cond === m) ? '' : 'none';
       });
       sel.addEventListener('change', () => sync(sel.value));
       sync(sel.value);
