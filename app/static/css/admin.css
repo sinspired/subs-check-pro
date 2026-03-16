@@ -11,7 +11,9 @@
   --muted-hard: rgba(144, 141, 141, 0.8);
   --success: #0fd056;
   --idle: #0198d3;
-  --prepare: rgb(0, 142, 213);
+  --prepare: rgb(26, 178, 254);
+  --stopping: rgb(0, 207, 111);
+  --forcing: #ed1717;
   --calculating: #a81c3398;
   --warning: #d97706;
   --danger: #ed1717;
@@ -69,7 +71,7 @@
   --danger: #dc2626;
   --muted: #9aa4b2;
   --muted-hard: rgba(71, 70, 70, 0.8);
-  --prepare: #38bdf8;
+  --prepare: rgb(1, 136, 194);
 
   --input-bg: rgba(0, 0, 0, 0.2);
   --logs-bg: rgba(0, 0, 0, 0.2);
@@ -632,6 +634,14 @@ main {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.toggle-btn:hover:not(:disabled) {
+  transform: translateY(-0px) scale(1.05);
+  box-shadow: var(--glass-shadow);
+  border-color: var(--glass-border-1);
+  backdrop-filter: blur(8px) brightness(120%);
+  background-color: transparent;
+}
+
 .toggle-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -647,8 +657,8 @@ main {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   color: currentColor; /* 继承按钮自身的 color，由各状态各自控制 */
   transition: color 0.2s ease;
 }
@@ -662,25 +672,14 @@ main {
 
 /* 状态样式 */
 .toggle-btn.state-idle {
-  background: color-mix(in srgb, var(--success) 10%, transparent);
-  border-color: color-mix(in srgb, var(--success) 20%, transparent);
+  background: color-mix(in srgb, var(--success) 5%, transparent);
+  border-color: color-mix(in srgb, var(--success) 15%, transparent);
   color: var(--success);
 }
 
 .toggle-btn.state-idle:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--success) 20%, transparent);
-  border-color: color-mix(in srgb, var(--success) 50%, transparent);
-}
-
-.toggle-btn.state-checking {
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 20%, transparent);
-  color: var(--danger);
-}
-
-.toggle-btn.state-checking:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--danger) 20%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
 }
 
 .toggle-btn.state-starting {
@@ -694,41 +693,73 @@ main {
   border-color: color-mix(in srgb, var(--muted) 20%, transparent);
 }
 
-.toggle-btn:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.05);
-  box-shadow: var(--glass-shadow);
-  border-color: var(--glass-border-1);
-  backdrop-filter: blur(8px) brightness(120%);
-  background-color: transparent;
+/* 准备中 */
+.toggle-btn.state-preparing .btn-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.toggle-btn.state-preparing {
+  background: color-mix(in srgb, var(--prepare) 5%, transparent);
+  border-color: color-mix(in srgb, var(--prepare) 15%, transparent);
+  color: var(--prepare);
+}
+
+.toggle-btn.state-preparing:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--prepare) 10%, transparent);
+  border-color: color-mix(in srgb, var(--prepare) 35%, transparent);
+}
+
+/* 检测中 */
+.toggle-btn.state-checking {
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+
+.toggle-btn.state-checking:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
 /* 正在终止 */
-.toggle-btn.state-stoping .btn-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--stoping);
-}
-.toggle-btn:disabled .btn-icon {
-  width: 20px;
-  height: 20px;
+.toggle-btn.state-stopping .btn-icon,
+.toggle-btn.state-forcing .btn-icon {
+  width: 22px;
+  height: 22px;
 }
 
-/* 准备中 */
-.toggle-btn.state-preparing {
-  background: color-mix(in srgb, var(--prepare) 5%, transparent);
-  border-color: color-mix(in srgb, var(--prepare) 10%, transparent);
+.toggle-btn.state-stopping {
+  background: color-mix(in srgb, var(--stopping) 5%, transparent);
+  border-color: color-mix(in srgb, var(--stopping) 25%, transparent);
+  color: var(--stopping);
 }
-.toggle-btn.state-preparing .btn-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--prepare);
+
+.toggle-btn:disabled.state-stopping {
+  background: color-mix(in srgb, var(--stopping) 10%, transparent);
+  border-color: color-mix(in srgb, var(--stopping) 35%, transparent);
 }
-.toggle-btn.state-preparing:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--prepare) 10%, transparent);
-  border-color: color-mix(in srgb, var(--prepare) 20%, transparent);
+
+.toggle-btn.state-stopping:hover:disabled {
+  background-color: color-mix(in srgb, var(--stopping) 10%, transparent);
+  border-color: color-mix(in srgb, var(--stopping) 40%, transparent);
 }
-.toggle-btn.state-preparing:hover:not(:disabled) .btn-icon {
-  color: var(--prepare);
+
+/* 强制中止 */
+.toggle-btn.state-forcing {
+  background: color-mix(in srgb, var(--forcing) 5%, transparent);
+  border-color: color-mix(in srgb, var(--forcing) 25%, transparent);
+  color: var(--forcing);
+}
+
+.toggle-btn:disabled.state-forcing {
+  background: color-mix(in srgb, var(--forcing) 10%, transparent);
+  border-color: color-mix(in srgb, var(--forcing) 35%, transparent);
+}
+
+.toggle-btn.state-forcing:hover:disabled {
+  background-color: color-mix(in srgb, var(--forcing) 10%, transparent);
+  border-color: color-mix(in srgb, var(--forcing) 40%, transparent);
 }
 
 /* 进度信息 */
@@ -1304,6 +1335,14 @@ main {
 
 .status-process {
   color: var(--success);
+}
+
+.status-stopping {
+  color: var(--stopping);
+}
+
+.status-forcing {
+  color: var(--forcing);
 }
 
 .status-logged {
@@ -2089,7 +2128,7 @@ main {
 
   /* 开始&结束检测按钮 */
   .toggle-btn {
-    margin: 0 -4px;
+    margin: 0 -4px 0 0;
   }
 
   /* 历史检测结果 */
