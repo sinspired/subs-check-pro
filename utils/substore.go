@@ -229,12 +229,32 @@ func buildScpOps(cfg config.SubProcessConfig) []any {
 			ID:         newOperatorID(),
 			Args: Args{
 				"order":       "asc",
-				"expressions": cfg.RegexSort,
+				"expressions": sanitizeRegexList(cfg.RegexSort),
 			},
 		})
 	}
 
 	return ops
+}
+
+// sanitizeRegexPattern 修复 YAML 双引号字符串中被错误解析的转义序列
+// \b(退格 0x08) → \\b，\t(制表 0x09) → \\t，\n → \\n，\r → \\r
+func sanitizeRegexPattern(s string) string {
+	replacer := strings.NewReplacer(
+		"\b", `\b`, // 退格 → 字面 \b（最常见误写）
+		"\t", `\t`, // 制表符（YAML \t）
+		"\n", `\n`, // 换行（YAML \n，出现在 regex 里大概率是误写）
+		"\r", `\r`, // 回车
+	)
+	return replacer.Replace(s)
+}
+
+func sanitizeRegexList(list []string) []string {
+	out := make([]string, len(list))
+	for i, s := range list {
+		out[i] = sanitizeRegexPattern(s)
+	}
+	return out
 }
 
 // 差量合并 Process（sub 专用）

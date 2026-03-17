@@ -149,6 +149,24 @@ sub-store-path: ""
 # 防止网络不好，所以现在内置，依赖:8199端口
 mihomo-overwrite-url: http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml
 
+# sub-store 节点操作，针对默认的 sub 订阅
+sub-process:
+  # 开启 DNS 解析（固定 Ali / IPv6 / 缓存启用）
+  resolve-domain: false
+  # 开启节点裂变（将多 IP 展开为独立节点）
+  node-split: false
+  # 正则排序表达式列表，按照匹配顺序排序
+  # 正则过滤，国家、协议过滤等操作，请进入 WebUI，点 “订阅管理”操作
+  regex-sort:
+    - ".*\bSG[¹²]\b.*"
+    - ".*\bUS[¹²]\b.*"
+    - "(.*GPT⁺.*)(.*GM.*)"
+    - ".*\bGM\b.*"
+    - ".*GPT⁺.*"
+    - ".*\bYT\b.*"
+  # 注入订阅流量信息节点
+  sub-info: false
+
 # singbox规则配置
 # json文件为分流规则
 # js脚本用来根据规则对节点进行处理
@@ -166,23 +184,6 @@ singbox-old:
   js: "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.js"
 
 # 以下配置查看sub-store相关的教程：https://hub.docker.com/r/xream/sub-store
-# sub-store 节点操作，针对默认的 sub 订阅
-sub-process:
-  # 开启 DNS 解析（固定 Ali / IPv6 / 缓存启用）
-  resolve-domain: false
-  # 开启节点裂变（将多 IP 展开为独立节点）
-  node-split: false
-  # 正则排序表达式列表，按照匹配顺序排序
-  # 正则过滤，国家、协议过滤等操作，请进入 WebUI，点 “订阅管理”操作
-  regex-sort:
-    # - ".*\\bSG.*"
-    # - ".*\\bUS.*"
-    # - "(.*GPT⁺.*)(.*GM.*)"
-    # - ".*\\bGM\\b.*"
-    # - ".*\\bGPT⁺.*"
-  # 注入订阅流量信息节点
-  sub-info: false
-
 # sub-store同步gist定时任务
 # 定时任务指定时将订阅/文件上传到私有 Gist. 在前端, 叫做 同步 或 同步配置.
 # 55 23 * * * 每天 23 点 55 分(避开部分机场后端每天0点定时重启)
