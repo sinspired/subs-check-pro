@@ -1209,17 +1209,9 @@ main {
   opacity: 1;
 }
 
-/* 中小屏放开外层限制，内容自然撑开 */
-@media (max-width: 899px) {
-  .summary-content-wrapper {
-    max-height: none;
-    overflow: visible;
-  }
-}
-
 /* ── 胶囊分组 ── */
 .smr-group {
-  padding: 7px 16px 4px;
+  padding: 0px 16px 4px;
 }
 
 .smr-group-title {
@@ -1236,7 +1228,24 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  padding-bottom: 4px;
+}
+
+/* 中小屏放开外层限制，内容自然撑开 */
+@media (max-width: 899px) {
+  .summary-content-wrapper {
+    max-height: none;
+    overflow: visible;
+  }
+  .smr-group {
+    padding: 7px 16px 4px;
+  }
+
+  /* ── 胶囊行 ── */
+.smr-chip-row {
   padding-bottom: 6px;
+}
+
 }
 
 /* ── 单个胶囊 ── */
@@ -1348,6 +1357,7 @@ main {
   .smr-section.smr-sub-open .smr-sub-body {
     max-height: none;
     overflow: visible;
+    padding-top: 12px;
   }
 }
 
