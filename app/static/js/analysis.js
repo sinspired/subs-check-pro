@@ -550,14 +550,14 @@ class GeoFlightMap {
 
     // 主渲染循环
     draw(now) {
-        // 可见性检查：优先用外部传入函数，否则回退到 tab-geo 判断，tab 不可见时跳过渲染节省性能
+        // 不可见时直接停止循环，由 resume() 重启
         const isVisible = this._visibilityFn
             ? this._visibilityFn()
             : document.getElementById('tab-geo')?.classList.contains('active');
 
         if (!isVisible) {
-            this.raf = requestAnimationFrame(t => this.draw(t));
-            return;
+            this.raf = null;   // 标记已停止
+            return;            // 不再调度下一帧
         }
 
         if (!this.t0) this.t0 = now;
@@ -578,6 +578,14 @@ class GeoFlightMap {
 
     _startAnim() { this.raf = requestAnimationFrame(t => this.draw(t)); }
 
+    pause() {
+        if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+    }
+
+    resume() {
+        if (!this.raf) { this.t0 = null; this._startAnim(); }
+    }
+    
     destroy() {
         if (this.raf) cancelAnimationFrame(this.raf);
         if (this._ro) this._ro.disconnect();

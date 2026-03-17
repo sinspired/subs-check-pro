@@ -1662,9 +1662,18 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   `;
 
     // ── 折叠交互 ──────────────────────────────────────────────────
+    // 外层摘要卡片折叠时也暂停
     const toggleBtn = summaryCard.querySelector('#summaryToggleBtn');
     if (toggleBtn) {
-      toggleBtn.onclick = e => { e.stopPropagation(); summaryCard.classList.toggle('collapsed'); };
+      toggleBtn.onclick = e => {
+        e.stopPropagation();
+        const isCollapsing = !summaryCard.classList.contains('collapsed');
+        summaryCard.classList.toggle('collapsed');
+        if (isCollapsing) {
+          _summaryMapInstance?.pause();
+        }
+        // 展开时不自动 resume，仍需用户手动展开地理分布子区块
+      };
     }
 
     summaryCard.querySelectorAll('.smr-sub-header').forEach(hdr => {
@@ -1673,11 +1682,18 @@ import { initQuickPreview } from './cfg-quickpreview.js';
         const section = hdr.closest('.smr-section');
         const isOpening = !section.classList.contains('smr-sub-open');
         section.classList.toggle('smr-sub-open');
-        if (section.id === 'smr-geo-section' && isOpening && _summaryMapInstance) {
-          _summaryMapInstance.t0 = null;
+
+        if (section.id === 'smr-geo-section') {
+          if (isOpening) {
+            _summaryMapInstance?.resume();   // 展开：恢复渲染
+          } else {
+            _summaryMapInstance?.pause();    // 折叠：停止循环
+          }
         }
       });
     });
+
+
 
     if (!summaryCard.classList.contains('collapsed')) summaryCard.classList.add('collapsed');
 
