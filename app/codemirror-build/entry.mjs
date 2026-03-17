@@ -31,7 +31,7 @@ const configCompletions = [
   { label: "alive-concurrent", type: "property", detail: "测活并发数，建议：10-1000", section: "检测参数", isArray: false },
   { label: "speed-concurrent", type: "property", detail: "测速并发数，建议：4-32", section: "检测参数", isArray: false },
   { label: "media-concurrent", type: "property", detail: "媒体解锁并发数，建议：4-200", section: "检测参数", isArray: false },
-  { label: "ipv6", type: "property", detail: "是否启用IPv6", section: "检测参数", isArray: false }, 
+  { label: "ipv6", type: "property", detail: "是否启用IPv6", section: "检测参数", isArray: false },
   { label: "check-interval", type: "property", detail: "检查间隔(分钟)", section: "检测参数", isArray: false },
   { label: "cron-expression", type: "property", detail: "定时检测", section: "检测参数", isArray: false },
   { label: "success-limit", type: "property", detail: "成功节点数量限制", section: "检测参数", isArray: false },
@@ -93,6 +93,17 @@ const configCompletions = [
   { label: "success-rate", type: "property", detail: "节点订阅成功率", section: "订阅设置", isArray: false },
   { label: "sub-urls-remote", type: "property", detail: "远程订阅清单地址", section: "订阅设置", isArray: true },
   { label: "sub-urls", type: "property", detail: "订阅地址", section: "订阅设置", isArray: true },
+  // singbox 子字段
+  { label: "version", type: "property", detail: "singbox 版本号", section: "singbox规则", isArray: false },
+  { label: "json", type: "property", detail: "singbox 分流规则 JSON 地址", section: "singbox规则", isArray: false },
+  { label: "js", type: "property", detail: "singbox 节点处理脚本 JS 地址", section: "singbox规则", isArray: false },
+
+  // sub-process 及子字段
+  { label: "sub-process", type: "property", detail: "sub-store 节点后处理配置", section: "sub-store", isArray: false },
+  { label: "resolve-domain", type: "property", detail: "开启 DNS 解析（固定 Ali/IPv6/缓存）", section: "sub-process", isArray: false },
+  { label: "node-split", type: "property", detail: "节点裂变：将多 IP 展开为独立节点", section: "sub-process", isArray: false },
+  { label: "regex-sort", type: "property", detail: "正则排序表达式列表，按匹配顺序排序", section: "sub-process", isArray: true },
+  { label: "sub-info", type: "property", detail: "注入订阅流量信息节点", section: "sub-process", isArray: false },
 ];
 
 const keySet = new Set(configCompletions.map(c => c.label));
@@ -205,7 +216,25 @@ const valueCompletions = {
   // notify-title 示例
   "notify-title": [
     { label: "\"🔔 节点状态更新\"", detail: "默认通知标题" }
-  ]
+  ],
+
+  "version": [
+    { label: "1.12", detail: "singbox 最新版（1.12.x）" },
+    { label: "1.11", detail: "singbox 旧版（1.11.x，iOS 兼容）" },
+    { label: "1.10", detail: "singbox 1.10.x" },
+  ],
+  "resolve-domain": [
+    { label: "true", detail: "开启 DNS 解析" },
+    { label: "false", detail: "关闭（默认）" },
+  ],
+  "node-split": [
+    { label: "true", detail: "启用节点裂变" },
+    { label: "false", detail: "关闭（默认）" },
+  ],
+  "sub-info": [
+    { label: "true", detail: "注入订阅流量信息节点" },
+    { label: "false", detail: "关闭（默认）" },
+  ],
 };
 
 // 数组项补全（用于 platforms 等，当输入 - 时补全子项）
@@ -252,7 +281,18 @@ const arrayItemCompletions = {
     // { label: "https://example.com/sub?token=43fa8f0dc9bb00dcfec2afb21b14378a&flag=clash.meta", detail: "Clash Meta 格式订阅" },
     { label: "https://raw.githubusercontent.com/example/repo/main/config/{Ymd}.yaml", detail: "带时间占位符的订阅" },
     { label: "https://example.com/sub.txt#我是备注", detail: "带备注的订阅（备注加到节点命名）" }
-  ]
+  ],
+
+  "regex-sort": [
+    { label: "\".*\\\\bHK\\\\b.*\"", detail: "香港节点优先" },
+    { label: "\".*\\\\bSG\\\\b.*\"", detail: "新加坡节点优先" },
+    { label: "\".*\\\\bUS\\\\b.*\"", detail: "美国节点优先" },
+    { label: "\".*\\\\bJP\\\\b.*\"", detail: "日本节点优先" },
+    { label: "\".*\\\\bGPT⁺.*\"", detail: "GPT+ 解锁节点优先" },
+    { label: "\".*\\\\bGM\\\\b.*\"", detail: "Gemini 解锁节点优先" },
+    { label: "\"(.*GPT⁺.*)(.*GM.*)\"", detail: "GPT+ 且 Gemini 同时满足" },
+    { label: "\".*\\\\bNF\\\\b.*\"", detail: "Netflix 解锁节点优先" },
+  ],
 };
 
 const arrayKeys = Object.keys(arrayItemCompletions);
@@ -470,7 +510,7 @@ const placeholderMatcher = new MatchDecorator({
   regexp: new RegExp(
     [
       // 匹配所有 configCompletions 中的 label
-      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|ipv6|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls)(?=\s*:\s*)',
+      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|ipv6|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls|sub-process|resolve-domain|node-split|regex-sort|sub-info|version|json|js)(?=\s*:\s*)',
 
       // 列表项：- openai / - "openai"
       '(?<=^[ \\t]*-\\s*["\']?)(openai|iprisk|gemini|tiktok|youtube|disney|netflix|x|ss|trojan|vless|vmess|shadowsocks)(?=["\']?\\b)',
