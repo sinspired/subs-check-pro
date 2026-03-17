@@ -351,7 +351,7 @@ const SCHEMA = [
           },
           {
             key: 'sub-process.regex-sort', label: '正则排序', type: 'url-list',
-            hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序\n示例：.*\bSG[¹²]\b.* (.*GPT⁺.*)(.*GM.*) .*GPT⁺.* .*\bYT\b(?!-CN).*',
+            hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序\n示例：.*\\bSG[¹²]\\b.* (.*GPT⁺.*)(.*GM.*) .*GPT⁺.* .*\\bYT\\b(?!-CN).*',
           },
         ],
       },
