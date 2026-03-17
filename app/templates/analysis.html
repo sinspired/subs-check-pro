@@ -1102,6 +1102,29 @@
             color: var(--muted);
         }
 
+
+        .geo-summary-item-left {
+            display: flex;
+            align-items: center;
+            font-size: 11px;
+            color: var(--muted);
+            flex: 1;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 6px
+        }
+
+        .geo-summary-item-right {
+            display: flex;
+            align-items: center;
+            font-size: 11px;
+            color: var(--muted);
+            flex: 1;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 6px
+        }
+
         .geo-summary-item strong {
             color: var(--fg);
             font-weight: 700;
@@ -1189,6 +1212,29 @@
                 display: none;
             }
         }
+
+        @media (max-width: 375px) {
+            .geo-summary {
+                display: flex;
+                gap: 2px;
+                padding: 10px 16px;
+                border-top: 1px solid var(--border);
+                flex-wrap: wrap;
+                flex-direction: column;
+            }
+
+            .geo-summary-item-right {
+                display: flex;
+                align-items: center;
+                font-size: 11px;
+                color: var(--muted);
+                flex: 1;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+                gap: 6px
+            }
+        }
+
 
         /* ── 协议分析 ── */
         .proto-stat-row {
@@ -2715,8 +2761,8 @@
                     ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
                 }
                 for (let lat = -60; lat <= 85; lat += 30) {
-        const [x1, y] = this.proj(this.origin.lon + 35 - 180, lat);
-    const [x2]    = this.proj(this.origin.lon + 35 + 180, lat);
+                    const [x1, y] = this.proj(this.origin.lon + 35 - 180, lat);
+                    const [x2] = this.proj(this.origin.lon + 35 + 180, lat);
                     ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
                 }
                 ctx.restore();
@@ -3357,9 +3403,11 @@
                 if (old) old.remove();
                 geoView.insertAdjacentHTML('beforeend', `
             <div class="geo-summary">
-                <div class="geo-summary-item">共 <strong>${entries.length}</strong> 个地区</div>
-                <div class="geo-summary-item">节点数 <strong>${geoTotal}</strong></div>
-                <div class="geo-summary-item" style="flex:1;justify-content:flex-end;flex-wrap:wrap;gap:6px">前三：${top3}</div>
+                <div class="geo-summary-item-left">
+                    <div class="geo-summary-item">共 <strong>${entries.length}</strong> 个地区</div>
+                    <div class="geo-summary-item">节点数 <strong>${geoTotal}</strong></div>
+                </div>
+                <div class="geo-summary-item-right">前三：${top3}</div>
             </div>`);
             }
 
