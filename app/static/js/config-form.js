@@ -253,13 +253,13 @@ const SCHEMA = [
         ],
       },
       {
-        title: '节点处理',
+        title: '节点标签',
         fields: [
           { key: 'node-prefix', label: '节点前缀', type: 'text', placeholder: 'Ubuntu-', hint: '依赖"检测 - 重命名节点"开关' },
         ],
       },
       {
-        title: '节点操作 (Sub-Store)',
+        title: '订阅操作 (Sub-Store)',
         fields: [
           {
             key: 'sub-process.resolve-domain', label: 'DNS 解析', type: 'toggle',
@@ -273,6 +273,11 @@ const SCHEMA = [
             key: 'sub-process.sub-info', label: '注入流量信息节点', type: 'toggle',
             hint: '在订阅开头注入虚拟节点，用于在客户端展示剩余流量、更新时间等信息',
           },
+        ],
+      },
+      {
+        title: '订阅筛选 (Sub-Store)',
+        fields: [
           {
             key: 'sub-process.regex-filter-keep',
             label: '筛选模式',
@@ -293,6 +298,11 @@ const SCHEMA = [
               '.*\\bUS[¹²]\\b.*',
             ],
           },
+        ],
+      },
+      {
+        title: '订阅排序 (Sub-Store)',
+        fields: [
           {
             key: 'sub-process.regex-sort', label: '正则排序', type: 'url-list',
             hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序',
@@ -325,10 +335,10 @@ const SCHEMA = [
             key: 'recipient-url', label: '通知渠道', type: 'url-list',
             hint: '支持 100+ 通知渠道，覆盖版本更新、节点状态和内置数据库更新通知，建议配置！',
             hintExamples: [
-              "tgram://", 
-              "bark://", 
-              "mailto://", 
-              "ntfy://", 
+              "tgram://",
+              "bark://",
+              "mailto://",
+              "ntfy://",
               "dingtalk://",
             ],
             links: [{ label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' }],
