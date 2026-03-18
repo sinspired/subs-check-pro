@@ -2445,7 +2445,7 @@ main {
     height: 1px;
   }
 
-  .sidebar {
+  .siderbar-wrapper {
     display: none;
   }
 
@@ -2500,14 +2500,11 @@ main {
   .content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    min-width: 0;
   }
 
   .content .progressCard {
     flex: 0 0 auto;
     overflow: hidden;
-    margin-top: -4px;
   }
 
   /* 指定移动设备高度 */
