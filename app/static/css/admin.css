@@ -710,7 +710,7 @@ main {
 .progress-actions {
   flex: 0 0 auto;
   padding: 0 0px 0 0;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 /* 上次检测结果 */
@@ -2407,16 +2407,25 @@ main {
 }
 
 @media (max-width: 375px) {
-  .history-line {
+  /* ── mobileBtns：小屏右侧操作按钮组 ── */
+  .mobileBtns {
+    position: relative;
+    right: -2px;
+    gap: 1px;
+  }
+
+  .mobileBtns .btn.small {
+    width: 30px;
+    height: 24px;
+  }
+
+  
+  .idle {
     width: 100%; /* 跟随 project-name 宽度 */
     text-align: justify; /* ← 两端对齐 */
     text-align-last: justify; /* 末行也强制两端对齐（单行时必须） */
     white-space: nowrap; /* 保持单行，否则 justify 按换行分布 */
-  }
-
-  .mobileBtns {
-    position: relative;
-    right: -10px;
+    padding-right: 6px;
   }
 }
 

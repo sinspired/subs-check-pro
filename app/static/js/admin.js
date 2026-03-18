@@ -998,7 +998,10 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       if (progBarWrap) progBarWrap.style.display = v ? '' : 'none'
       if (els.historyPlaceholder)
         els.historyPlaceholder.style.display = v ? 'none' : ''
-      if (els.historyLine) els.historyLine.style.display = v ? 'none' : ''
+      if (els.historyLine) {
+        els.historyLine.style.display = v ? 'none' : ''
+        els.historyLine.classList.add("idle")
+      }
 
       if (!v) {
         if (els.progressBar) els.progressBar.value = 0
