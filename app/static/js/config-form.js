@@ -24,7 +24,12 @@ const SCHEMA = [
       {
         title: '检测计划',
         fields: [
-          { key: 'cron-expression', label: 'Cron 表达式', type: 'cron', fullWidth: true, placeholder: '0 4,16 * * *', hint: '优先级高于检测间隔；推荐凌晨 4 点和 16 点执行' },
+          {
+            key: 'cron-expression', label: 'Cron 表达式', type: 'cron', fullWidth: true, placeholder: '0 4,16 * * *', hint: '优先级高于检测间隔；推荐凌晨 4 点和 16 点执行',
+            hintExamples: [
+              '0 4,16 * * *',
+            ],
+          },
           { key: 'check-interval', label: '检测间隔 (分钟)', type: 'number', min: 1, placeholder: '720', hint: 'Cron 为空时生效；建议 720–1440' },
         ],
       },
@@ -282,11 +287,21 @@ const SCHEMA = [
             key: 'sub-process.regex-filter',
             label: '正则筛选',
             type: 'url-list',
-            hint: '每行一条正则，模式由上方"筛选模式"决定；留空不筛选\n示例：\\bYT\\b(?!-CN).*',
+            hint: '每行一条正则，模式由上方"筛选模式"决定；留空不筛选',
+            hintExamples: [
+              '(.*GPT⁺.*)(.*GM.*)',
+              '.*\\bUS[¹²]\\b.*',
+            ],
           },
           {
             key: 'sub-process.regex-sort', label: '正则排序', type: 'url-list',
-            hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序\n示例：.*\\bSG[¹²]\\b.* (.*GPT⁺.*)(.*GM.*) .*GPT⁺.* .*\\bYT\\b(?!-CN).*',
+            hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序',
+            hintExamples: [
+              '.*\\bSG[¹²]\\b.*',
+              '(.*GPT⁺.*)(.*GM.*)',
+              '.*GPT⁺.*',
+              '.*\\bYT\\b(?!-CN).*',
+            ],
           },
         ],
       },
@@ -308,7 +323,14 @@ const SCHEMA = [
           },
           {
             key: 'recipient-url', label: '通知渠道', type: 'url-list',
-            hint: '支持 tgram:// bark:// mailto:// ntfy:// dingtalk:// 等 Apprise 协议，覆盖版本更新、节点状态和内置数据库更新通知，建议配置！',
+            hint: '支持 100+ 通知渠道，覆盖版本更新、节点状态和内置数据库更新通知，建议配置！',
+            hintExamples: [
+              "tgram://", 
+              "bark://", 
+              "mailto://", 
+              "ntfy://", 
+              "dingtalk://",
+            ],
             links: [{ label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' }],
           },
           {
@@ -1194,6 +1216,26 @@ function mkCronInput(field, value) {
   return wrap;
 }
 
+function renderHintBlock(fieldDef) {
+  const wrap = el('span', { class: 'cfg-label-hint' });
+  if (fieldDef.hint) {
+    wrap.appendChild(document.createTextNode(fieldDef.hint));
+  }
+  if (fieldDef.hintExamples?.length) {
+    // 与 hint 文字之间留一点间距
+    if (fieldDef.hint) {
+      wrap.appendChild(document.createTextNode('\u2002')); // en space
+    }
+    fieldDef.hintExamples.forEach(ex => {
+      const c = document.createElement('code');
+      c.className = 'cfg-hint-code';
+      c.textContent = ex;
+      wrap.appendChild(c);
+    });
+  }
+  return wrap;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    字段行构建
 ═══════════════════════════════════════════════════════════════ */
@@ -1208,8 +1250,10 @@ function mkField(fieldDef, value) {
   if (!isFull) {
     const labelCol = el('div', { class: 'cfg-label-col' });
     labelCol.appendChild(el('span', { class: 'cfg-label-text', textContent: fieldDef.label }));
-    // hint 移入 label 列，与标签纵向排列
-    if (fieldDef.hint) labelCol.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
+    // hint 添加code示例
+    if (fieldDef.hint || fieldDef.hintExamples?.length) {
+      labelCol.appendChild(renderHintBlock(fieldDef));
+    }
     if (fieldDef.links?.length) labelCol.appendChild(mkLinks(fieldDef.links));
     row.appendChild(labelCol);
   } else {
@@ -1228,7 +1272,7 @@ function mkField(fieldDef, value) {
     case 'select': ctrl = mkSelect(fieldDef, displayValue); break;
     case 'chips': ctrl = mkChips(fieldDef, displayValue); break;
     case 'url-list': ctrl = mkUrlList(fieldDef, displayValue); break;
-    case 'cron': ctrl = mkCronInput(fieldDef, displayValue); break;  // ← 补全，否则分段渲染永不触发
+    case 'cron': ctrl = mkCronInput(fieldDef, displayValue); break;
     default: ctrl = mkInput(fieldDef, displayValue); break;
   }
   ctrlWrap.appendChild(ctrl);
@@ -1241,7 +1285,9 @@ function mkField(fieldDef, value) {
 
   // full-width 字段的 hint 仍挂在 row 上（跨全列）
   // 非 full-width 的 hint 已在上方 labelCol 内添加，此处跳过
-  if (fieldDef.hint && isFull) row.appendChild(el('span', { class: 'cfg-label-hint', textContent: fieldDef.hint }));
+  if (isFull && (fieldDef.hint || fieldDef.hintExamples?.length)) {
+    row.appendChild(renderHintBlock(fieldDef));
+  }
   if (isFull && fieldDef.links?.length) row.appendChild(mkLinks(fieldDef.links));
 
   _attachValidator(row, fieldDef);

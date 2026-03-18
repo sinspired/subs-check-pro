@@ -454,6 +454,28 @@
   color: var(--muted);
   line-height: 1.4;
 }
+
+/* hint 内联代码片段 */
+.cfg-label-hint .cfg-hint-code {
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  padding: 2px 4px 0; /* ← bottom +1px 补偿 descender 视差 */
+  margin-bottom: 2px;
+  margin-right: 2px;
+  border-radius: 3px;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  color: color-mix(in srgb, var(--accent) 100%, transparent);
+  user-select: all;
+  cursor: text;
+  vertical-align: middle;
+}
+
 .cfg-field.full-width .cfg-links {
   grid-row: 3;
   grid-column: 1;
@@ -1178,6 +1200,7 @@
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   margin-top: 2px;
+  margin-bottom: 12px;
 }
 .cfg-url-add:hover {
   color: var(--accent);
