@@ -253,6 +253,43 @@ const SCHEMA = [
           { key: 'node-prefix', label: '节点前缀', type: 'text', placeholder: 'Ubuntu-', hint: '依赖"检测 - 重命名节点"开关' },
         ],
       },
+      {
+        title: '节点操作 (Sub-Store)',
+        fields: [
+          {
+            key: 'sub-process.resolve-domain', label: 'DNS 解析', type: 'toggle',
+            hint: '解析节点域名为 IP；固定使用 Ali DNS / IPv6 / 缓存启用',
+          },
+          {
+            key: 'sub-process.node-split', label: '节点裂变', type: 'toggle',
+            hint: '将 DNS 解析到的多个 IP 展开为独立节点；自动开启 DNS 解析',
+          },
+          {
+            key: 'sub-process.sub-info', label: '注入流量信息节点', type: 'toggle',
+            hint: '在订阅开头注入虚拟节点，用于在客户端展示剩余流量、更新时间等信息',
+          },
+          {
+            key: 'sub-process.regex-filter-keep',
+            label: '筛选模式',
+            type: 'select',
+            hint: '白名单=仅保留匹配节点；黑名单=丢弃匹配节点',
+            options: [
+              { value: 'true', label: '白名单丨保留模式' },
+              { value: 'false', label: '黑名单丨过滤模式' },
+            ],
+          },
+          {
+            key: 'sub-process.regex-filter',
+            label: '正则筛选',
+            type: 'url-list',
+            hint: '每行一条正则，模式由上方"筛选模式"决定；留空不筛选\n示例：\\bYT\\b(?!-CN).*',
+          },
+          {
+            key: 'sub-process.regex-sort', label: '正则排序', type: 'url-list',
+            hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序\n示例：.*\\bSG[¹²]\\b.* (.*GPT⁺.*)(.*GM.*) .*GPT⁺.* .*\\bYT\\b(?!-CN).*',
+          },
+        ],
+      },
     ],
   },
 
@@ -332,43 +369,6 @@ const SCHEMA = [
           { key: 'sub-store-sync-cron', label: '同步 Gist Cron', type: 'cron', fullWidth: true, placeholder: '55 5-23/2 * * *', hint: '定时将订阅/文件上传到私有 Gist. 在前端, 叫做 同步 或 同步配置.', },
           { key: 'sub-store-produce-cron', label: '更新订阅 Cron', type: 'text', fullWidth: true, placeholder: '0 */2 * * *,sub,sub', hint: ' 0 */2 * * *,sub,sub_A;0 */3 * * *,col,col_B = 每 2 小时处理一次单条订阅 sub_A，每 3 小时处理一次组合订阅 col_B。', },
           { key: 'sub-store-push-service', label: 'Push 推送服务', type: 'text', fullWidth: true, placeholder: 'https://push.example.com', hint: '例如：Bark: https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]，在拉取失败时发送通知', },
-        ],
-      },
-      {
-        title: '节点操作 (Sub-Store)',
-        fields: [
-          {
-            key: 'sub-process.resolve-domain', label: 'DNS 解析', type: 'toggle',
-            hint: '解析节点域名为 IP；固定使用 Ali DNS / IPv6 / 缓存启用',
-          },
-          {
-            key: 'sub-process.node-split', label: '节点裂变', type: 'toggle',
-            hint: '将 DNS 解析到的多个 IP 展开为独立节点；自动开启 DNS 解析',
-          },
-          {
-            key: 'sub-process.sub-info', label: '注入流量信息节点', type: 'toggle',
-            hint: '在订阅开头注入虚拟节点，用于在客户端展示剩余流量、更新时间等信息',
-          },
-          {
-            key: 'sub-process.regex-filter-keep',
-            label: '筛选模式',
-            type: 'select',
-            hint: '白名单=仅保留匹配节点；黑名单=丢弃匹配节点',
-            options: [
-              { value: 'true', label: '白名单丨保留模式' },
-              { value: 'false', label: '黑名单丨过滤模式' },
-            ],
-          },
-          {
-            key: 'sub-process.regex-filter',
-            label: '正则筛选',
-            type: 'url-list',
-            hint: '每行一条正则，模式由上方"筛选模式"决定；留空不筛选\n示例：\\bYT\\b(?!-CN).*',
-          },
-          {
-            key: 'sub-process.regex-sort', label: '正则排序', type: 'url-list',
-            hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序\n示例：.*\\bSG[¹²]\\b.* (.*GPT⁺.*)(.*GM.*) .*GPT⁺.* .*\\bYT\\b(?!-CN).*',
-          },
         ],
       },
       {
