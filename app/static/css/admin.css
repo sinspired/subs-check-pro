@@ -1238,12 +1238,12 @@ main {
     overflow: visible;
   }
   .smr-group {
-    padding: 7px 16px 4px;
+    padding: 6px 16px 4px;
   }
 
   /* ── 胶囊行 ── */
   .smr-chip-row {
-    padding-bottom: 6px;
+    padding-bottom: 0px;
   }
 }
 
