@@ -21,6 +21,12 @@ type SubProcessConfig struct {
 	// 为 true 时自动前置开启 ResolveDomain
 	NodeSplit bool `yaml:"node-split"`
 
+	// RegexFilterKeep true=保留匹配节点（白名单），false=丢弃匹配节点（黑名单）
+	RegexFilterKeep bool `yaml:"regex-filter-keep"`
+
+	// RegexFilter 正则筛选表达式列表，nil/空 = 不启用
+	RegexFilter []string `yaml:"regex-filter"`
+
 	// RegexSort 正则排序表达式列表（固定 asc），nil/空 = 不启用
 	RegexSort []string `yaml:"regex-sort"`
 
@@ -129,9 +135,10 @@ var OriginDefaultConfig = &Config{
 	CronCheckUpdate:  "0 0,9,21 * * *",
 
 	SubProcess: SubProcessConfig{
-		ResolveDomain: false,
-		NodeSplit:     false,
-		SubInfo:       false,
+		ResolveDomain:   false,
+		NodeSplit:       false,
+		RegexFilterKeep: true, // 默认白名单
+		SubInfo:         false,
 	},
 }
 

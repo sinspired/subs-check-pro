@@ -185,7 +185,8 @@ func patchDisabled(raw json.RawMessage, disabled bool) (any, error) {
 // 执行顺序：
 //  1. Resolve Domain —— DNS 解析（NodeSplit=true 时自动开启）
 //  2. Node Split     —— 裂变，依赖 ① 结果
-//  3. Regex Sort     —— 正则排序
+//  3. Regex Filter   —— 正则筛选（白名单/黑名单）
+//  4. Regex Sort     —— 正则排序
 func buildScpOps(cfg config.SubProcessConfig) []any {
 	needResolve := cfg.ResolveDomain || cfg.NodeSplit
 
@@ -221,7 +222,20 @@ func buildScpOps(cfg config.SubProcessConfig) []any {
 		})
 	}
 
-	// ③ Regex Sort
+	// ③ Regex Filter
+	if len(cfg.RegexFilter) > 0 {
+		ops = append(ops, ScriptOperator{
+			Type:       "Regex Filter",
+			CustomName: "正则筛选",
+			ID:         newOperatorID(),
+			Args: Args{
+				"keep":  cfg.RegexFilterKeep,
+				"regex": sanitizeRegexList(cfg.RegexFilter),
+			},
+		})
+	}
+
+	// ④ Regex Sort
 	if len(cfg.RegexSort) > 0 {
 		ops = append(ops, ScriptOperator{
 			Type:       "Regex Sort Operator",

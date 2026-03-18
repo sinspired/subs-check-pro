@@ -102,6 +102,8 @@ const configCompletions = [
   { label: "sub-process", type: "property", detail: "sub-store 节点后处理配置", section: "sub-store", isArray: false },
   { label: "resolve-domain", type: "property", detail: "开启 DNS 解析（固定 Ali/IPv6/缓存）", section: "sub-process", isArray: false },
   { label: "node-split", type: "property", detail: "节点裂变：将多 IP 展开为独立节点", section: "sub-process", isArray: false },
+  { label: "regex-filter-keep", type: "property", detail: "true=保留匹配节点（白名单），false=丢弃匹配节点（黑名单）", section: "sub-process", isArray: true },
+  { label: "regex-filter", type: "property", detail: "正则筛选表达式列表，", section: "sub-process", isArray: true },
   { label: "regex-sort", type: "property", detail: "正则排序表达式列表，按匹配顺序排序", section: "sub-process", isArray: true },
   { label: "sub-info", type: "property", detail: "注入订阅流量信息节点", section: "sub-process", isArray: false },
 ];
@@ -281,6 +283,21 @@ const arrayItemCompletions = {
     // { label: "https://example.com/sub?token=43fa8f0dc9bb00dcfec2afb21b14378a&flag=clash.meta", detail: "Clash Meta 格式订阅" },
     { label: "https://raw.githubusercontent.com/example/repo/main/config/{Ymd}.yaml", detail: "带时间占位符的订阅" },
     { label: "https://example.com/sub.txt#我是备注", detail: "带备注的订阅（备注加到节点命名）" }
+  ],
+
+  "regex-keep": [
+    { label: "true", detail: "保留匹配节点（白名单）" },
+    { label: "false", detail: "丢弃匹配节点（黑名单）" },],
+
+  "regex-filter": [
+    { label: "\".*\\\\bHK\\\\b.*\"", detail: "香港节点优先" },
+    { label: "\".*\\\\bSG\\\\b.*\"", detail: "新加坡节点优先" },
+    { label: "\".*\\\\bUS\\\\b.*\"", detail: "美国节点优先" },
+    { label: "\".*\\\\bJP\\\\b.*\"", detail: "日本节点优先" },
+    { label: "\".*\\\\bGPT⁺.*\"", detail: "GPT+ 解锁节点优先" },
+    { label: "\".*\\\\bGM\\\\b.*\"", detail: "Gemini 解锁节点优先" },
+    { label: "\"(.*GPT⁺.*)(.*GM.*)\"", detail: "GPT+ 且 Gemini 同时满足" },
+    { label: "\".*\\\\bNF\\\\b.*\"", detail: "Netflix 解锁节点优先" },
   ],
 
   "regex-sort": [
@@ -510,7 +527,7 @@ const placeholderMatcher = new MatchDecorator({
   regexp: new RegExp(
     [
       // 匹配所有 configCompletions 中的 label
-      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|ipv6|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls|sub-process|resolve-domain|node-split|regex-sort|sub-info|version|json|js)(?=\s*:\s*)',
+      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|ipv6|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls|sub-process|resolve-domain|node-split|regex-filter-keep|regex-filter|regex-sort|sub-info|version|json|js)(?=\s*:\s*)',
 
       // 列表项：- openai / - "openai"
       '(?<=^[ \\t]*-\\s*["\']?)(openai|iprisk|gemini|tiktok|youtube|disney|netflix|x|ss|trojan|vless|vmess|shadowsocks)(?=["\']?\\b)',

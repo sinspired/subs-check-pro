@@ -350,6 +350,22 @@ const SCHEMA = [
             hint: '在订阅开头注入虚拟节点，用于在客户端展示剩余流量、更新时间等信息',
           },
           {
+            key: 'sub-process.regex-filter-keep',
+            label: '筛选模式',
+            type: 'select',
+            hint: '白名单=仅保留匹配节点；黑名单=丢弃匹配节点',
+            options: [
+              { value: 'true', label: '白名单丨保留模式' },
+              { value: 'false', label: '黑名单丨过滤模式' },
+            ],
+          },
+          {
+            key: 'sub-process.regex-filter',
+            label: '正则筛选',
+            type: 'url-list',
+            hint: '每行一条正则，模式由上方"筛选模式"决定；留空不筛选\n示例：\\bYT\\b(?!-CN).*',
+          },
+          {
             key: 'sub-process.regex-sort', label: '正则排序', type: 'url-list',
             hint: '按优先级填写正则表达式，匹配的节点排在前面；留空不排序\n示例：.*\\bSG[¹²]\\b.* (.*GPT⁺.*)(.*GM.*) .*GPT⁺.* .*\\bYT\\b(?!-CN).*',
           },

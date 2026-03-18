@@ -153,17 +153,26 @@ mihomo-overwrite-url: http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml
 sub-process:
   # 开启 DNS 解析（固定 Ali / IPv6 / 缓存启用）
   resolve-domain: false
+
   # 开启节点裂变（将多 IP 展开为独立节点）
   node-split: false
+
+  # true=保留匹配节点（白名单），false=丢弃匹配节点（黑名单）
+  regex-filter-keep: true
+  # 正则筛选表达式列表
+  regex-filter:
+    # - ".*\bYT\b(?!-CN).*"
+
   # 正则排序表达式列表，按照匹配顺序排序
   # 正则过滤，国家、协议过滤等操作，请进入 WebUI，点 “订阅管理”操作
   regex-sort:
-    - ".*\bSG[¹²]\b.*"
-    - ".*\bUS[¹²]\b.*"
-    - "(.*GPT⁺.*)(.*GM.*)"
-    - ".*\bGM\b.*"
-    - ".*GPT⁺.*"
-    - ".*\bYT\b(?!-CN).*"
+    # - ".*\bSG[¹²]\b.*"
+    # - ".*\bUS[¹²]\b.*"
+    # - "(.*GPT⁺.*)(.*GM.*)"
+    # - ".*\bGM\b.*"
+    # - ".*GPT⁺.*"
+    # - ".*\bYT\b(?!-CN).*"
+
   # 注入订阅流量信息节点
   sub-info: false
 
