@@ -814,7 +814,7 @@ function renderOverview(r, ci, ga, subCount, geoCount, protoCount, cfg) {
         { label: 'CF 中转', value: cfConTotal, sub: total ? Math.round(cfConTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`, color: 'var(--success)' },
         { label: '独立 VPS', value: vpsTotal, sub: total ? Math.round(vpsTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`, color: 'var(--warning)' },
         { label: '流量消耗', value: ci.check_traffic || '-', sub: `耗时 ${ci.check_duration || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--muted)' },
-        { label: '有效订阅', value: subCount, sub: `检测时间 ${ci.check_time || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`, color: 'var(--muted)' },
+        { label: '活跃订阅', value: subCount, sub: `检测时间 ${ci.check_time || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`, color: 'var(--muted)' },
     ];
     document.getElementById('summaryChips').innerHTML = chips.map(c =>
         `<div class="summary-chip"><div class="chip-icon" style="background:color-mix(in srgb,${c.color} 12%,transparent);color:${c.color}">${c.icon}</div><div class="chip-value" style="color:${c.color}">${c.value}</div><div class="chip-label">${c.label}</div><div class="chip-sub">${c.sub || ''}</div></div>`
@@ -854,7 +854,7 @@ function renderOverview(r, ci, ga, subCount, geoCount, protoCount, cfg) {
             ${[
             ['geo', '地理分布', `${geoCount} 个地区`, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`],
             ['proto', '协议分析', `${protoCount} 种协议`, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`],
-            ['subs', '订阅排名', `${subCount} 个有效`, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],
+            ['subs', '订阅排名', `${subCount} 个活跃`, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`],
             ['cfgana', '配置分析', '运行参数', `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>`],
         ].map(([tab, label, sub, icon]) =>
             `<button class="nav-card" onclick="switchTab('${tab}')"><div class="nav-card-left">${icon}<span class="nav-card-label">${label}</span></div><div class="nav-card-right">${sub}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div></button>`
@@ -1186,13 +1186,13 @@ function renderProto(ga) {
 }
 
 function renderSubs(subs, subsBad) {
-    document.getElementById('copyToolbar').innerHTML = subs.length ? `<div class="copy-toolbar"><span class="copy-toolbar-label">复制：</span><button class="copy-btn" id="copyUrlsBtn" onclick="copyUrls(false)" title="每行一个 URL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="btn-text">URL 列表</span></button><button class="copy-btn" id="copyYamlBtn" onclick="copyUrls(true)" title="可直接替换 sub-urls 配置段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="btn-text">YAML 格式</span></button><div class="copy-scope"><label title="同时包含失效订阅"><input type="checkbox" id="copyIncludeBad"><span class="scope-text">含失效</span></label></div></div>` : '';
-    if (!subs.length) { document.getElementById('rankingContent').innerHTML = '<p style="color:var(--muted);font-size:13px">暂无有效订阅</p>'; }
+    document.getElementById('copyToolbar').innerHTML = subs.length ? `<div class="copy-toolbar"><span class="copy-toolbar-label">复制：</span><button class="copy-btn" id="copyUrlsBtn" onclick="copyUrls(false)" title="每行一个 URL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="btn-text">URL 列表</span></button><button class="copy-btn" id="copyYamlBtn" onclick="copyUrls(true)" title="可直接替换 sub-urls 配置段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="btn-text">YAML 格式</span></button><div class="copy-scope"><label title="同时包含沉默订阅"><input type="checkbox" id="copyIncludeBad"><span class="scope-text">含沉默订阅</span></label></div></div>` : '';
+    if (!subs.length) { document.getElementById('rankingContent').innerHTML = '<p style="color:var(--muted);font-size:13px">暂无活跃订阅</p>'; }
     else {
-        document.getElementById('rankingContent').innerHTML = `<div class="section-title">订阅排名（${subs.length} 个有效）</div><div class="sub-list">${subs.map((s, i) => { const stats = s.stats || {}, rateStr = String(stats.rate || '0%'), rateNum = parseFloat(rateStr), barColor = rateNum >= 10 ? 'var(--success)' : rateNum > 0 ? 'var(--warning)' : 'var(--danger)'; const locs = Array.isArray(s.top_locations) ? s.top_locations.join('').split('|').filter(Boolean) : []; const protos = s.protocols ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : []; const tierClass = rateNum >= 20 ? 'tier-s' : rateNum >= 10 ? 'tier-a' : rateNum >= 3 ? 'tier-b' : 'tier-c'; const tierLabel = rateNum >= 20 ? 'S' : rateNum >= 10 ? 'A' : rateNum >= 3 ? 'B' : 'C'; return `<div class="sub-item"><div class="sub-header"><span class="sub-rank">${i + 1}</span><span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="sub-tier ${tierClass}">${tierLabel}</span><span class="sub-rate" style="color:${barColor}">${rateStr}</span></div><div class="sub-bar-wrap"><div class="sub-bar" style="width:${Math.min(rateNum, 100)}%;background:${barColor}"></div></div><div class="sub-meta"><span>${stats.success || 0} / ${stats.total || 0} 节点</span>${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}${protos.map(([k, v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}</div></div>`; }).join('')}</div>`;
+        document.getElementById('rankingContent').innerHTML = `<div class="section-title">订阅排名（${subs.length} 个活跃）</div><div class="sub-list">${subs.map((s, i) => { const stats = s.stats || {}, rateStr = String(stats.rate || '0%'), rateNum = parseFloat(rateStr), barColor = rateNum >= 10 ? 'var(--success)' : rateNum > 0 ? 'var(--warning)' : 'var(--danger)'; const locs = Array.isArray(s.top_locations) ? s.top_locations.join('').split('|').filter(Boolean) : []; const protos = s.protocols ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : []; const tierClass = rateNum >= 20 ? 'tier-s' : rateNum >= 10 ? 'tier-a' : rateNum >= 3 ? 'tier-b' : 'tier-c'; const tierLabel = rateNum >= 20 ? 'S' : rateNum >= 10 ? 'A' : rateNum >= 3 ? 'B' : 'C'; return `<div class="sub-item"><div class="sub-header"><span class="sub-rank">${i + 1}</span><span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="sub-tier ${tierClass}">${tierLabel}</span><span class="sub-rate" style="color:${barColor}">${rateStr}</span></div><div class="sub-bar-wrap"><div class="sub-bar" style="width:${Math.min(rateNum, 100)}%;background:${barColor}"></div></div><div class="sub-meta"><span>${stats.success || 0} / ${stats.total || 0} 节点</span>${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}${protos.map(([k, v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}</div></div>`; }).join('')}</div>`;
     }
     if (!subsBad.length) { document.getElementById('badContent').innerHTML = ''; return; }
-    document.getElementById('badContent').innerHTML = `<div class="section-title-toggle" onclick="toggleBad()">失效订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span><span class="toggle-line"></span><svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div><div id="badList" style="display:none"><div class="bad-list">${subsBad.map(s => { const st = s.stats || {}; return `<div class="bad-item"><span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="bad-count">${st.success || 0}/${st.total || 0}</span></div>`; }).join('')}</div></div>`;
+    document.getElementById('badContent').innerHTML = `<div class="section-title-toggle" onclick="toggleBad()">沉默订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span><span class="toggle-line"></span><svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div><div id="badList" style="display:none"><div class="bad-list">${subsBad.map(s => { const st = s.stats || {}; return `<div class="bad-item"><span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="bad-count">${st.success || 0}/${st.total || 0}</span></div>`; }).join('')}</div></div>`;
 }
 
 const _copyTimers = {};
@@ -1225,7 +1225,7 @@ function copyUrls(asYaml) {
         if (includeBad && subsBad.length) text += `\n\n# 成功率为 0 的订阅\nsub-urls-bad:\n` + subsBad.map(s => { const st = s.stats || {}; return `  - ${s.url} # 0.0% (${st.success || 0}/${st.total || 0})`; }).join('\n');
     } else {
         text = subs.map(s => s.url).join('\n');
-        if (includeBad && subsBad.length) text += '\n\n# 失效订阅\n' + subsBad.map(s => s.url).join('\n');
+        if (includeBad && subsBad.length) text += '\n\n# 沉默订阅\n' + subsBad.map(s => s.url).join('\n');
     }
     writeClipboard(text).then(ok => _flashBtn(btnId, ok));
 }
@@ -1282,8 +1282,8 @@ function renderConfig(ci, ga, sr, sb, cfg) {
         { k: '速度下限', v: speed > 0 ? speed + ' KB/s' : '未设置', cls: speed > 0 ? 'ok' : 'warn' },
         { k: '可用节点', v: total, cls: total > 0 ? 'ok' : 'bad' },
         { k: '通过率', v: checked > 0 ? fmtRate(passRate) : '—', cls: passRate >= 1 ? 'ok' : passRate > 0 ? 'warn' : 'bad' },
-        { k: '有效订阅', v: goodCnt + ' 个' + (successRate > 0 ? `（≥${successRate}%）` : '') },
-        { k: '失效订阅', v: badCnt + ' 个', cls: badCnt > 0 ? (badCnt > goodCnt ? 'bad' : 'warn') : 'ok' },
+        { k: '活跃订阅', v: goodCnt + ' 个' + (successRate > 0 ? `（≥${successRate}%）` : '') },
+        { k: '沉默订阅', v: badCnt + ' 个', cls: badCnt > 0 ? (badCnt > goodCnt ? 'bad' : 'warn') : 'ok' },
         { k: '检测时间', v: ci.check_time || '-' },
     ];
 
@@ -1324,15 +1324,15 @@ function renderConfig(ci, ga, sr, sb, cfg) {
         else if (passRate < 1) suggests.push({ l: 'warn', t: `通过率仅 ${fmtRate(passRate)}，低于正常水平。建议检查网络质量或订阅源状态。` });
         else if (passRate >= 5) suggests.push({ l: 'good', t: `通过率 ${fmtRate(passRate)}，节点筛选效果优秀。` });
     }
-    // 2. 订阅有效率（success-rate 影响有效/无效分界线）
+    // 2. 订阅活跃率（success-rate 影响活跃/无效分界线）
     const totalSubs = goodCnt + badCnt;
-    if (successRate > 0) suggests.push({ l: 'info', t: `有效订阅筛选阈值为 <code>success-rate: ${successRate}%</code>，低于此值的订阅归入失效列表。可在"订阅排名"标签查看完整分布。` });
+    if (successRate > 0) suggests.push({ l: 'info', t: `活跃订阅筛选阈值为 <code>success-rate: ${successRate}%</code>，低于此值的订阅归入沉默列表。可在"订阅排名"标签查看完整分布。` });
     if (badCnt > 0 && totalSubs > 0) {
         const r = Math.round(badCnt / totalSubs * 100);
-        if (r > 50) suggests.push({ l: 'warn', t: `失效订阅占比 ${r}%（${badCnt}/${totalSubs}），超半数失效，建议清理或替换低质订阅源。` });
-        else suggests.push({ l: 'info', t: `存在 ${badCnt} 个失效订阅（${r}%），可前往"订阅排名"标签查看。` });
+        if (r > 50) suggests.push({ l: 'warn', t: `沉默订阅占比 ${r}%（${badCnt}/${totalSubs}），超半数沉默，建议清理或替换低质订阅源。` });
+        else suggests.push({ l: 'info', t: `存在 ${badCnt} 个沉默订阅（${r}%），可前往"订阅排名"标签查看。` });
     } else if (badCnt === 0 && goodCnt > 0) {
-        suggests.push({ l: 'good', t: '所有订阅源均有效，订阅源状态良好。' });
+        suggests.push({ l: 'good', t: '所有订阅源均活跃，订阅源状态良好。' });
     }
 
     // 3. 速度测试参数
@@ -1354,7 +1354,7 @@ function renderConfig(ci, ga, sr, sb, cfg) {
         suggests.push({ l: 'good', t: '<code>keep-success-proxies: true</code> 已开启，可避免上游订阅更新时因暂时拉不到节点导致可用节点清空。' });
         if (hasLocalhostAll) suggests.push({ l: 'warn', t: '检测到 <code>sub-urls</code> 中包含 <code>127.0.0.1/all.yaml</code>。已启用 <code>keep-success-proxies</code> 时，程序会自动保留历史成功节点，无需再订阅本地 all.yaml，可移除该条目以减少冗余。' });
     } else {
-        suggests.push({ l: 'info', tab: 'detection', t: '<code>keep-success-proxies: false</code>，每次检测不保留历史节点，上游订阅临时失效时可用节点可能清零，建议设为 true。' });
+        suggests.push({ l: 'info', tab: 'detection', t: '<code>keep-success-proxies: false</code>，每次检测不保留历史节点，上游订阅临时沉默时可用节点可能清零，建议设为 true。' });
     }
     // 6. 并发数
     if (aliveCon > 500) suggests.push({ l: 'warn', tab: 'detection', t: `测活并发 ${aliveCon} 过高，超出一般路由器芯片处理能力，建议设为 100–300，量力而行。` });

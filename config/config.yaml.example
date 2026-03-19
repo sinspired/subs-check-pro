@@ -368,7 +368,6 @@ ghproxy-group:
 sub-urls-retry: 3
 # 网络实在太差，就调高一点，比如 15
 sub-urls-timeout: 10
-
 # 订阅成功率提醒阈值
 # 低于此值会将订阅链接打印出来，用于排查质量差的订阅，使用小于1的小数，比如：0.001
 success-rate: 0
