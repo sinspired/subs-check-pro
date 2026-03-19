@@ -1537,6 +1537,163 @@ h1 svg {
   cursor: pointer;
 }
 
+.threshold-card {
+  margin-bottom: 8px;
+  padding: 11px 14px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+}
+.threshold-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.threshold-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.threshold-label svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.threshold-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 5px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  transition: opacity 0.2s;
+}
+.threshold-chip svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+.threshold-chip.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── 尺子 ── */
+.ruler-wrap {
+  position: relative;
+  padding: 0 2px;
+  margin-bottom: 6px;
+}
+.ruler-track {
+  position: relative;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  overflow: visible;
+}
+.ruler-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 5px 0 0 5px;
+  pointer-events: none;
+}
+.ruler-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* 竖线手柄 + 两端圆点 */
+.ruler-handle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--accent);
+  border-radius: 2px;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+.ruler-handle::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
+}
+.ruler-handle::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
+}
+.ruler-handle.dragging {
+  cursor: grabbing;
+}
+
+/* 放大触摸区 */
+.ruler-handle-hit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  margin-left: -12px;
+  cursor: grab;
+  z-index: 3;
+}
+.ruler-handle-hit.dragging {
+  cursor: grabbing;
+}
+
+.threshold-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+}
+.foot-above {
+  color: var(--accent);
+  font-weight: 500;
+}
+.foot-below {
+  color: var(--muted);
+}
+
+.sub-item--dim {
+  opacity: 0.25;
+  transition: opacity 0.25s;
+}
+
 .sub-list {
   display: flex;
   flex-direction: column;
@@ -2071,11 +2228,7 @@ code {
 
   .tab-bar {
     display: flex;
-    background-color: color-mix(
-    in srgb,
-    var(--bg-hover) 50%,
-    transparent
-  );
+    background-color: color-mix(in srgb, var(--bg-hover) 50%, transparent);
   }
 
   .topbar-meta {

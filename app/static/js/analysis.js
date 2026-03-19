@@ -737,7 +737,7 @@ function renderReport(r, cfg) {
     const geoCount = Object.keys(ga.geography_distribution || {}).length, protoCount = Object.keys(ga.protocol_distribution || {}).length;
     _sb('sb-geo', geoCount); _sb('sb-proto', protoCount); _sb('sb-subs', sr.length);
     renderOverview(r, ci, ga, sr.length, geoCount, protoCount, cfg);
-    renderGeo(ga); renderProto(ga); renderSubs(sr, sb); renderConfig(ci, ga, sr, sb, cfg);
+    renderGeo(ga); renderProto(ga); renderSubs(sr, sb, cfg); renderConfig(ci, ga, sr, sb, cfg);
 }
 function _sb(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
@@ -1185,14 +1185,245 @@ function renderProto(ga) {
         <div class="proto-grid">${cards}</div>`;
 }
 
-function renderSubs(subs, subsBad) {
-    document.getElementById('copyToolbar').innerHTML = subs.length ? `<div class="copy-toolbar"><span class="copy-toolbar-label">复制：</span><button class="copy-btn" id="copyUrlsBtn" onclick="copyUrls(false)" title="每行一个 URL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="btn-text">URL 列表</span></button><button class="copy-btn" id="copyYamlBtn" onclick="copyUrls(true)" title="可直接替换 sub-urls 配置段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span class="btn-text">YAML 格式</span></button><div class="copy-scope"><label title="同时包含沉默订阅"><input type="checkbox" id="copyIncludeBad"><span class="scope-text">含沉默订阅</span></label></div></div>` : '';
-    if (!subs.length) { document.getElementById('rankingContent').innerHTML = '<p style="color:var(--muted);font-size:13px">暂无活跃订阅</p>'; }
-    else {
-        document.getElementById('rankingContent').innerHTML = `<div class="section-title">订阅排名（${subs.length} 个活跃）</div><div class="sub-list">${subs.map((s, i) => { const stats = s.stats || {}, rateStr = String(stats.rate || '0%'), rateNum = parseFloat(rateStr), barColor = rateNum >= 10 ? 'var(--success)' : rateNum > 0 ? 'var(--warning)' : 'var(--danger)'; const locs = Array.isArray(s.top_locations) ? s.top_locations.join('').split('|').filter(Boolean) : []; const protos = s.protocols ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : []; const tierClass = rateNum >= 20 ? 'tier-s' : rateNum >= 10 ? 'tier-a' : rateNum >= 3 ? 'tier-b' : 'tier-c'; const tierLabel = rateNum >= 20 ? 'S' : rateNum >= 10 ? 'A' : rateNum >= 3 ? 'B' : 'C'; return `<div class="sub-item"><div class="sub-header"><span class="sub-rank">${i + 1}</span><span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="sub-tier ${tierClass}">${tierLabel}</span><span class="sub-rate" style="color:${barColor}">${rateStr}</span></div><div class="sub-bar-wrap"><div class="sub-bar" style="width:${Math.min(rateNum, 100)}%;background:${barColor}"></div></div><div class="sub-meta"><span>${stats.success || 0} / ${stats.total || 0} 节点</span>${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}${protos.map(([k, v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}</div></div>`; }).join('')}</div>`;
+function renderSubs(subs, subsBad, cfg) {
+    cfg = cfg || {};
+
+    // 复制工具栏
+    document.getElementById('copyToolbar').innerHTML = subs.length
+        ? `<div class="copy-toolbar">
+        <span class="copy-toolbar-label">复制：</span>
+        <button class="copy-btn" id="copyUrlsBtn" onclick="copyUrls(false)" title="每行一个 URL">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span class="btn-text">URL 列表</span>
+        </button>
+        <button class="copy-btn" id="copyYamlBtn" onclick="copyUrls(true)" title="可直接替换 sub-urls 配置段">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span class="btn-text">YAML 格式</span>
+        </button>
+        <div class="copy-scope">
+          <label title="同时包含沉默订阅">
+            <input type="checkbox" id="copyIncludeBad">
+            <span class="scope-text">含沉默订阅</span>
+          </label>
+        </div>
+      </div>`
+        : '';
+
+    if (!subs.length) {
+        document.getElementById('rankingContent').innerHTML =
+            '<p style="color:var(--muted);font-size:13px">暂无活跃订阅</p>';
+    } else {
+        // ① 先渲染列表 HTML
+        const listHTML = subs.map((s, i) => {
+            const stats = s.stats || {};
+            const rateStr = String(stats.rate || '0%');
+            const rateNum = parseFloat(rateStr);
+            const barColor = rateNum >= 10 ? 'var(--success)' : rateNum > 0 ? 'var(--warning)' : 'var(--danger)';
+            const locs = Array.isArray(s.top_locations) ? s.top_locations.join('').split('|').filter(Boolean) : [];
+            const protos = s.protocols ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]) : [];
+            const tierClass = rateNum >= 20 ? 'tier-s' : rateNum >= 10 ? 'tier-a' : rateNum >= 3 ? 'tier-b' : 'tier-c';
+            const tierLabel = rateNum >= 20 ? 'S' : rateNum >= 10 ? 'A' : rateNum >= 3 ? 'B' : 'C';
+            return `<div class="sub-item" data-rate="${rateNum}">
+        <div class="sub-header">
+          <span class="sub-rank">${i + 1}</span>
+          <span class="sub-url" title="${esc(s.url)}">${esc(s.url)}</span>
+          <span class="sub-tier ${tierClass}">${tierLabel}</span>
+          <span class="sub-rate" style="color:${barColor}">${rateStr}</span>
+        </div>
+        <div class="sub-bar-wrap"><div class="sub-bar" style="width:${Math.min(rateNum, 100)}%;background:${barColor}"></div></div>
+        <div class="sub-meta">
+          <span>${stats.success || 0} / ${stats.total || 0} 节点</span>
+          ${locs.map(l => `<span class="tag-pill">${l}</span>`).join('')}
+          ${protos.map(([k, v]) => `<span class="tag-pill">${k}:${v}</span>`).join('')}
+        </div>
+      </div>`;
+        }).join('');
+
+        document.getElementById('rankingContent').innerHTML =
+            `<div class="section-title">订阅排名（${subs.length} 个活跃）</div>
+       <div id="thresholdSlot"></div>
+       <div class="sub-list">${listHTML}</div>`;
+
+        // ② 列表已在 DOM 中，再初始化手柄
+        initThresholdSlider(subs, cfg);
     }
-    if (!subsBad.length) { document.getElementById('badContent').innerHTML = ''; return; }
-    document.getElementById('badContent').innerHTML = `<div class="section-title-toggle" onclick="toggleBad()">沉默订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span><span class="toggle-line"></span><svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div><div id="badList" style="display:none"><div class="bad-list">${subsBad.map(s => { const st = s.stats || {}; return `<div class="bad-item"><span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span><span class="bad-count">${st.success || 0}/${st.total || 0}</span></div>`; }).join('')}</div></div>`;
+
+    // 沉默订阅
+    if (!subsBad.length) {
+        document.getElementById('badContent').innerHTML = '';
+        return;
+    }
+    document.getElementById('badContent').innerHTML =
+        `<div class="section-title-toggle" onclick="toggleBad()">
+       沉默订阅&nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0">(${subsBad.length})</span>
+       <span class="toggle-line"></span>
+       <svg class="toggle-chevron" id="badChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+     </div>
+     <div id="badList" style="display:none">
+       <div class="bad-list">
+         ${subsBad.map(s => {
+            const st = s.stats || {};
+            return `<div class="bad-item">
+             <span class="bad-url" title="${esc(s.url)}">${esc(s.url)}</span>
+             <span class="bad-count">${st.success || 0}/${st.total || 0}</span>
+           </div>`;
+        }).join('')}
+       </div>
+     </div>`;
+}
+
+function drawRuler(svgEl, maxRate) {
+    if (!svgEl) return;
+    // 必须在 DOM 渲染后取真实宽度
+    const W = svgEl.getBoundingClientRect().width || svgEl.parentElement?.clientWidth || 400;
+    const H = 28;
+    // 用真实像素坐标，不设 viewBox 缩放
+    svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svgEl.removeAttribute('preserveAspectRatio');
+
+    const steps = 20;
+    let html = `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="rgba(100,105,113,0.1)" stroke-width="0.5"/>`;
+
+    for (let i = 0; i <= steps; i++) {
+        const x = (i / steps) * W;
+        const isMajor = i % 5 === 0;
+        const tickH = isMajor ? 10 : 5;
+        const y1 = (H - tickH) / 2;
+        const y2 = y1 + tickH;
+        html += `<line
+            x1="${x.toFixed(1)}" y1="${y1}" x2="${x.toFixed(1)}" y2="${y2}"
+            stroke="${isMajor ? 'rgba(14,165,160,0.4)' : 'rgba(100,105,113,0.22)'}"
+            stroke-width="${isMajor ? 1.2 : 0.8}"/>`;
+        if (isMajor) {
+            const val = Math.round(i / steps * maxRate);
+            const anchor = i === 0 ? 'start' : i === steps ? 'end' : 'middle';
+            html += `<text
+                x="${x.toFixed(1)}" y="${y2 + 9}"
+                text-anchor="${anchor}"
+                font-size="9"
+                fill="rgba(100,105,113,0.5)"
+                font-family="system-ui,-apple-system,sans-serif">${val}%</text>`;
+        }
+    }
+    svgEl.innerHTML = html;
+}
+
+function initThresholdSlider(subs, cfg) {
+    const slot = document.getElementById('thresholdSlot');
+    if (!slot) return;
+
+    const rates = subs.map(s => parseFloat(s.stats?.rate || '0'));
+    const maxRate = Math.max(...rates, 1);
+    const cfgRate = parseFloat(cfg['success-rate'] || '0') * 100; // 0.05 → 5%
+    let threshold = cfgRate > 0 ? Math.min(cfgRate, maxRate) : 0;
+
+    slot.innerHTML = `
+    <div class="threshold-card">
+      <div class="threshold-top">
+        <div class="threshold-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+          成功率筛选
+        </div>
+        <div class="threshold-chip hidden" id="thresholdChip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+          </svg>
+          <span id="thresholdChipVal"></span>
+        </div>
+      </div>
+      <div class="ruler-wrap">
+        <div class="ruler-track" id="rulerTrack">
+          <div class="ruler-fill" id="rulerFill" style="width:0%"></div>
+          <svg class="ruler-svg" id="rulerSvg"></svg>
+          <div class="ruler-handle" id="rulerHandle" style="left:0%"></div>
+          <div class="ruler-handle-hit" id="rulerHandleHit" style="left:0%"></div>
+        </div>
+      </div>
+      <div class="threshold-foot">
+        <span class="foot-above" id="thresholdAbove"></span>
+        <span class="foot-below" id="thresholdBelow"></span>
+      </div>
+    </div>`;
+
+    // 绘制刻度
+    const svgEl = document.getElementById('rulerSvg');
+    // rAF 确保 DOM 已渲染、元素已有实际宽度
+    requestAnimationFrame(() => {
+        drawRuler(svgEl, maxRate);
+
+        // resize 时重绘（容器宽度变化时刻度不变形）
+        const ro = new ResizeObserver(() => drawRuler(svgEl, maxRate));
+        ro.observe(document.getElementById('rulerTrack'));
+    });
+
+    const track = document.getElementById('rulerTrack');
+    const handle = document.getElementById('rulerHandle');
+    const handleHit = document.getElementById('rulerHandleHit');
+    const fill = document.getElementById('rulerFill');
+    const chip = document.getElementById('thresholdChip');
+    const chipVal = document.getElementById('thresholdChipVal');
+
+    const updateUI = () => {
+        const pct = Math.max(0, Math.min(1, threshold / maxRate));
+        handle.style.left = `${pct * 100}%`;
+        handleHit.style.left = `${pct * 100}%`;
+        fill.style.width = `${pct * 100}%`;
+
+        if (threshold <= 0) {
+            chip.classList.add('hidden');
+        } else {
+            chip.classList.remove('hidden');
+            chipVal.textContent = `≥ ${threshold.toFixed(1)}%`;
+        }
+
+        let above = 0, below = 0;
+        document.querySelectorAll('.sub-item[data-rate]').forEach(el => {
+            const r = parseFloat(el.dataset.rate);
+            const dim = threshold > 0 && r < threshold;
+            el.classList.toggle('sub-item--dim', dim);
+            dim ? below++ : above++;
+        });
+
+        document.getElementById('thresholdAbove').textContent =
+            threshold > 0 ? `${above} 个达标` : `${above} 个活跃订阅`;
+        document.getElementById('thresholdBelow').textContent =
+            threshold > 0 ? `${below} 个低于阈值` : '';
+
+        const activeCount = document.querySelectorAll('.sub-item[data-rate]:not(.sub-item--dim)').length;
+        const urlsBtn = document.getElementById('copyUrlsBtn');
+        const yamlBtn = document.getElementById('copyYamlBtn');
+        if (urlsBtn) urlsBtn.querySelector('.btn-text').textContent =
+            activeCount < subs.length ? `URL 列表 (${activeCount})` : 'URL 列表';
+        if (yamlBtn) yamlBtn.querySelector('.btn-text').textContent =
+            activeCount < subs.length ? `YAML 格式 (${activeCount})` : 'YAML 格式';
+    };
+
+    const setFromX = clientX => {
+        const rect = track.getBoundingClientRect();
+        let pct = (clientX - rect.left) / rect.width;
+        pct = Math.max(0, Math.min(1, pct));
+        threshold = pct < 0.03 ? 0 : pct * maxRate;
+        updateUI();
+    };
+
+    let dragging = false;
+    handleHit.addEventListener('pointerdown', e => {
+        dragging = true;
+        handleHit.setPointerCapture(e.pointerId);
+        handleHit.classList.add('dragging');
+        handle.classList.add('dragging');
+    });
+    handleHit.addEventListener('pointermove', e => { if (dragging) setFromX(e.clientX); });
+    handleHit.addEventListener('pointerup', () => {
+        dragging = false;
+        handleHit.classList.remove('dragging');
+        handle.classList.remove('dragging');
+    });
+    track.addEventListener('click', e => { if (!dragging) setFromX(e.clientX); });
+
+    updateUI();
 }
 
 const _copyTimers = {};
@@ -1213,20 +1444,47 @@ function _flashBtn(id, ok) {
     if (ok) { btn.classList.add('copied'); btn.innerHTML = `${_COPY_SVG_OK}<span class="btn-text">已复制</span>`; _copyTimers[id] = setTimeout(() => _resetBtn(id), 1800); }
     else { btn.classList.remove('copied'); btn.innerHTML = `${_COPY_SVG_ERR}<span class="btn-text">请手动复制</span>`; _copyTimers[id] = setTimeout(() => _resetBtn(id), 2200); }
 }
+// copyUrls 改为只复制未被 dim 的条目
 function copyUrls(asYaml) {
     if (!_reportData) return;
-    const subs = _reportData.subs_ranking || [], subsBad = _reportData.subs_ranking_bad || [];
+    const subs = _reportData.subs_ranking || [];
+    const subsBad = _reportData.subs_ranking_bad || [];
     const includeBad = document.getElementById('copyIncludeBad')?.checked;
     const btnId = asYaml ? 'copyYamlBtn' : 'copyUrlsBtn';
+
+    // 读取当前未被阈值过滤的订阅（保持原始顺序）
+    const activeSubs = subs.filter((_, i) => {
+        const el = document.querySelector(`.sub-item[data-rate]:nth-of-type(${i + 1})`);
+        // 更可靠：直接查 DOM
+        return true; // 见下方替代写法
+    });
+
+    // 更可靠：从 DOM 读取可见项的 URL
+    const visibleUrls = new Set(
+        [...document.querySelectorAll('.sub-item[data-rate]:not(.sub-item--dim) .sub-url')]
+            .map(el => el.getAttribute('title')) // title 存的是原始 URL
+    );
+    const filteredSubs = subs.filter(s => visibleUrls.has(s.url));
+
     let text = '';
     if (asYaml) {
-        const fmt = s => { const st = s.stats || {}, protos = s.protocols ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join('; ') : ''; return `  - ${s.url} # ${String(st.rate || '0%')} (${st.success || 0}/${st.total || 0})${protos ? '[' + protos + ']' : ''}`; };
-        text = `# 达标订阅列表\nsub-urls:\n` + subs.map(fmt).join('\n');
-        if (includeBad && subsBad.length) text += `\n\n# 成功率为 0 的订阅\nsub-urls-bad:\n` + subsBad.map(s => { const st = s.stats || {}; return `  - ${s.url} # 0.0% (${st.success || 0}/${st.total || 0})`; }).join('\n');
+        const fmt = s => {
+            const st = s.stats || {};
+            const protos = s.protocols
+                ? Object.entries(s.protocols).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join('; ')
+                : '';
+            return `  - ${s.url} # ${String(st.rate || '0%')} (${st.success || 0}/${st.total || 0})${protos ? ' [' + protos + ']' : ''}`;
+        };
+        text = `# 活跃订阅列表\nsub-urls:\n` + filteredSubs.map(fmt).join('\n');
+        if (includeBad && subsBad.length)
+            text += `\n\n# 沉默订阅\nsub-urls-silent:\n` +
+                subsBad.map(s => { const st = s.stats || {}; return `  - ${s.url} # 0.0% (${st.success || 0}/${st.total || 0})`; }).join('\n');
     } else {
-        text = subs.map(s => s.url).join('\n');
-        if (includeBad && subsBad.length) text += '\n\n# 沉默订阅\n' + subsBad.map(s => s.url).join('\n');
+        text = filteredSubs.map(s => s.url).join('\n');
+        if (includeBad && subsBad.length)
+            text += '\n\n# 沉默订阅\n' + subsBad.map(s => s.url).join('\n');
     }
+
     writeClipboard(text).then(ok => _flashBtn(btnId, ok));
 }
 
@@ -1282,8 +1540,8 @@ function renderConfig(ci, ga, sr, sb, cfg) {
         { k: '速度下限', v: speed > 0 ? speed + ' KB/s' : '未设置', cls: speed > 0 ? 'ok' : 'warn' },
         { k: '可用节点', v: total, cls: total > 0 ? 'ok' : 'bad' },
         { k: '通过率', v: checked > 0 ? fmtRate(passRate) : '—', cls: passRate >= 1 ? 'ok' : passRate > 0 ? 'warn' : 'bad' },
-        { k: '活跃订阅', v: goodCnt + ' 个' + (successRate > 0 ? `（≥${successRate}%）` : '') },
-        { k: '沉默订阅', v: badCnt + ' 个', cls: badCnt > 0 ? (badCnt > goodCnt ? 'bad' : 'warn') : 'ok' },
+        { k: '活跃订阅', v: goodCnt + ' 个' },
+        { k: '沉默订阅', v: badCnt + ' 个', cls: badCnt > 0 ? 'warn' : 'ok' },
         { k: '检测时间', v: ci.check_time || '-' },
     ];
 
@@ -1326,7 +1584,10 @@ function renderConfig(ci, ga, sr, sb, cfg) {
     }
     // 2. 订阅活跃率（success-rate 影响活跃/无效分界线）
     const totalSubs = goodCnt + badCnt;
-    if (successRate > 0) suggests.push({ l: 'info', t: `活跃订阅筛选阈值为 <code>success-rate: ${successRate}%</code>，低于此值的订阅归入沉默列表。可在"订阅排名"标签查看完整分布。` });
+    if (successRate > 0) suggests.push({
+        l: 'info',
+        t: `<code>success-rate: ${(successRate * 100).toFixed(1)}%</code> 已设置，成功率低于此值的订阅会在日志中打印。`
+    });
     if (badCnt > 0 && totalSubs > 0) {
         const r = Math.round(badCnt / totalSubs * 100);
         if (r > 50) suggests.push({ l: 'warn', t: `沉默订阅占比 ${r}%（${badCnt}/${totalSubs}），超半数沉默，建议清理或替换低质订阅源。` });
