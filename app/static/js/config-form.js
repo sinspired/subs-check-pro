@@ -672,6 +672,11 @@ let _pendingSlot = null;
 let _lastTab = null;
 let _resizeTimer = null;
 
+// 是否记住各 tab 的滚动位置（true = 记住，false = 每次回到顶部）
+let _rememberScroll = true;
+// 各 tab 滚动位置缓存，key = tabId，value = scrollTop
+const _scrollCache = new Map();
+
 
 /* ════════════════════════════════════════════════════════════
    宽度计算
@@ -1612,6 +1617,31 @@ function _updateModeToggle(mode) {
   btn.title = isYaml ? '切换到表单模式' : '切换到 YAML 编辑器';
 }
 
+/**
+ * _getScrollContainer — 找到面板实际使用的滚动容器
+ * · 若面板自身可滚动（overflow auto/scroll 且内容超出）→ 返回面板自身
+ * · 否则向上找第一个可滚动祖先
+ * · 都找不到则返回 panel 本身（兜底，操作无害）
+ */
+function _getScrollContainer(panel) {
+  // 先检查面板自身
+  const selfStyle = getComputedStyle(panel);
+  if (['auto', 'scroll'].includes(selfStyle.overflowY) ||
+    ['auto', 'scroll'].includes(selfStyle.overflow)) {
+    return panel;
+  }
+  // 向上查找可滚动祖先
+  let el = panel.parentElement;
+  while (el && el !== document.documentElement) {
+    const s = getComputedStyle(el);
+    if (['auto', 'scroll'].includes(s.overflowY) ||
+      ['auto', 'scroll'].includes(s.overflow)) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return panel; // 兜底
+}
 
 /* ════════════════════════════════════════════════════════════
    DOM 状态同步
@@ -1623,8 +1653,8 @@ function applyPanels() {
   if (!tabBar) return;
 
   /* 只有双槽均有内容时才真正进入 split-mode；
-     单槽时保持 _splitOn=true 但视觉上铺满单列，
-     防止 split-mode 的 flex 布局让空面板撑开空白 */
+   单槽时保持 _splitOn=true 但视觉上铺满单列，
+   防止 split-mode 的 flex 布局让空面板撑开空白 */
   // 用显示阈值，让手动开启的双栏在 280-340 也能生效
   const isSplit = _splitOn && _canShowSplitBtn() && Boolean(_leftTab) && Boolean(_rightTab);
 
@@ -1632,13 +1662,50 @@ function applyPanels() {
     const id = t.dataset.tab;
     t.classList.toggle('active', id === _leftTab);
     t.classList.toggle('active-right', isSplit && id === _rightTab);
-    t.setAttribute('aria-selected', String(id === _leftTab || (isSplit && id === _rightTab)));
+    t.setAttribute('aria-selected', String(
+      id === _leftTab || (isSplit && id === _rightTab)
+    ));
   });
 
+  // ── 第一遍：先保存所有「即将失活」面板的滚动位置 ──
+  // 必须在 class 变更前读取，否则 display:none 会让 scrollTop 归零
+  const toActivate = [];
+  document.querySelectorAll('#cfgPanels .cfg-panel').forEach(p => {
+    const id = p.id.replace('panel-', '');
+    const wasActive = p.classList.contains('active') || p.classList.contains('active-right');
+    const willActive = id === _leftTab || (isSplit && id === _rightTab);
+
+    if (wasActive && !willActive) {
+      // 面板仍可见时读取滚动位置，存入缓存
+      const scroller = _getScrollContainer(p);
+      _scrollCache.set(id, scroller.scrollTop);
+    }
+
+    if (!wasActive && willActive) {
+      toActivate.push({ p, id });
+    }
+  });
+
+  // ── 第二遍：切换 class（此后不可见面板的 scrollTop 可能被浏览器重置）──
   document.querySelectorAll('#cfgPanels .cfg-panel').forEach(p => {
     const id = p.id.replace('panel-', '');
     p.classList.toggle('active', id === _leftTab);
     p.classList.toggle('active-right', isSplit && id === _rightTab);
+  });
+
+  // ── 第三遍：恢复「新激活」面板的滚动位置 ──
+  // requestAnimationFrame 确保面板已经 display:block、尺寸已确定后再设置
+  toActivate.forEach(({ p, id }) => {
+    const restore = () => {
+      const scroller = _getScrollContainer(p);
+      if (_rememberScroll && _scrollCache.has(id)) {
+        scroller.scrollTop = _scrollCache.get(id);
+      } else {
+        scroller.scrollTop = 0;
+      }
+    };
+    // 若 scroller 是共享父容器，需等渲染完成后设置
+    requestAnimationFrame(restore);
   });
 
   panelsWrap?.classList.toggle('split-mode', isSplit);
@@ -1649,7 +1716,6 @@ function applyPanels() {
     splitBtn.setAttribute('aria-pressed', String(_splitOn && _canShowSplitBtn()));
   }
 }
-
 
 /* ════════════════════════════════════════════════════════════
    公开 API
@@ -1914,6 +1980,7 @@ export function initConfigForm() {
 export function renderConfigForm(configObj) {
   _cfg = _flattenCfg(configObj ?? {});
   _built.clear();
+  _scrollCache.clear(); // 配置重载时清空滚动缓存
 
   const toRebuild = new Set([_leftTab, _rightTab].filter(Boolean));
   if (toRebuild.size === 0) {
