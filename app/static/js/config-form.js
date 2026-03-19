@@ -1,5 +1,5 @@
 /**
- * config-form.js  v4
+ * config-form.js
  *
  * 双栏逻辑：
  *   · 初始化时根据编辑器可用宽度自动决定是否开启双栏
@@ -670,6 +670,7 @@ let _rightTab = null;
 let _splitOn = false;
 let _pendingSlot = null;
 let _lastTab = null;
+let _resizeTimer = null;
 
 
 /* ════════════════════════════════════════════════════════════
@@ -1338,8 +1339,12 @@ function mkField(fieldDef, value) {
   row.appendChild(ctrlWrap);
 
   // url-list：将折行按钮插入 label 行右侧
-  if (fieldDef.type === 'url-list' && ctrl._wrapToggle) {
-    row.querySelector('.cfg-label-row')?.appendChild(ctrl._wrapToggle);
+  if (fieldDef.type === 'url-list') {
+    // 加空值防御，避免 ctrl 被包裹或重构后静默失效
+    const toggle = ctrl?._wrapToggle;
+    if (toggle) {
+      row.querySelector('.cfg-label-row')?.appendChild(toggle);
+    }
   }
 
   // full-width 字段的 hint 仍挂在 row 上（跨全列）
@@ -1688,7 +1693,8 @@ export function initConfigForm() {
   function activateTab(id) {
     if (!_built.has(id)) buildPanel(id);
 
-    if (!_splitOn || !_canSplit()) {
+    // 改为 _canShowSplitBtn()，与 applyPanels / toggleSplit 保持一致
+    if (!_splitOn || !_canShowSplitBtn()) {
       _leftTab = id;
       _lastTab = id;
       applyPanels();
