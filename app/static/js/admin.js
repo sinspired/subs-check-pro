@@ -2665,11 +2665,14 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       if (els.iconMoon) els.iconMoon.style.display = t === 'dark' ? '' : 'none'
       if (els.iconSun) els.iconSun.style.display = t === 'light' ? '' : 'none'
 
-      // 根据当前主题设置按钮提示
       if (els.themeToggleBtn) {
         els.themeToggleBtn.title =
           t === 'dark' ? '切换到浅色模式' : '切换到深色模式'
       }
+
+      // 同步 theme-color
+      document.querySelector('meta[name="theme-color"]')
+        ?.setAttribute('content', t === 'dark' ? '#18191b' : '#ffffff')
 
       if (codeMirrorView) {
         const val = codeMirrorView.state.doc.toString()

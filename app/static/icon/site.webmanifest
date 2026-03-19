@@ -2,10 +2,10 @@
   "name": "Subs-Check-Pro",
   "short_name": "SubsCheckPro",
   "description": "Subs-Check 性能版.",
-  "start_url": "/",
+  "start_url": "/admin",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#18191b",
   "theme_color": "#0ea5a0",
   "icons": [
     {

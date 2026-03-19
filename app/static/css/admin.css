@@ -163,7 +163,11 @@ header {
   justify-content: space-between;
   padding: 0 8px;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+}
+
+header.card {
+  border-radius: 0 0 12px 12px;
+  border-top: none;
 }
 
 .hdr-left {
@@ -418,7 +422,7 @@ header {
 /* 卡片 */
 .card {
   background: var(--card);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   padding: 12px;
   overflow: hidden;
@@ -2414,6 +2418,71 @@ main {
   :root {
     --gap: 10px;
   }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent-light);
+  }
+
+  /* ── 布局 ── */
+  html,
+  body {
+    overflow: auto;
+  }
+
+  /* .card {
+    border-radius: 16px;
+  }
+
+  header {
+    margin-top: var(--gap);
+    height: calc(var(--header-height) * 1.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .summary-toggle-header {
+    opacity: 0.8;
+    margin-top: 0px;
+    padding: 7px 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+  }
+  body {
+    padding: 0 6px;
+  } */
+  main {
+    height: auto;
+  }
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+  }
+  .content .progressCard {
+    flex: 0 0 auto;
+    overflow: hidden;
+  }
+
   /* ── 顶栏 / 导航 ── */
   .logo {
     width: 38px;
@@ -2442,26 +2511,6 @@ main {
   #btnProjectInfo,
   #btnAnalysis {
     display: inline-block;
-  }
-
-  /* ── 布局 ── */
-  html,
-  body {
-    overflow: auto;
-  }
-  main {
-    height: auto;
-  }
-  .layout {
-    grid-template-columns: 1fr;
-  }
-  .content {
-    display: flex;
-    flex-direction: column;
-  }
-  .content .progressCard {
-    flex: 0 0 auto;
-    overflow: hidden;
   }
 
   /* ── 卡片 ── */
