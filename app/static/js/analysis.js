@@ -1,5 +1,26 @@
 // analysis.js
 
+/* ── 平台名称 → CSS 变量，图表和 mini 胶囊共用 ── */
+const PLATFORM_COLORS = {
+    'Netflix': 'var(--unlock-netflix)',
+    'YouTube': 'var(--unlock-youtube)',
+    'Disney+': 'var(--unlock-disney)',
+    'TikTok': 'var(--unlock-tiktok)',
+    'GPT+': 'var(--unlock-gpt)',
+    'GPT': 'var(--unlock-gpt)',
+    'Gemini': 'var(--unlock-gemini)',
+    'iprisk': 'var(--unlock-iprisk)',
+    'openai': 'var(--unlock-openai)',
+};
+
+/* 按平台名匹配，匹配不到则按分类回退 */
+function platformColor(name, category = 'media') {
+    if (PLATFORM_COLORS[name]) return PLATFORM_COLORS[name];
+    return category === 'ai'
+        ? 'var(--unlock-ai-fallback)'
+        : 'var(--unlock-media-fallback)';
+}
+
 // 国家中心坐标 [lon, lat]
 const GEO_COUNTRY_COORDS = {
     // 东亚
@@ -807,14 +828,14 @@ function renderOverview(r, ci, ga, subCount, geoCount, protoCount, cfg) {
 
     const passRate = checked > 0 ? Math.min(100, total / checked * 100) : 0;
     const chips = [
-        { label: '可用节点', value: total, sub: `共检测 ${ci.check_count_raw || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`, color: 'var(--accent)' },
-        { label: '通过率', value: fmtRate(passRate), sub: `速度下限 ${minSpeedStr}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`, color: passRate >= 5 ? 'var(--success)' : passRate > 0 ? 'var(--warning)' : 'var(--danger)' },
-        { label: '覆盖地区', value: geoCount, sub: '国家/地区', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`, color: 'var(--idle)' },
-        { label: '协议种类', value: protoCount, sub: '协议分布', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--idle)' },
-        { label: 'CF 中转', value: cfConTotal, sub: total ? Math.round(cfConTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`, color: 'var(--success)' },
-        { label: '独立 VPS', value: vpsTotal, sub: total ? Math.round(vpsTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`, color: 'var(--warning)' },
-        { label: '流量消耗', value: ci.check_traffic || '-', sub: `耗时 ${ci.check_duration || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--muted)' },
-        { label: '活跃订阅', value: subCount, sub: `检测时间 ${ci.check_time || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`, color: 'var(--muted)' },
+        { label: '可用节点', value: total, sub: `共检测 ${ci.check_count_raw || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`, color: 'var(--chip-nodes)' },
+        { label: '通过率', value: fmtRate(passRate), sub: `速度下限 ${minSpeedStr}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`, color: passRate >= 5 ? 'var(--chip-passrate-good)' : passRate > 0 ? 'var(--chip-passrate-warn)' : 'var(--chip-passrate-bad)' },
+        { label: '覆盖地区', value: geoCount, sub: '国家/地区', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`, color: 'var(--chip-geo)' },
+        { label: '协议种类', value: protoCount, sub: '协议分布', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--chip-proto)' },
+        { label: 'CF 中转', value: cfConTotal, sub: total ? Math.round(cfConTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`, color: 'var(--chip-cf)' },
+        { label: '独立 VPS', value: vpsTotal, sub: total ? Math.round(vpsTotal / total * 100) + '%' : '0%', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`, color: 'var(--chip-vps)' },
+        { label: '流量消耗', value: ci.check_traffic || '-', sub: `耗时 ${ci.check_duration || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, color: 'var(--chip-traffic)' },
+        { label: '活跃订阅', value: subCount, sub: `检测时间 ${ci.check_time || '-'}`, icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`, color: 'var(--chip-sub)' },
     ];
     document.getElementById('summaryChips').innerHTML = chips.map(c =>
         `<div class="summary-chip"><div class="chip-icon" style="background:color-mix(in srgb,${c.color} 12%,transparent);color:${c.color}">${c.icon}</div><div class="chip-value" style="color:${c.color}">${c.value}</div><div class="chip-label">${c.label}</div><div class="chip-sub">${c.sub || ''}</div></div>`
@@ -823,7 +844,7 @@ function renderOverview(r, ci, ga, subCount, geoCount, protoCount, cfg) {
     // 解锁标签
     const unlockData = parseUnlockFromSummary((r.summary || '').trim());
     document.getElementById('unlockSection').innerHTML = unlockData.length
-        ? `<div class="section-title" style="margin-bottom:8px">媒体 &amp; AI 解锁</div><div class="unlock-row" style="margin-bottom:16px">${unlockData.map(u => `<span class="unlock-tag"><span class="ut-dot" style="background:${u.color}"></span>${u.name}<span class="ut-count">${u.count}</span></span>`).join('')}</div>` : '';
+        ? `<div class="section-title" style="margin-bottom:8px">媒体 &amp; AI 解锁</div><div class="unlock-row" style="margin-bottom:16px">${unlockData.map(u => `<span class="unlock-tag"><span class="ut-dot" style="background:${u.color}"></span>${u.name}<span class="ut-count" style="color:${u.color}">${u.count}</span></span>`).join('')}</div>` : '';
 
     // 配置快览面板
     const cfgPanel = buildCfgStatusPanel(cfg, ci);
@@ -836,14 +857,14 @@ function renderOverview(r, ci, ga, subCount, geoCount, protoCount, cfg) {
         <div class="stat-panel">
             <div class="panel-title">线路质量</div>
             <div class="quality-row">
-                <div class="quality-item"><div class="quality-val" style="color:var(--success)">${cfRatio}</div><div class="quality-label">CF 中转 ¹⁺</div></div>
-                <div class="quality-item"><div class="quality-val" style="color:var(--idle)">${vpsRatioStr}</div><div class="quality-label">独立 VPS ²</div></div>
+                <div class="quality-item card-cf"><div class="quality-val">${cfRatio}</div><div class="quality-label">CF 中转 ¹⁺</div></div>
+                <div class="quality-item card-vps"><div class="quality-val">${vpsRatioStr}</div><div class="quality-label">独立 VPS ²</div></div>
             </div>
             <div class="cf-breakdown">
                 ${cfGroup('CF 一致 ¹⁺', cfCon, 'var(--success)')}
                 ${cfGroup('CF 不一致 ⁰', cfIncon, 'var(--warning)')}
                 ${Object.keys(cfBlock).length ? cfGroup('CF 异常 ⁻¹', cfBlock, 'var(--danger)') : ''}
-                ${cfGroup('独立 VPS ²', vps, 'var(--idle)')}
+                ${cfGroup('独立 VPS ²', vps, 'var(--chip-vps)')}
             </div>
         </div>`;
 
@@ -874,16 +895,28 @@ function buildHeroSentence(ci, ga) {
 }
 
 function parseUnlockFromSummary(text) {
-    const colors = { 'Netflix': '#e50914', 'YouTube': '#ff0000', 'Disney+': '#113ccf', 'TikTok': '#010101', 'GPT+': '#10a37f', 'GPT': '#10a37f', 'Gemini': '#4285f4' };
-    const result = [];
-    for (const m of [text.match(/流媒体解锁:\s*\[([^\]]*)\]/), text.match(/AI 解锁\[([^\]]*)\]/)]) {
-        if (!m) continue;
-        for (const item of m[1].split(',').map(s => s.trim()).filter(Boolean)) {
-            const [name, count] = item.split(':').map(s => s.trim());
-            if (name && count) result.push({ name, count, color: colors[name] || 'var(--muted)' });
-        }
+  const result = [];
+  // 按分类分别解析，保留 category 信息用于回退色
+  const sections = [
+    { regex: /流媒体解锁:\s*\[([^\]]*)\]/, category: 'media' },
+    { regex: /AI 解锁\[([^\]]*)\]/,        category: 'ai'    },
+  ];
+  for (const { regex, category } of sections) {
+    const m = text.match(regex);
+    if (!m) continue;
+    for (const item of m[1].split(',').map(s => s.trim()).filter(Boolean)) {
+      const [name, count] = item.split(':').map(s => s.trim());
+      if (name && count) {
+        result.push({
+          name,
+          count,
+          // 直接调用 platformColor，回退色按分类区分
+          color: platformColor(name, category),
+        });
+      }
     }
-    return result;
+  }
+  return result;
 }
 
 function cfGroup(title, obj, color) {

@@ -133,6 +133,30 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   let cachedSummaryText = null
   let lastUIState = null // 记录 UI 状态 (idle/preparing/checking)
 
+  /* ── 解锁平台品牌色映射 ── */
+  const PLATFORM_COLORS = {
+    'Netflix': 'var(--unlock-netflix)',
+    'YouTube': 'var(--unlock-youtube)',
+    'Disney+': 'var(--unlock-disney)',
+    'TikTok': 'var(--unlock-tiktok)',
+    'GPT+': 'var(--unlock-gpt)',
+    'GPT': 'var(--unlock-gpt)',
+    'Gemini': 'var(--unlock-gemini)',
+    'iprisk': 'var(--unlock-iprisk)',
+    'openai': 'var(--unlock-openai)',
+  };
+
+  function platformColor(name, category = 'media') {
+    if (PLATFORM_COLORS[name]) return PLATFORM_COLORS[name];
+    return category === 'ai'
+      ? 'var(--unlock-ai-fallback)'
+      : 'var(--unlock-media-fallback)';
+  }
+
+  const colors = Object.fromEntries(
+    Object.keys(PLATFORM_COLORS).map(name => [name, platformColor(name)])
+  );
+
   // ==================== 核心工具函数 ====================
 
   /**
@@ -1327,38 +1351,40 @@ import { initQuickPreview } from './cfg-quickpreview.js';
        <span class="smr-chip-label">${label}</span>
        <span class="smr-chip-val" style="color:var(${colorVar})">${value}</span>
      </span>`;
-    const unlockChip = (name, count, colorVar = '--idle') =>
+
+    const unlockChip = (name, count, color = 'var(--unlock-media-fallback)') =>
       `<span class="smr-chip smr-chip-unlock">
-       <span class="smr-chip-label">${name}</span>
-       <span class="smr-chip-val" style="color:var(${colorVar})">${count}</span>
-     </span>`;
+     <span class="smr-chip-label">${name}</span>
+     <span class="smr-chip-val" style="color:${color}">${count}</span>
+   </span>`;
 
     // ── 胶囊行 ────────────────────────────────────────────────────
     // 行1：检测参数
     const passColor = passRate >= 5 ? '--success' : passRate > 0 ? '--warning' : '--danger';
     const row1 = `<div class="smr-chip-row">
-    ${chip('检测', info.check_count_raw || '-', '--muted')}
+    ${chip('检测', info.check_count_raw || '-', '--chip-sub')}
     ${chip('可用', aliveCount, '--success')}
     ${chip('通过率', fmtRate(passRate), passColor)}
     ${info.check_min_speed > 0
         ? chip('测速下限', info.check_min_speed + ' KB/s', '--accent')
         : chip('模式', '仅测活', '--muted')}
-    ${chip('流量', info.check_traffic || '-', '--accent')}
+    ${chip('流量', info.check_traffic || '-', '--chip-traffic')}
     ${chip('耗时', info.check_duration || '-', '--idle')}
   </div>`;
 
     // 行2：节点分布
     const row2 = `<div class="smr-chip-row">
-    ${chip('地区', geoCount, '--idle')}
-    ${chip('协议', protoCount, '--warning')}
-    ${chip('CF中转', cfVal.toFixed(1) + '%' + (cfConTotal ? ' · ' + cfConTotal : ''), '--success')}
-    ${chip('VPS', vpsVal.toFixed(1) + '%' + (vpsTotal ? ' · ' + vpsTotal : ''), '--idle')}
+    ${chip('地区', geoCount, '--chip-geo')}
+    ${chip('协议', protoCount, '--chip-proto')}
+    ${chip('CF中转', cfVal.toFixed(1) + '%' + (cfConTotal ? ' · ' + cfConTotal : ''), '--chip-cf')}
+    ${chip('VPS', vpsVal.toFixed(1) + '%' + (vpsTotal ? ' · ' + vpsTotal : ''), '--chip-vps')}
   </div>`;
 
     const unlockChips = [
-      ...mediaList.map(u => unlockChip(u.name, u.count, '--idle')),
-      ...aiList.map(u => unlockChip(u.name, u.count, '--success')),
+      ...mediaList.map(u => unlockChip(u.name, u.count, platformColor(u.name, 'media'))),
+      ...aiList.map(u => unlockChip(u.name, u.count, platformColor(u.name, 'ai'))),
     ].join('');
+
     const row3 = unlockChips
       ? `<div class="smr-group"><div class="smr-group-title">解锁状态</div><div class="smr-chip-row">${unlockChips}</div></div>`
       : '';
@@ -1573,6 +1599,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
 
     summaryCard.style.display = (actionState === 'idle') ? 'flex' : 'none';
   }
+
   /**
    *隐藏上次检测结果
    *
