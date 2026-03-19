@@ -196,8 +196,7 @@ class GeoFlightMap {
     _addOriginHint(container) {
         const div = document.createElement('div');
         div.className = 'map-origin-hint';
-        div.id = 'mapOriginHint';
-        div.textContent = '● 当前位置';
+        div.textContent = '● 当前位置（时区估算）';
         container.appendChild(div);
     }
 
@@ -895,28 +894,28 @@ function buildHeroSentence(ci, ga) {
 }
 
 function parseUnlockFromSummary(text) {
-  const result = [];
-  // 按分类分别解析，保留 category 信息用于回退色
-  const sections = [
-    { regex: /流媒体解锁:\s*\[([^\]]*)\]/, category: 'media' },
-    { regex: /AI 解锁\[([^\]]*)\]/,        category: 'ai'    },
-  ];
-  for (const { regex, category } of sections) {
-    const m = text.match(regex);
-    if (!m) continue;
-    for (const item of m[1].split(',').map(s => s.trim()).filter(Boolean)) {
-      const [name, count] = item.split(':').map(s => s.trim());
-      if (name && count) {
-        result.push({
-          name,
-          count,
-          // 直接调用 platformColor，回退色按分类区分
-          color: platformColor(name, category),
-        });
-      }
+    const result = [];
+    // 按分类分别解析，保留 category 信息用于回退色
+    const sections = [
+        { regex: /流媒体解锁:\s*\[([^\]]*)\]/, category: 'media' },
+        { regex: /AI 解锁\[([^\]]*)\]/, category: 'ai' },
+    ];
+    for (const { regex, category } of sections) {
+        const m = text.match(regex);
+        if (!m) continue;
+        for (const item of m[1].split(',').map(s => s.trim()).filter(Boolean)) {
+            const [name, count] = item.split(':').map(s => s.trim());
+            if (name && count) {
+                result.push({
+                    name,
+                    count,
+                    // 直接调用 platformColor，回退色按分类区分
+                    color: platformColor(name, category),
+                });
+            }
+        }
     }
-  }
-  return result;
+    return result;
 }
 
 function cfGroup(title, obj, color) {
@@ -1089,33 +1088,8 @@ function renderGeo(ga) {
         mapSlot.style.display = 'flex';
         if (_geoMapInstance) { _geoMapInstance.destroy(); _geoMapInstance = null; }
 
-        function _initMap(origin) {
-            const hint = document.getElementById('mapOriginHint');
-            if (hint && origin._fromGeo) {
-                // 若已获取精确位置则提示坐标
-                hint.textContent = `● ${origin.lat.toFixed(1)}°, ${origin.lon.toFixed(1)}°`;
-            }
-            _geoMapInstance = new GeoFlightMap(mapSlot, entries, origin);
-        }
-
-        // 先用时区猜测快速渲染，geolocation 成功后重建
-        const guessed = guessOrigin();
-        _initMap(guessed);
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                pos => {
-                    const precise = { lon: pos.coords.longitude, lat: pos.coords.latitude, _fromGeo: true };
-                    // 若精确位置与猜测差距较大才重建
-                    if (Math.hypot(precise.lon - guessed.lon, precise.lat - guessed.lat) > 3) {
-                        if (_geoMapInstance) { _geoMapInstance.destroy(); }
-                        _initMap(precise);
-                    }
-                },
-                () => { },   // 拒绝授权静默失败，保留猜测位置
-                { timeout: 4000, maximumAge: 60000 }
-            );
-        }
+        const origin = guessOrigin();
+        _geoMapInstance = new GeoFlightMap(mapSlot, entries, origin);
     }
 }
 
