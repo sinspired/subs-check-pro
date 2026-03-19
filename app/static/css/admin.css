@@ -106,6 +106,56 @@
   --invert: 100%;
 }
 
+:root {
+  --chip-nodes: #0ea5a0;
+  /* 通过率：三档动态 */
+  --chip-passrate-good: #0fd056; /* 绿   ≥ 5%  */
+  --chip-passrate-warn: #d97706; /* 橙   > 0%  */
+  --chip-passrate-bad: #ed1717; /* 红   = 0%  */
+  --chip-geo: #0198d3;
+  --chip-proto: #8b5cf6;
+  --chip-cf: #ed430b;
+  --chip-vps: #6366f1;
+  --chip-traffic: #e23b76;
+  --chip-sub: #64748b;
+}
+
+:root[data-theme='dark'] {
+  --chip-nodes: #0ea5a0;
+  --chip-passrate-good: #16a34a;
+  --chip-passrate-warn: #d97706;
+  --chip-passrate-bad: #dc2626;
+  --chip-geo: #0285d7;
+  --chip-proto: #7c3aed;
+  --chip-cf: #be5601;
+  --chip-vps: #818cf8;
+  --chip-traffic: #c11451;
+
+  --chip-sub: #698ab8;
+}
+
+:root {
+  --unlock-netflix: #e50914;
+  --unlock-youtube: #ff0000;
+  --unlock-disney: #113ccf;
+  --unlock-tiktok: #00b881;
+  --unlock-gpt: #0084bc;
+  --unlock-gemini: #47be0c;
+  --unlock-iprisk: #f97316;
+  --unlock-openai: #d34300; /* 与 GPT 同源 */
+
+  /* 未匹配的平台回退色 */
+  --unlock-media-fallback: var(--idle);
+  --unlock-ai-fallback: var(--success);
+}
+
+:root[data-theme='dark'] {
+  --unlock-tiktok: #06de9d;
+  --unlock-gpt: #0da5e6;
+  --unlock-disney: #3b5fe0; /* 深色背景下略提亮 */
+  --unlock-gemini: #84bb0e;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
