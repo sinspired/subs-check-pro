@@ -268,6 +268,7 @@ func GetCurrentTime() string {
 // SendNotifyCheckResult 发送节点检查结果通知
 func SendNotifyCheckResult(length int) {
 	title := config.GlobalConfig.NotifyTitle
+	// TODO: 添加消耗流量
 	body := fmt.Sprintf("✅ 可用节点：%d\n🕒 %s", length, GetCurrentTime())
 	broadcastNotify(NotifyNodeStatus, title, body, "")
 }

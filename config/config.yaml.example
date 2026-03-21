@@ -260,7 +260,7 @@ callback-script: ""
 
 # -----------通知设置-----------
 # 配置通知渠道，将自动发送检测结果通知，新版本通知
-# 复制 https://vercel.com/new/clone?repository-url=https://github.com/sinspired/apprise_vercel 到浏览器
+# 访问 https://github.com/sinspired/apprise_vercel 部署通知 API 服务
 # 按提示部署，建议为 Vercel 项目设置自定义域名（国内访问 Vercel 可能受限）。
 # 填写搭建的apprise API server 地址
 # 示例：https://notify.xxxx.us.kg/notify

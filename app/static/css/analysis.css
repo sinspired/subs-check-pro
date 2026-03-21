@@ -308,6 +308,7 @@ body {
   align-self: stretch;
 }
 
+/* TODO:样式不要太显眼 */
 .tab-bar {
   display: none;
   align-items: center;

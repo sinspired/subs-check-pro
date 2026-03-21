@@ -13,6 +13,7 @@ import (
 // 2.如果只通过cookies检测 或 client检测，res.OpenaiWeb = true，tag为"GPT"
 //
 // 经在Windows和ios客户端测试，如果仅通过一项检测，客户端很大概率不能使用，但web端很大概率可以使用。所以如果全部通过添加了一个角标"⁺",保留仅通过一项检测的tag为"GPT",web端用户几乎不需要发现标签变化。
+// TODO: copilot 似乎需要 新的检测
 func CheckOpenAI(httpClient *http.Client) (bool, bool) {
 	return CheckCookies(httpClient), CheckClient(httpClient)
 }

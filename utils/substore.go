@@ -632,6 +632,7 @@ func (f file) updateSubStoreFile() error {
 	}
 
 	// 已存在：仅替换 SCP 操作，用户操作全部保留
+	// TODO: 如果除了 id 其他都一致，也需要替换
 	merged, err := mergeFileProcess(existing, scpOps)
 	if err != nil {
 		return fmt.Errorf("合并 %s process 失败: %w", f.Name, err)

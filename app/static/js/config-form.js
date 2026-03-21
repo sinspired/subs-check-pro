@@ -1060,6 +1060,7 @@ function mkChips(field, values) {
   return wrap;
 }
 
+// TODO: 考虑支持拖动排序
 function mkUrlList(field, values) {
   const list = Array.isArray(values) ? values : (values ? [values] : []);
   const wrap = el('div', { class: 'cfg-url-list', 'data-key': field.key });
