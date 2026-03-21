@@ -322,7 +322,7 @@ func (app *App) checkProxies() error {
 
 	slog.Info("检测完成")
 	save.SaveConfig(results)
-	utils.SendNotifyCheckResult(len(results))
+	utils.SendNotifyCheckResult(len(results), check.CheckTraffic)
 	utils.UpdateSubs()
 
 	// 执行回调脚本

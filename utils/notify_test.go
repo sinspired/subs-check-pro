@@ -8,10 +8,10 @@ import (
 
 var TestAPI = "https://apprise.xxxxx.xxxxx.org/notify"
 var TestURLs = []string{
-	"ntfy://xxxxxxx",
-	"bark://api.day.app/xxxxxxxxxxxxxxx",
-	"tgram://xxxxxxxxxxxxxxxxxxx/xxxxxxxxxxxxxxxx",
-	"mailto://xxxxxxxx:yyyyyyyyy@qq.com",
+	"ntfy://subs-check-pro",
+	// "bark://api.day.app/xxxxxxxxxxxxxxx",
+	// "tgram://xxxxxxxxxxxxxxxxxxx/xxxxxxxxxxxxxxxx",
+	// "mailto://xxxxxxxx:yyyyyyyyy@qq.com",
 }
 
 // helper: 设置全局配置并在测试结束后恢复
@@ -46,7 +46,7 @@ func TestSendNotifyCheckResult(t *testing.T) {
 	withTestConfig()
 
 	// 验证函数能正常执行，不返回错误
-	SendNotifyCheckResult(5)
+	SendNotifyCheckResult(5, "2.09G")
 }
 
 func TestSendNotifyDetectLatestRelease(t *testing.T) {
