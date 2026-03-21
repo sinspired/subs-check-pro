@@ -371,22 +371,137 @@ func mergeSubProcess(existing []json.RawMessage, scpOps []any, cfg config.SubPro
 	return result, nil
 }
 
-// file 差量合并（仅替换 SCP 操作）
+// stripGhProxy 剥离 GitHub 代理前缀，还原为原始 URL
+// 支持两种格式：
+//   - https://proxy.domain/https://raw.githubusercontent.com/...  （前缀拼接完整 URL）
+//   - https://proxy.domain/raw.githubusercontent.com/...          （省略 https:// 的短格式）
+func stripGhProxy(rawURL string) string {
+	// 常见 GitHub 原始地址特征
+	markers := []string{
+		"https://raw.githubusercontent.com",
+		"https://github.com",
+		"raw.githubusercontent.com",
+		"github.com",
+	}
+	for _, marker := range markers {
+		idx := strings.Index(rawURL, marker)
+		if idx > 0 {
+			candidate := rawURL[idx:]
+			// 短格式：raw.githubusercontent.com 没有 https://，补上
+			if !strings.HasPrefix(candidate, "https://") {
+				candidate = "https://" + candidate
+			}
+			return candidate
+		}
+	}
+	return rawURL
+}
 
-// mergeFileProcess file 资源的差量合并：仅替换 SCP 操作，用户操作全部保留
+// normalizeForCompare 用于比较前统一规范化：剥离代理前缀 + 去掉末尾 fragment（#...）
+// 因为 fragment 不影响实际请求内容，但可能因参数顺序不同导致误判
+func normalizeForCompare(rawURL string) string {
+	u := stripGhProxy(rawURL)
+	// fragment 部分（# 之后）不参与比较
+	if idx := strings.Index(u, "#"); idx >= 0 {
+		u = u[:idx]
+	}
+	return u
+}
+
+// isSameScpOp 判断旧操作（任意来源）与新 SCP 操作是否实质相同：
+// type 一致，且规范化后的 content 和 mode 一致
+func isSameScpOp(raw json.RawMessage, newOp ScriptOperator) bool {
+	var existing struct {
+		Type string `json:"type"`
+		Args struct {
+			Content string `json:"content"`
+			Mode    string `json:"mode"`
+		} `json:"args"`
+	}
+	if err := json.Unmarshal(raw, &existing); err != nil {
+		return false
+	}
+
+	newContent, _ := newOp.Args["content"].(string)
+	newMode, _ := newOp.Args["mode"].(string)
+
+	return existing.Type == newOp.Type &&
+		existing.Args.Mode == newMode &&
+		normalizeForCompare(existing.Args.Content) == normalizeForCompare(newContent)
+}
+
+// mergeFileProcess file 资源的差量合并：
+//   - 旧 SCP 操作 → 丢弃，由 scpOps 重建
+//   - 非 SCP 操作：
+//   - 与某个新 SCP 操作 type+content+mode 一致 → 原地替换（补 SCP ID，保持位置）
+//   - 无匹配 → 用户自定义，原样保留
+//   - 未被替换的新 SCP 操作 → 追加末尾
 func mergeFileProcess(existing []json.RawMessage, scpOps []any) ([]any, error) {
 	result := make([]any, 0, len(existing)+len(scpOps))
+	replaced := make([]bool, len(scpOps))
+
 	for _, raw := range existing {
 		if isScpOperator(raw) {
 			continue
 		}
-		var op any
-		if err := json.Unmarshal(raw, &op); err != nil {
-			return nil, fmt.Errorf("解析用户操作失败: %w", err)
+
+		matchIdx := -1
+		for i, newOp := range scpOps {
+			if replaced[i] {
+				continue
+			}
+			op, ok := newOp.(ScriptOperator)
+			if !ok {
+				continue
+			}
+			if isSameScpOp(raw, op) {
+				matchIdx = i
+				break
+			}
 		}
-		result = append(result, op)
+
+		if matchIdx >= 0 {
+			// 首次匹配：原地替换，标记已消费
+			result = append(result, scpOps[matchIdx])
+			replaced[matchIdx] = true
+		} else {
+			// 检查是否为已被替换操作的"重复版本"（同一原始地址，不同代理前缀）
+			// 通过逆向检查：若 raw 与任意已替换的 scpOps[i] 实质相同，则丢弃
+			isDuplicate := false
+			for i, newOp := range scpOps {
+				if !replaced[i] {
+					continue
+				}
+				op, ok := newOp.(ScriptOperator)
+				if !ok {
+					continue
+				}
+				if isSameScpOp(raw, op) {
+					isDuplicate = true
+					break
+				}
+			}
+			if isDuplicate {
+				// 已替换操作的重复旧版本，丢弃
+				continue
+			}
+
+			// 纯用户自定义操作：原样保留
+			var op any
+			if err := json.Unmarshal(raw, &op); err != nil {
+				return nil, fmt.Errorf("解析用户操作失败: %w", err)
+			}
+			result = append(result, op)
+		}
 	}
-	result = append(result, scpOps...)
+
+	// 未被替换的新 SCP 操作追加到末尾
+	for i, op := range scpOps {
+		if !replaced[i] {
+			result = append(result, op)
+		}
+	}
+
 	return result, nil
 }
 
@@ -632,7 +747,6 @@ func (f file) updateSubStoreFile() error {
 	}
 
 	// 已存在：仅替换 SCP 操作，用户操作全部保留
-	// TODO: 如果除了 id 其他都一致，也需要替换
 	merged, err := mergeFileProcess(existing, scpOps)
 	if err != nil {
 		return fmt.Errorf("合并 %s process 失败: %w", f.Name, err)
