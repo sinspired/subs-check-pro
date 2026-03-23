@@ -302,7 +302,9 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 		// 回退策略：尝试正则暴力提取
 		nodes = fallbackExtractV2Ray(data, urlStr)
 		if len(nodes) == 0 {
-			slog.Warn("解析失败或为空列表", "URL", urlStr, "error", err)
+			if !hasDatePlaceholder(urlStr) {
+				slog.Warn("解析失败或为空列表", "URL", urlStr, "error", err)
+			}
 			return
 		}
 	}
