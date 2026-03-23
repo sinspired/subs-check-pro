@@ -245,6 +245,7 @@ const arrayItemCompletions = {
     { label: "iprisk", detail: "IP 风险检测" },
     { label: "openai", detail: "OpenAI 解锁检测" },
     { label: "gemini", detail: "Gemini 解锁检测" },
+    { label: "copilot", detail: "Copilot 解锁检测" },
     { label: "tiktok", detail: "TikTok 解锁检测" },
     { label: "youtube", detail: "YouTube 解锁检测" },
     { label: "netflix", detail: "Netflix 解锁检测" },
@@ -296,6 +297,7 @@ const arrayItemCompletions = {
     { label: "\".*\\\\bJP\\\\b.*\"", detail: "日本节点优先" },
     { label: "\".*\\\\bGPT⁺.*\"", detail: "GPT+ 解锁节点优先" },
     { label: "\".*\\\\bGM\\\\b.*\"", detail: "Gemini 解锁节点优先" },
+    { label: "\".*\\\\bCP\\\\b.*\"", detail: "Copilot 解锁节点优先" },
     { label: "\"(.*GPT⁺.*)(.*GM.*)\"", detail: "GPT+ 且 Gemini 同时满足" },
     { label: "\".*\\\\bNF\\\\b.*\"", detail: "Netflix 解锁节点优先" },
   ],
@@ -307,6 +309,7 @@ const arrayItemCompletions = {
     { label: "\".*\\\\bJP\\\\b.*\"", detail: "日本节点优先" },
     { label: "\".*\\\\bGPT⁺.*\"", detail: "GPT+ 解锁节点优先" },
     { label: "\".*\\\\bGM\\\\b.*\"", detail: "Gemini 解锁节点优先" },
+    { label: "\".*\\\\bCP\\\\b.*\"", detail: "Copilot 解锁节点优先" },
     { label: "\"(.*GPT⁺.*)(.*GM.*)\"", detail: "GPT+ 且 Gemini 同时满足" },
     { label: "\".*\\\\bNF\\\\b.*\"", detail: "Netflix 解锁节点优先" },
   ],
@@ -530,7 +533,7 @@ const placeholderMatcher = new MatchDecorator({
       '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|ipv6|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls|sub-process|resolve-domain|node-split|regex-filter-keep|regex-filter|regex-sort|sub-info|version|json|js)(?=\s*:\s*)',
 
       // 列表项：- openai / - "openai"
-      '(?<=^[ \\t]*-\\s*["\']?)(openai|iprisk|gemini|tiktok|youtube|disney|netflix|x|ss|trojan|vless|vmess|shadowsocks)(?=["\']?\\b)',
+      '(?<=^[ \\t]*-\\s*["\']?)(openai|iprisk|gemini|copilot|tiktok|youtube|disney|netflix|x|ss|trojan|vless|vmess|shadowsocks)(?=["\']?\\b)',
 
       // 订阅备注（行内 #...）
       '(?<=^[ \\t]*-\\s*[^#]*)(#.*$)',
