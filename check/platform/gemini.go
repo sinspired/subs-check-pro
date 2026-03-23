@@ -24,6 +24,11 @@ func CheckGemini(httpClient *http.Client) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
+	// 45631641,null,false 意味着港澳、送中和欧洲, 无痕模式可以访问，会校验 Google 账户
+	// 最好的方案还是修改Google账户归属，使用优质账户
+	// https://policies.google.com/country-association-form
+	// 似乎 Google 已经对 IP 和 Google 账号做了分级，如有更好的方案，可以提PR
 	if strings.Contains(string(body), "45631641,null,true") {
 		return true, nil
 	}

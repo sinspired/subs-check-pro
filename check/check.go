@@ -61,6 +61,8 @@ type Result struct {
 	Proxy          map[string]any
 	Openai         bool
 	OpenaiWeb      bool
+	Copilot        bool
+	CopilotAPI     bool
 	X              bool
 	Youtube        string
 	Netflix        bool
@@ -827,6 +829,8 @@ func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Co
 		} else if clientOK || cookiesOK {
 			job.Result.OpenaiWeb = true
 		}
+	case "copilot":
+		job.Result.Copilot, job.Result.CopilotAPI = platform.CheckCopilot(job.Client.Client)
 	case "youtube":
 		if region, _ := platform.CheckYoutube(job.Client.Client); region != "" {
 			job.Result.Youtube = region
@@ -901,7 +905,7 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 
 	if config.GlobalConfig.MediaCheck {
 		// 移除旧标签
-		name = regexp.MustCompile(`\s*\|(?:NF|D\+|GPT⁺|GPT|GM|X|YT|KeepSucced|KeepHistory|KeepSuccess|YT-[^|]+|TK|TK-[^|]+|\d+%)`).ReplaceAllString(name, "")
+		name = regexp.MustCompile(`\s*\|(?:NF|D\+|GPT⁺|GPT|CP⁺|CP|GM|X|YT|KeepSucced|KeepHistory|KeepSuccess|YT-[^|]+|TK|TK-[^|]+|\d+%)`).ReplaceAllString(name, "")
 	}
 
 	// 平台标签（按用户配置顺序）
@@ -912,6 +916,12 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 				tags = append(tags, "GPT⁺")
 			} else if res.OpenaiWeb {
 				tags = append(tags, "GPT")
+			}
+		case "copilot":
+			if res.Copilot && res.CopilotAPI {
+				tags = append(tags, "CP")
+			} else if res.Copilot {
+				tags = append(tags, "CP⁻")
 			}
 		case "x":
 			if res.X && !strings.Contains(name, "⁻¹") && !strings.Contains(name, "🏴‍☠️") {

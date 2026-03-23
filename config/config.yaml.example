@@ -228,10 +228,14 @@ isp-check: false
 
 # 是否开启流媒体检测，其中IP欺诈依赖重命名
 media-check: true
+# iprisk: 0%; 
+# openai: GPT; gemini: GM; copilot: CP; 
+# Youtube: YT; tiktok: TK; netflix: NF; Disney: D+
 platforms:
   - iprisk
   # - openai
   # - gemini
+  # - copilot
   - youtube
   # - tiktok
   # - netflix
