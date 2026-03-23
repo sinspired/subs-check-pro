@@ -163,10 +163,17 @@ const SCHEMA = [
       {
         title: '解锁检测',
         fields: [
-          { key: 'media-check', label: '流媒体检测', type: 'toggle', hint: '检测流媒体和 AI 服务解锁情况' },
+          {
+            key: 'media-check', label: '流媒体检测', type: 'toggle', hint: '检测流媒体和 AI 服务解锁情况'
+          },
           {
             key: 'platforms', label: '检测平台', type: 'chips',
-            options: ['iprisk', 'openai', 'gemini', 'youtube', 'tiktok', 'netflix', 'disney', 'x'],
+            options: ['iprisk', 'openai', 'gemini', 'copilot', 'youtube', 'tiktok', 'netflix', 'disney', 'x'],
+            hint: '根据解锁情况添加节点标签:',
+            hintExamples: [
+              "iprisk: 0%",
+              "openai: GPT", "gemini: GM", "copilot: CP", "Youtube: YT", "tiktok: TK", "netflix: NF", "Disney: D+", "X: Twitter"
+            ]
           },
         ],
       },
