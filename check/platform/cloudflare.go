@@ -3,7 +3,6 @@ package platform
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"log/slog"
@@ -177,52 +176,26 @@ func checkCFEndpoint(httpClient *http.Client, url string, expectedStatus int) (b
 	if err != nil {
 		return false, err
 	}
-
 	for key, value := range cfCommonHeaders() {
 		req.Header.Set(key, value)
 	}
 
-	transport := httpClient.Transport
-	if transport == nil {
-		transport = &http.Transport{}
-	}
-	if t, ok := transport.(*http.Transport); ok {
-		sni := req.URL.Hostname()
-		t.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-			ServerName:         sni,
-		}
-		httpClient.Transport = t
-	}
-
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		errStr := err.Error()
-
-		// 检测是否为典型的 Cloudflare 拒绝自身加速请求的错误
-		//  strings.Contains(errStr, "EOF") ||
-		// 	strings.Contains(errStr, "tls:") ||
-		// 	strings.Contains(errStr, "ws closed: 1005") ||
-		// 	strings.Contains(errStr, "connection reset") ||
-
-		if strings.Contains(errStr, "EOF") ||
-			strings.Contains(errStr, "tls:") ||
-			strings.Contains(errStr, "connection reset") {
-			slog.Debug("Cloudflare 连接异常，但可能可以访问，暂时返回 true", "error", errStr)
-			return true, nil
-		}
 		return false, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != expectedStatus {
-		if resp.StatusCode == 403 {
-			slog.Debug("放行状态码", "code", resp.StatusCode)
-			return true, nil
-		} else {
-			slog.Warn("cloudflare.com 返回非预期状态码", "code", resp.StatusCode)
-		}
+	switch resp.StatusCode {
+	case expectedStatus:
+		slog.Debug("正常访问CF")
+		return true, nil
+	case 403:
+		// 403 同样是 CF 拒绝自身请求的表现，剔除
+		slog.Debug("CF 代理访问自身返回 403，剔除")
+		return false, nil  // ← 改为 false
+	default:
+		slog.Debug("CF 返回非预期状态码", "code", resp.StatusCode)
 		return false, nil
 	}
-	return true, nil
 }
