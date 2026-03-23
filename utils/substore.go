@@ -786,7 +786,7 @@ func (f file) updateSubStoreFile() error {
 	if err := updateResource(endpoint, f, f.Name); err != nil {
 		return fmt.Errorf("更新 %s 失败: %w", f.Name, err)
 	}
-	slog.Info(fmt.Sprintf("%s 订阅已更新（用户自定义操作已保留）", f.Name))
+	slog.Info(fmt.Sprintf("%s 订阅已更新", f.Name))
 	return nil
 }
 
