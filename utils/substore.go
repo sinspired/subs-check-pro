@@ -315,12 +315,12 @@ func mergeSubProcess(existing []json.RawMessage, scpOps []any, cfg config.SubPro
 		case isScpOperator(raw):
 			// SCP 操作：先判断是否为 SubInfo
 			if cfg.SubInfo && isSubInfoScpOperator(raw) {
-				// SubInfo 开关开启：暂存，最终放到末尾
-				var op any
-				if err := json.Unmarshal(raw, &op); err != nil {
-					return nil, fmt.Errorf("解析 SubInfo 操作失败: %w", err)
+				// 更新代理前缀，保留 #fragment 与 arguments
+				rebuilt, err := rebuildSubInfoContent(raw)
+				if err != nil {
+					return nil, fmt.Errorf("重建 SubInfo 操作失败: %w", err)
 				}
-				existingSubInfo = op
+				existingSubInfo = rebuilt
 				hasSubInfo = true
 			}
 			// 其他 SCP 操作（含开关关闭时的 SubInfo）统一丢弃，末尾重建
@@ -369,6 +369,36 @@ func mergeSubProcess(existing []json.RawMessage, scpOps []any, cfg config.SubPro
 	}
 
 	return result, nil
+}
+
+// rebuildSubInfoContent 更新 SubInfo content 的代理前缀，保留 #fragment 与 arguments
+func rebuildSubInfoContent(raw json.RawMessage) (any, error) {
+	var op struct {
+		Type       string         `json:"type"`
+		CustomName string         `json:"customName"`
+		ID         string         `json:"id"`
+		Disabled   bool           `json:"disabled"`
+		Args       map[string]any `json:"args"`
+	}
+	if err := json.Unmarshal(raw, &op); err != nil {
+		return nil, err
+	}
+
+	content, _ := op.Args["content"].(string)
+
+	// 剥离旧代理前缀，还原原始 URL（stripGhProxy 保留 #fragment）
+	bare := stripGhProxy(content)
+
+	// 分离 base 与 fragment，fragment 原样保留
+	base, fragment, hasFragment := strings.Cut(bare, "#")
+
+	newContent := WarpURL(base, IsGithubProxy)
+	if hasFragment {
+		newContent += "#" + fragment
+	}
+	op.Args["content"] = newContent
+
+	return op, nil
 }
 
 // stripGhProxy 剥离 GitHub 代理前缀，还原为原始 URL
