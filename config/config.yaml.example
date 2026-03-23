@@ -228,8 +228,8 @@ isp-check: false
 
 # 是否开启流媒体检测，其中IP欺诈依赖重命名
 media-check: true
-# iprisk: 0%; 
-# openai: GPT; gemini: GM; copilot: CP; 
+# iprisk: 0%;
+# openai: GPT; gemini: GM; copilot: CP;
 # Youtube: YT; tiktok: TK; netflix: NF; Disney: D+
 platforms:
   - iprisk
@@ -345,27 +345,22 @@ system-proxy: ""
 github-proxy: ""
 # GitHub 代理列表：程序会自动筛选可用的 GitHub 代理
 ghproxy-group:
-  - "https://github.intellisensing.tech/"
-  - "https://ghproxy.wjsphy.top/"
-  - "https://githubacc.caiaiwan.com/"
-  - "https://l0l0l.cc/"
-  - "https://cdn-gh.141888.xyz/"
-  - "https://ghjs.131412.eu.org/"
-  - "https://gh.dev.438250.xyz/"
-  - "https://git-clone.ccrui.dev/"
-  - "https://b.yesican.top/"
-  - "https://hub.why-ing.top/"
-  - "https://q-github.cnxiaobai.com/"
-  - "https://g.108964.xyz/"
-  - "https://git.maomao.ovh/"
-  - "https://git.llvho.com/"
-  - "https://ghp.opendatahub.xyz/"
-  - "https://privateghproxy.iil.im/"
-  - "https://gh.mtx72.cc/"
-  - "https://git.loushi.site/"
-  - "https://ghproxy.gopher.ink/"
-  - "https://gh.tou.lu/"
-  - "https://gh.aurzex.top/"
+  - https://gh.b52m.cn/
+  - https://g.108964.xyz/
+  - https://github.732086.xyz/
+  - https://git.1999111.xyz/
+  - https://gh-proxy.mereith.com/
+  - https://gh.oevery.me/
+  - https://git.repcz.link/
+  - https://gh.xda.plus/
+  - https://git.maomao.ovh/
+  - https://github.dpik.top/
+  - https://hk.gh-proxy.org/
+  - https://cdn.gh-proxy.org/
+  - https://edgeone.gh-proxy.org/
+  - https://v6.gh-proxy.org/
+  - https://gh-proxy.org/
+  - https://github.catvod.com/
 
 # -----------获取订阅-----------
 # 重试次数(获取订阅失败后重试次数)
