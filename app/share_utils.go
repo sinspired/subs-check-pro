@@ -221,7 +221,7 @@ func (app *App) handleFileShare(basePath string, _ bool) gin.HandlerFunc {
 				HeaderColor: "var(--idle)",
 				HeaderIcon:  template.HTML(svgFolder),
 				HeaderTitle: "公开资源目录",
-				Description: template.HTML("无需鉴权，对应服务器目录 <code>output/more/</code>，文件列表已隐匿，请直接使用完整链接访问。"),
+				Description: template.HTML("无需鉴权，对应服务器目录 <code>output/more/</code>，文件列表已隐匿，请直接使用完整链接访问 <code>http://localhost:8199/more/file.*</code>。"),
 				BadgeStyle:  "warning",
 				BadgeText:   "Public",
 				FooterText:  "Open Access",
