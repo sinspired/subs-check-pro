@@ -830,6 +830,9 @@ func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Co
 			job.Result.OpenaiWeb = true
 		}
 	case "copilot":
+		if job.NeedCF && !job.IsCfAccessible {
+			break
+		}
 		job.Result.Copilot, job.Result.CopilotAPI = platform.CheckCopilot(job.Client.Client)
 	case "youtube":
 		if region, _ := platform.CheckYoutube(job.Client.Client); region != "" {
