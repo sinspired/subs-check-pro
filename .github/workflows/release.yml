@@ -132,10 +132,14 @@ jobs:
             项目: `${{ github.repository }}`
 
             说明:
-
-              - 自动添加 sub-store 操作：`节点解析`，`节点裂变`，`正则筛选`，`正则排序`，`注入订阅流量信息`。[查看相关配置](https://github.com/sinspired/subs-check-pro/blob/6a29f14338606216ca4ec271c7caba10923850ca/config/config.yaml.example#L152-L172)
-              - 现在可直接在 sub-store 的 sub 订阅添加和编辑脚本，检测更新不再覆盖用户配置
-              - 可使用 [sub-store脚本](https://raw.githubusercontent.com/sinspired/sub-store-scripts/main/surge/modules/sub-store-scripts/sub-info/node.js#showLastUpdate=true) 注入一个订阅信息节点
+              - 修复 Gemini 解锁检测不准确，支持欧盟区标签显示
+              - 添加 Copilot 解锁检测
+              - WebUI 为列表添加拖拽排序
+              - WebUI 可视化分析报告优化,添加订阅成功率实时筛选
+              - 移动设备现在可以折叠日志显示
+              - 节点状态通知添加"消耗流量"数据
+              - 支持 HTTP/2, 优化连接复用逻辑
+              - 支持单独设置媒体解锁超时
               - 错误修复和优化
               
             🔗 [查看详情](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
