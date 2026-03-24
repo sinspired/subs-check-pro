@@ -1049,10 +1049,10 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 
 			// 资源清理
 			// 无论拨号成功还是失败，函数返回时：
-			// 1. stop(): 注销监听器，避免 mergedCtx 长期持有 clientCtx 的引用
-			// 2. mergedCancel(): 释放 mergedCtx 资源
-			defer stop()
+			// 1. mergedCancel(): 释放 mergedCtx 资源
+			// 2. stop(): 注销监听器（cancel 幂等，顺序无实际影响）
 			defer mergedCancel()
+			defer stop()
 
 			host, portStr, err := net.SplitHostPort(addr)
 			if err != nil {
@@ -1083,11 +1083,6 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 		Proxy:               nil,
 		IdleConnTimeout:     5 * time.Second,
 		MaxIdleConnsPerHost: 5,
-	}
-
-	// HTTP/2 判断
-	if baseTransport.ForceAttemptHTTP2 || len(baseTransport.TLSNextProto) > 0 {
-		networkLimitDefault = false
 	}
 
 	statsTransport.Base = baseTransport
