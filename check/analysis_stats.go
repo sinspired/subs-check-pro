@@ -32,7 +32,8 @@ var (
 
 	// 流媒体解锁特征
 	reMediaGPT = regexp.MustCompile(`(?i)GPT`)
-	reMediaGM  = regexp.MustCompile(`(?i)GM|Global`)
+	reMediaGM  = regexp.MustCompile(`(?i)GM|Gemini`)
+	reMediaCP  = regexp.MustCompile(`(?i)CP|Copilot`)
 	reMediaTK  = regexp.MustCompile(`(?i)TK|TikTok`)
 	reMediaYT  = regexp.MustCompile(`(?i)YT|YouTube`)
 	reMediaNF  = regexp.MustCompile(`(?i)NF|Netflix`)
@@ -139,6 +140,9 @@ func (pc *ProxyChecker) GenerateAnalysisReport() {
 			if reMediaGM.MatchString(name) {
 				s.Media["Gemini"]++
 			}
+			if reMediaCP.MatchString(name) {
+				s.Media["Copilot"]++
+			}
 			// 流媒体解锁
 			if reMediaNF.MatchString(name) {
 				s.Media["Netflix"]++
@@ -211,7 +215,7 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	sb.WriteString("  check_count_raw: " + strconv.Itoa(int(Progress.Load())) + "\n")
 	sb.WriteString("  check_traffic: " + CheckTraffic + "\n")
 	sb.WriteString("  check_traffic_raw: " + strconv.FormatUint(TotalBytes.Load(), 10) + "\n")
-	
+
 	var speedText string
 	if speedON {
 		speedText = fmt.Sprintf("%d", config.GlobalConfig.MinSpeed)
@@ -282,7 +286,7 @@ func generateSummary(s *AnalysisStats) string {
 
 	// 3. 分类获取流媒体和 AI 的前几名
 	topMedia := getTopFiltered(s.Media, []string{"Netflix", "YouTube", "Disney+", "TikTok"}, 5)
-	topAI := getTopFiltered(s.Media, []string{"GPT", "GPT+", "Gemini"}, 3)
+	topAI := getTopFiltered(s.Media, []string{"GPT", "GPT+", "Gemini", "Copilot"}, 4)
 
 	var speedText string
 	if speedON {
