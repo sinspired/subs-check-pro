@@ -1176,7 +1176,16 @@
   gap: 6px;
   padding-top: 4px;
   width: 100%;
+  margin: 0;
 }
+
+/* 由于拖拽按钮,我们将列表整体左移并补偿宽度 */
+.cfg-field.full-width .cfg-ctrl > .cfg-url-list {
+  margin-left: -18px;
+  width: calc(100% + 18px);
+  max-width: calc(100% + 18px);
+}
+
 .cfg-url-item {
   display: flex;
   gap: 4px;
@@ -1192,23 +1201,21 @@
   position: relative;
   flex: 1;
   display: flex;
-  align-items: flex-start;  /* 图标和输入框顶部对齐 */
+  align-items: flex-start; /* 图标和输入框顶部对齐 */
   gap: 0;
 }
 
 /* 输入框不再需要 padding-left 留空间 */
 .cfg-url-input-wrap .cfg-url-input {
   width: 100%;
-  padding-left: 30px !important;  /* 无条件留出图标空间 */
+  padding-left: 30px !important; /* 无条件留出图标空间 */
 }
-
-
 
 .cfg-url-icon {
   position: absolute;
   left: 8px;
   top: 50%;
-  transform: translateY(-50%);  /* ← 补上这行 */
+  transform: translateY(-50%);
   width: 15px;
   height: 15px;
   display: flex;
@@ -1243,13 +1250,19 @@
 
 .cfg-url-item:hover {
   background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
-  margin: 0 -2px; /* 背景向两侧撑满，与 cfg-field hover 一致 */
-  padding: 0 2px; /* 抵消 margin 扩展，内容不位移 */
+  margin: 0 2px; /* 背景向两侧撑满，与 cfg-field hover 一致 */
+  padding: 0 -2px; /* 抵消 margin 扩展，内容不位移 */
 }
 
 /* 输入框跟随左移 2px */
 .cfg-url-item:hover .cfg-url-input {
-  transform: translateX(-2px);
+  transform: translateX(2px);
+  transition: transform 0.12s;
+  border-color: color-mix(in srgb, var(--border) 100%, var(--fg) 15%);
+}
+
+.cfg-url-item:hover .cfg-url-drag {
+  transform: translateX(2px);
   transition: transform 0.12s;
   border-color: color-mix(in srgb, var(--border) 100%, var(--fg) 15%);
 }
@@ -1258,7 +1271,9 @@
 .cfg-url-drag {
   display: flex;
   align-items: center;
-  padding: 0 4px 0 2px;
+  padding: 0 -2px 0 6px;
+  justify-content: center;
+  padding: 0;
   color: var(--text-muted, #9ca3af);
   cursor: grab;
   flex-shrink: 0;
@@ -1406,6 +1421,7 @@
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   margin-top: 2px;
   margin-bottom: 12px;
+  margin-left: 18px;
 }
 .cfg-url-add:hover {
   color: var(--accent);
