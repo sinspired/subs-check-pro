@@ -1095,23 +1095,21 @@ function mkUrlList(field, values) {
   wrap.appendChild(addBtn);
 
   // ── 拖拽状态 ──────────────────────────────────────────────────────
-  let _dragSrc = null;   // 正在拖动的 row 元素
+  let _dragSrc = null;
 
-  function _getDragHandle(row) {
-    return row.querySelector('.cfg-url-drag');
-  }
-
+  // ── 鼠标拖拽事件 ──────────────────────────────────────────────────
   function _onDragStart(e, row) {
     _dragSrc = row;
     row.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-    // 必须设置才能在 Firefox 触发 drag 事件
     e.dataTransfer.setData('text/plain', '');
   }
 
   function _onDragEnd(row) {
     row.classList.remove('dragging');
-    wrap.querySelectorAll('.cfg-url-item').forEach(r => r.classList.remove('drag-over'));
+    wrap.querySelectorAll('.cfg-url-item').forEach(r =>
+      r.classList.remove('drag-over-top', 'drag-over-bottom')
+    );
     _dragSrc = null;
   }
 
@@ -1119,14 +1117,11 @@ function mkUrlList(field, values) {
     if (!_dragSrc || row === _dragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-
-    // 根据鼠标在目标行的上/下半区决定插入位置
     const rect = row.getBoundingClientRect();
-    const mid = rect.top + rect.height / 2;
-    wrap.querySelectorAll('.cfg-url-item').forEach(r => {
-      r.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-    row.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+    wrap.querySelectorAll('.cfg-url-item').forEach(r =>
+      r.classList.remove('drag-over-top', 'drag-over-bottom')
+    );
+    row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
   }
 
   function _onDragLeave(row) {
@@ -1141,6 +1136,98 @@ function mkUrlList(field, values) {
     wrap.insertBefore(_dragSrc, before ? row : row.nextSibling);
     row.classList.remove('drag-over-top', 'drag-over-bottom');
   }
+
+  // ── 触摸拖拽 ──────────────────────────────────────────────────────
+  let _touchSrc = null;
+  let _touchClone = null;
+  let _touchOffsetX = 0;
+  let _touchOffsetY = 0;
+
+  function _getRowFromPoint(x, y) {
+    // 隐藏 clone 防止 elementFromPoint 命中它
+    if (_touchClone) _touchClone.style.display = 'none';
+    const el = document.elementFromPoint(x, y);
+    if (_touchClone) _touchClone.style.display = '';
+    return el?.closest('.cfg-url-item') ?? null;
+  }
+
+  function _onTouchStart(e, row) {
+    // 只响应把手触发的触摸
+    if (!e.target.closest('.cfg-url-drag')) return;
+    e.preventDefault();
+
+    _touchSrc = row;
+    const touch = e.touches[0];
+    const rect = row.getBoundingClientRect();
+    _touchOffsetX = touch.clientX - rect.left;
+    _touchOffsetY = touch.clientY - rect.top;
+
+    // 创建跟手幽灵
+    _touchClone = row.cloneNode(true);
+    Object.assign(_touchClone.style, {
+      position: 'fixed',
+      zIndex: '9999',
+      width: rect.width + 'px',
+      left: (touch.clientX - _touchOffsetX) + 'px',
+      top: (touch.clientY - _touchOffsetY) + 'px',
+      opacity: '0.85',
+      pointerEvents: 'none',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+      borderRadius: '6px',
+    });
+    document.body.appendChild(_touchClone);
+    row.classList.add('dragging');
+  }
+
+  function _onTouchMove(e) {
+    if (!_touchSrc) return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+
+    // 跟手移动
+    if (_touchClone) {
+      _touchClone.style.left = (touch.clientX - _touchOffsetX) + 'px';
+      _touchClone.style.top = (touch.clientY - _touchOffsetY) + 'px';
+    }
+
+    // 高亮目标行
+    const target = _getRowFromPoint(touch.clientX, touch.clientY);
+    wrap.querySelectorAll('.cfg-url-item').forEach(r =>
+      r.classList.remove('drag-over-top', 'drag-over-bottom')
+    );
+    if (target && target !== _touchSrc) {
+      const rect = target.getBoundingClientRect();
+      target.classList.add(
+        touch.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom'
+      );
+    }
+  }
+
+  function _onTouchEnd(e) {
+    if (!_touchSrc) return;
+
+    const touch = e.changedTouches[0];
+    const target = _getRowFromPoint(touch.clientX, touch.clientY);
+
+    if (target && target !== _touchSrc) {
+      const rect = target.getBoundingClientRect();
+      const before = touch.clientY < rect.top + rect.height / 2;
+      wrap.insertBefore(_touchSrc, before ? target : target.nextSibling);
+    }
+
+    // 清理
+    _touchSrc.classList.remove('dragging');
+    wrap.querySelectorAll('.cfg-url-item').forEach(r =>
+      r.classList.remove('drag-over-top', 'drag-over-bottom')
+    );
+    _touchClone?.remove();
+    _touchClone = null;
+    _touchSrc = null;
+  }
+
+  // 触摸事件挂在 wrap 上，避免每行重复绑定
+  wrap.addEventListener('touchstart', _onTouchStart.bind(null, null), { passive: false });
 
   // ── 行构建 ────────────────────────────────────────────────────────
   function addRow(val = '') {
@@ -1219,6 +1306,13 @@ function mkUrlList(field, values) {
     row.addEventListener('dragover', e => _onDragOver(e, row));
     row.addEventListener('dragleave', () => _onDragLeave(row));
     row.addEventListener('drop', e => _onDrop(e, row));
+
+    // 触摸拖拽
+    row.addEventListener('touchstart', e => _onTouchStart(e, row), { passive: false });
+
+    // touchmove / touchend 挂在 document 上，确保手指移出 row 时仍能跟踪
+    document.addEventListener('touchmove', _onTouchMove, { passive: false });
+    document.addEventListener('touchend', _onTouchEnd);
 
     if (field.key === 'recipient-url') {
       const inputWrap = el('div', { class: 'cfg-url-input-wrap' });
