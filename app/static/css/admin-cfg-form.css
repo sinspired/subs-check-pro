@@ -1192,18 +1192,23 @@
   position: relative;
   flex: 1;
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;  /* 图标和输入框顶部对齐 */
+  gap: 0;
 }
 
+/* 输入框不再需要 padding-left 留空间 */
 .cfg-url-input-wrap .cfg-url-input {
   width: 100%;
   padding-left: 30px !important;  /* 无条件留出图标空间 */
 }
 
+
+
 .cfg-url-icon {
   position: absolute;
   left: 8px;
-  top: 8px;          /* 改用固定 top，避免 textarea 多行时图标居中跑偏 */
+  top: 50%;
+  transform: translateY(-50%);  /* ← 补上这行 */
   width: 15px;
   height: 15px;
   display: flex;
