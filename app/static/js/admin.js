@@ -2986,6 +2986,52 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     ])
   }
 
+  /**
+ * 小屏日志区折叠/展开逻辑
+ * 点击 #toggleLogsBtn 切换 .logs-wrapper 的显隐
+ */
+  function initLogsCollapseBtn() {
+    const toggleBtn = document.getElementById('toggleLogsBtn');
+    const logsWrapper = document.getElementById('logContainer');
+    const logsCard = document.getElementById('logArea');
+
+    // 找到日志卡片内的 .card-tip 元素
+    const cardTip = logsCard?.querySelector('.card-tip');
+
+    if (!toggleBtn || !logsWrapper || !logsCard) return;
+
+    // 记录原始提示文案，折叠时替换，展开时还原
+    const originalTip = cardTip?.textContent ?? '';
+    const collapsedTip = '日志已折叠，点击右上角按钮展开';
+
+    toggleBtn.addEventListener('click', () => {
+      const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+
+      if (isExpanded) {
+        // 展开 → 折叠
+        logsWrapper.classList.add('logs-collapsed');
+        logsCard.classList.add('logs-card-collapsed');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.setAttribute('title', '展开日志');
+        toggleBtn.setAttribute('aria-label', '展开日志区域');
+
+        // 替换 card-tip 文案
+        if (cardTip) cardTip.textContent = collapsedTip;
+
+      } else {
+        // 折叠 → 展开
+        logsWrapper.classList.remove('logs-collapsed');
+        logsCard.classList.remove('logs-card-collapsed');
+        toggleBtn.setAttribute('aria-expanded', 'true');
+        toggleBtn.setAttribute('title', '折叠日志');
+        toggleBtn.setAttribute('aria-label', '折叠日志区域');
+
+        // 还原原始 card-tip 文案
+        if (cardTip) cardTip.textContent = originalTip;
+      }
+    });
+  }
+
   ; (async function bootstrap() {
     const saved = safeLS('subscheck_api_key')
     if (saved && els.apiKeyInput) els.apiKeyInput.value = saved
@@ -3037,6 +3083,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     // 页面加载后调用一次
     initConfigForm()
     switchEditorMode('form')   // 确保初始状态正确（搜索按钮隐藏等）
+    initLogsCollapseBtn();
     window.showToast = showToast
     window.saveConfigWithValidation = saveConfigWithValidation
     window.loadConfigValidated = loadConfigValidated
