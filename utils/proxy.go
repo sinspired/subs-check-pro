@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -143,7 +145,7 @@ func GetGhProxy() bool {
 
 	// 先检测单个 GhProxy
 	if GhProxy != "" {
-		if ok, normalized := checkGhProxyAvailable(GhProxy); ok {
+		if ok, normalized, _ := checkGhProxyAvailable(GhProxy); ok {
 			config.GlobalConfig.GithubProxy = normalized
 			slog.Debug("GitHub代理", "normalized", normalized)
 			IsGhProxyAvailable = true
@@ -156,9 +158,15 @@ func GetGhProxy() bool {
 		slog.Debug("开始并发检测 GhProxyGroup 内的代理")
 
 		type result struct {
-			proxy string
-			ok    bool
-			cost  time.Duration
+			proxy     string
+			ok        bool
+			cost      time.Duration
+			speedKBps float64
+		}
+
+		score := func(r result) float64 {
+			latencyScore := 1.0 / r.cost.Seconds()
+			return r.speedKBps*0.7 + latencyScore*0.3
 		}
 
 		resultCh := make(chan result, len(GhProxyGroup))
@@ -169,35 +177,40 @@ func GetGhProxy() bool {
 			go func(p string) {
 				defer wg.Done()
 				start := time.Now()
-				ok, normalized := checkGhProxyAvailable(p)
+				ok, normalized, speedKBps := checkGhProxyAvailable(p)
 				cost := time.Since(start)
-				resultCh <- result{proxy: normalized, ok: ok, cost: cost}
+				resultCh <- result{proxy: normalized, ok: ok, cost: cost, speedKBps: speedKBps}
 			}(proxy)
 		}
 
-		// 等待所有 goroutine 完成后关闭通道
 		go func() {
 			wg.Wait()
 			close(resultCh)
 		}()
 
-		// 找到最快可用的代理
 		var best result
-		best.cost = time.Hour // 初始设为一个很大的值
+		var bestScore float64
 		for r := range resultCh {
-			if r.ok && r.cost < best.cost {
-				best = r
+			if r.ok {
+				if s := score(r); s > bestScore {
+					bestScore = s
+					best = r
+				}
 			}
 		}
 
 		if best.ok {
 			config.GlobalConfig.GithubProxy = best.proxy
 			if best.cost.Milliseconds() < 1000 {
-				cost := fmt.Sprintf("%dms", best.cost.Milliseconds())
-				slog.Info("最佳GitHub代理", "URL", best.proxy, "耗时", cost)
+				slog.Info("最佳GitHub代理", "URL", best.proxy,
+					"耗时", fmt.Sprintf("%dms", best.cost.Milliseconds()),
+					"速度", fmt.Sprintf("%.1fKB/s", best.speedKBps),
+				)
 			} else {
-				cost := fmt.Sprintf("%.2fs", best.cost.Seconds())
-				slog.Info("最佳GitHub代理", "URL", best.proxy, "耗时", cost)
+				slog.Info("最佳GitHub代理", "URL", best.proxy,
+					"耗时", fmt.Sprintf("%.2fs", best.cost.Seconds()),
+					"速度", fmt.Sprintf("%.1fKB/s", best.speedKBps),
+				)
 			}
 			IsGhProxyAvailable = true
 			return true
@@ -209,44 +222,65 @@ func GetGhProxy() bool {
 	return false
 }
 
-// checkGhProxyAvailable 检查指定的 githubproxy是否可用,并返回处理后的地址
-func checkGhProxyAvailable(githubProxy string) (bool, string) {
-	// proxyBase 例如: "https://ghproxy.com/"
+// checkGhProxyAvailable 检查指定的 githubproxy 是否可用，并返回处理后的地址和速度
+func checkGhProxyAvailable(githubProxy string) (bool, string, float64) {
 	if !strings.HasSuffix(githubProxy, "/") {
 		githubProxy = githubProxy + "/"
 	}
-
 	if !strings.HasPrefix(githubProxy, "http://") && !strings.HasPrefix(githubProxy, "https://") {
 		githubProxy = "https://" + githubProxy
 	}
 
-	testTarget := "https://raw.githubusercontent.com/github/gitignore/main/Go.gitignore"
+	const (
+		testTarget = "https://raw.githubusercontent.com/golang/go/080aa8e9647e5211650f34f3a93fb493afbe396d/src/net/http/transport.go"
+		// curl -L "https://raw.githubusercontent.com/golang/go/080aa8e9647e5211650f34f3a93fb493afbe396d/src/net/http/transport.go" | sha256sum
+		expectedHash = "cbb44007f7cc4cd862acfdb70fbbf5bd89cd800de78a2905bfbc71900e7639e2"
+		minSizeBytes = 50 * 1024
+	)
+
 	testURL := githubProxy + testTarget
 
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 15 * time.Second,
 		Transport: &http.Transport{
-			Proxy: nil, // 禁用系统代理，确保直连测试
+			Proxy: nil,
 		},
 	}
 
+	start := time.Now()
 	resp, err := client.Get(testURL)
 	if err != nil {
-		return false, githubProxy
+		return false, githubProxy, 0
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return false, githubProxy
+		return false, githubProxy, 0
 	}
 
-	// 读取完整响应体，确保下载完成
-	_, err = io.Copy(io.Discard, resp.Body)
+	hasher := sha256.New()
+	n, err := io.Copy(hasher, resp.Body)
 	if err != nil {
-		return false, githubProxy
+		return false, githubProxy, 0
 	}
 
-	return true, githubProxy
+	if n < minSizeBytes {
+		return false, githubProxy, 0
+	}
+
+	actualHash := hex.EncodeToString(hasher.Sum(nil))
+	if actualHash != expectedHash {
+		slog.Debug("ghproxy 内容校验失败",
+			"proxy", githubProxy,
+			"actual", actualHash,
+		)
+		return false, githubProxy, 0
+	}
+
+	elapsed := time.Since(start).Seconds()
+	speedKBps := float64(n) / elapsed / 1024
+
+	return true, githubProxy, speedKBps
 }
 
 // isSysProxyAvailable 并发检测代理是否可用

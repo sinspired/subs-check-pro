@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/sinspired/subs-check-pro/config"
 )
 
@@ -36,29 +37,63 @@ func TestIsDirectProxyConfig(t *testing.T) {
 
 func TestFindGhProxy(t *testing.T) {
 	if len(GhProxies) == 0 {
-		slog.Debug("未找到可用的 githubproxy，将不使用 githubproxy")
-		return
+		t.Skip("GhProxies 为空，跳过测试")
+	}
+	runGhProxyDetection(t, GhProxies, "", "") // 使用默认文件名
+}
+
+func TestFindGhProxyFromConfig(t *testing.T) {
+	data, err := os.ReadFile("../config/config.yaml.example")
+	if err != nil {
+		t.Fatalf("读取配置文件失败: %v", err)
 	}
 
-	slog.Debug("开始并发检测 GhProxyGroup 内的代理")
+	var cfg struct {
+		GhProxyGroup []string `yaml:"ghproxy-group"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("解析 yaml 失败: %v", err)
+	}
+
+	if len(cfg.GhProxyGroup) == 0 {
+		t.Fatal("config.yaml.example 中未找到 ghproxy-group 配置")
+	}
+
+	t.Logf("共找到 %d 个候选代理", len(cfg.GhProxyGroup))
+	runGhProxyDetection(t, cfg.GhProxyGroup, "test_gh_group.csv", "test_gh_group_detail.csv")
+}
+
+// runGhProxyDetection 并发检测候选代理，输出两个 csv 文件并设置最佳代理
+func runGhProxyDetection(t *testing.T, proxies []string, listFile, detailFile string) {
+	if listFile == "" {
+		listFile = "test_gh.csv"
+	}
+	if detailFile == "" {
+		detailFile = "test_gh_detail.csv"
+	}
+	t.Helper()
 
 	type result struct {
-		proxy string
-		ok    bool
-		cost  time.Duration
+		proxy     string
+		ok        bool
+		cost      time.Duration
+		speedKBps float64
 	}
 
-	resultCh := make(chan result, len(GhProxies))
+	score := func(r result) float64 {
+		return r.speedKBps*0.7 + (1.0/r.cost.Seconds())*0.3
+	}
+
+	resultCh := make(chan result, len(proxies))
 	var wg sync.WaitGroup
 
-	for _, proxy := range GhProxies {
+	for _, proxy := range proxies {
 		wg.Add(1)
 		go func(p string) {
 			defer wg.Done()
 			start := time.Now()
-			ok, normalized := checkGhProxyAvailable(p)
-			cost := time.Since(start)
-			resultCh <- result{proxy: normalized, ok: ok, cost: cost}
+			ok, normalized, speedKBps := checkGhProxyAvailable(p)
+			resultCh <- result{proxy: normalized, ok: ok, cost: time.Since(start), speedKBps: speedKBps}
 		}(proxy)
 	}
 
@@ -68,63 +103,73 @@ func TestFindGhProxy(t *testing.T) {
 	}()
 
 	var best result
-	best.cost = time.Hour
+	var bestScore float64
 	var allAvailable []result
 
 	for r := range resultCh {
 		if r.ok {
-			// 打印耗时（毫秒）
 			slog.Info("",
 				"可用代理", r.proxy,
 				"耗时", fmt.Sprintf("%dms", r.cost.Milliseconds()),
+				"速度", fmt.Sprintf("%.1fKB/s", r.speedKBps),
 			)
 			allAvailable = append(allAvailable, r)
-
-			if r.cost < best.cost {
+			if s := score(r); s > bestScore {
+				bestScore = s
 				best = r
 			}
 		}
 	}
 
-	if best.ok {
-		config.GlobalConfig.GithubProxy = best.proxy
-		slog.Info("最佳GitHub代理",
-			"githubproxy", best.proxy,
-			"耗时(ms)", fmt.Sprintf("%d", best.cost.Milliseconds()),
-		)
+	if len(allAvailable) == 0 {
+		slog.Debug("未找到可用的 githubproxy")
+		return
 	}
 
-	// 如果有可用代理，排序并输出 CSV
-	if len(allAvailable) > 0 {
-		sort.Slice(allAvailable, func(i, j int) bool {
-			return allAvailable[i].cost < allAvailable[j].cost
-		})
+	config.GlobalConfig.GithubProxy = best.proxy
+	slog.Info("最佳GitHub代理",
+		"githubproxy", best.proxy,
+		"耗时", fmt.Sprintf("%dms", best.cost.Milliseconds()),
+		"速度", fmt.Sprintf("%.1fKB/s", best.speedKBps),
+	)
 
-		file, err := os.Create("test_ghproxies.csv")
+	sort.Slice(allAvailable, func(i, j int) bool {
+		return score(allAvailable[i]) > score(allAvailable[j])
+	})
+
+	writeCSV := func(filename string, header []string, rows func(r result) []string) {
+		f, err := os.Create(filename)
 		if err != nil {
-			t.Fatalf("创建 CSV 文件失败: %v", err)
+			t.Fatalf("创建文件 %s 失败: %v", filename, err)
 		}
-		defer file.Close()
-
-		writer := csv.NewWriter(file)
-		defer writer.Flush()
-
-		// 写表头
-		// writer.Write([]string{"Proxy", "Cost(s)"})
-
-		// 写数据
+		defer f.Close()
+		w := csv.NewWriter(f)
+		defer w.Flush()
+		if header != nil {
+			w.Write(header)
+		}
 		for _, r := range allAvailable {
-			writer.Write([]string{
-				fmt.Sprintf("- %s", r.proxy),
-				// r.proxy,
-				// fmt.Sprintf("%d", r.cost.Milliseconds()),
-			})
+			w.Write(rows(r))
 		}
-
-		t.Logf("已输出 %d 个可用代理到 test_ghproxies.csv", len(allAvailable))
-	} else {
-		slog.Debug("未找到可用的 githubproxy，将不使用 githubproxy")
 	}
+
+	writeCSV(listFile, nil, func(r result) []string {
+		return []string{fmt.Sprintf("- %s", r.proxy)}
+	})
+
+	writeCSV(detailFile,
+		[]string{"Proxy", "Cost(ms)", "Speed(KB/s)", "Score"},
+		func(r result) []string {
+			return []string{
+				r.proxy,
+				fmt.Sprintf("%d", r.cost.Milliseconds()),
+				fmt.Sprintf("%.1f", r.speedKBps),
+				fmt.Sprintf("%.2f", score(r)),
+			}
+		},
+	)
+
+	t.Logf("已输出 %d 个可用代理，列表: %s，详情: %s", len(allAvailable), listFile, detailFile)
 }
 
 // GitHub 代理列表
