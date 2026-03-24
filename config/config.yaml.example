@@ -147,6 +147,7 @@ sub-store-path: ""
 
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
 # 防止网络不好，所以现在内置，依赖:8199端口
+# 内置 ACL4SSR_Online_Full 和 Sinspired_Rules_CDN.yaml
 mihomo-overwrite-url: http://127.0.0.1:8199/Sinspired_Rules_CDN.yaml
 
 # sub-store 节点操作，针对默认的 sub 订阅
