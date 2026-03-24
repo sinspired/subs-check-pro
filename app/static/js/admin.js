@@ -142,6 +142,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     'GPT+': 'var(--unlock-gpt)',
     'GPT': 'var(--unlock-gpt)',
     'Gemini': 'var(--unlock-gemini)',
+    'Copilot': 'var(--unlock-copilot)',
     'iprisk': 'var(--unlock-iprisk)',
     'openai': 'var(--unlock-openai)',
   };
