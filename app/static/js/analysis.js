@@ -1589,7 +1589,7 @@ function renderConfig(ci, ga, sr, sb, cfg) {
 
     const deployCards = [];
     if (!ghProxy) deployCards.push({ tab: 'advanced', title: 'Github 代理未设置', desc: '国内环境获取 GitHub 订阅源易超时，建议部署自有代理加速（或使用内置 ghproxy-group）。', actions: [{ label: 'CF-Proxy 一键部署', href: 'https://github.com/sinspired/CF-Proxy', primary: true }] });
-    if (!hasNotify) deployCards.push({ tab: 'notify', title: '通知渠道未配置', desc: '配置 Apprise 后，检测完成自动推送到微信、Telegram、邮件等 100+ 渠道。', actions: [{ label: '3分钟快速配置', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', primary: true }, { label: '测试通知渠道', href: 'https://apprise.linkpc.dpdns.org', primary: false }] });
+    if (!hasNotify) deployCards.push({ tab: 'notify', title: '通知渠道未配置', desc: '配置 Apprise 后，检测完成自动推送到微信、Telegram、邮件等 100+ 渠道。', actions: [{ label: '3分钟快速配置', href: 'https://apprise.linkpc.dpdns.org/docs/QuicSet', primary: true }, { label: '测试通知渠道', href: 'https://apprise.linkpc.dpdns.org', primary: false }] });
     if (!speedTestUrl) deployCards.push({ tab: 'subscriptions', title: '测速功能已关闭', desc: '设置 <code>speed-test-url</code> 启用真实下载测速，可精确过滤低速节点。建议使用自建测速地址避免被节点屏蔽。', actions: [{ label: '自建测速说明', href: 'https://github.com/sinspired/subs-check-pro#config', primary: false }] });
 
     //配置分析建议

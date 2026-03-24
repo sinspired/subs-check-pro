@@ -357,7 +357,7 @@ const SCHEMA = [
               "ntfy://",
               "dingtalk://",
             ],
-            links: [{ label: '渠道配置文档', href: 'https://sinspired.github.io/apprise_vercel/docs/QuicSet', icon: 'docs' }],
+            links: [{ label: '渠道配置文档', href: 'https://apprise.linkpc.dpdns.org/docs/QuicSet', icon: 'docs' }],
           },
           {
             key: 'notify-title', label: '通知标题', type: 'text', fullWidth: true, placeholder: '🔔 节点状态更新',
