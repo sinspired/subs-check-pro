@@ -3004,31 +3004,34 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     const originalTip = cardTip?.textContent ?? '';
     const collapsedTip = '日志已折叠，点击右上角按钮展开';
 
+    // 折叠操作封装
+    function collapseLog() {
+      logsWrapper.classList.add('logs-collapsed');
+      logsCard.classList.add('logs-card-collapsed');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.setAttribute('title', '展开日志');
+      toggleBtn.setAttribute('aria-label', '展开日志区域');
+      if (cardTip) cardTip.textContent = collapsedTip;
+    }
+
+    // 展开操作封装
+    function expandLog() {
+      logsWrapper.classList.remove('logs-collapsed');
+      logsCard.classList.remove('logs-card-collapsed');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      toggleBtn.setAttribute('title', '折叠日志');
+      toggleBtn.setAttribute('aria-label', '折叠日志区域');
+      if (cardTip) cardTip.textContent = originalTip;
+    }
+
+    // 小屏时默认折叠
+    if (window.innerWidth <= 899) {
+      collapseLog();
+    }
+
     toggleBtn.addEventListener('click', () => {
       const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-
-      if (isExpanded) {
-        // 展开 → 折叠
-        logsWrapper.classList.add('logs-collapsed');
-        logsCard.classList.add('logs-card-collapsed');
-        toggleBtn.setAttribute('aria-expanded', 'false');
-        toggleBtn.setAttribute('title', '展开日志');
-        toggleBtn.setAttribute('aria-label', '展开日志区域');
-
-        // 替换 card-tip 文案
-        if (cardTip) cardTip.textContent = collapsedTip;
-
-      } else {
-        // 折叠 → 展开
-        logsWrapper.classList.remove('logs-collapsed');
-        logsCard.classList.remove('logs-card-collapsed');
-        toggleBtn.setAttribute('aria-expanded', 'true');
-        toggleBtn.setAttribute('title', '折叠日志');
-        toggleBtn.setAttribute('aria-label', '折叠日志区域');
-
-        // 还原原始 card-tip 文案
-        if (cardTip) cardTip.textContent = originalTip;
-      }
+      isExpanded ? collapseLog() : expandLog();
     });
   }
 
