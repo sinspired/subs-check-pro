@@ -288,6 +288,7 @@ const SCHEMA = [
           {
             key: 'sub-process.sub-info', label: '注入流量信息节点', type: 'toggle',
             hint: '在订阅开头注入虚拟节点，用于在客户端展示剩余流量、更新时间等信息',
+            links: [{ label: '脚本示例', href: 'https://raw.githubusercontent.com/sinspired/sub-store-scripts/refs/heads/main/surge/modules/sub-store-scripts/sub-info/node.js', icon: 'jsFile' }],
           },
         ],
       },
