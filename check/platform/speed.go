@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -84,7 +85,14 @@ func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket, getNetBytes f
 	req.Header.Set("User-Agent", convert.RandUserAgent())
 	req.Header.Set("Cache-Control", "no-cache")
 
-	// 发起请求
+	// 准备读取器,将起始时间和起始流量的记录移到 Do(req) 之前
+	var startNetBytes uint64
+	if getNetBytes != nil {
+		startNetBytes = getNetBytes()
+	}
+	startTime := time.Now()
+
+	// 发起请求 (此时开始发生 TCP/TLS 握手)
 	resp, err := speedClient.Do(req)
 	if err != nil {
 		return 0, 0, err
@@ -93,12 +101,6 @@ func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket, getNetBytes f
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return 0, 0, fmt.Errorf("http status %d", resp.StatusCode)
-	}
-
-	// 准备读取器
-	var startNetBytes uint64
-	if getNetBytes != nil {
-		startNetBytes = getNetBytes()
 	}
 
 	var limit uint64
@@ -113,13 +115,13 @@ func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket, getNetBytes f
 		limit:       limit,
 	}
 
-	// 执行下载 (io.Copy)
-	startTime := time.Now()
+	// 执行下载读取 (io.Copy)
 	// copiedBytes，以便在 getNetBytes 失败时兜底
 	copiedBytes, err := io.Copy(io.Discard, limitedReader)
 
 	// 如果错误是“超时”或“EOF”，这是测速的正常结束状态，不应视为 Failure
-	if err != nil && err != io.EOF && err != context.DeadlineExceeded && err != context.Canceled {
+	// 使用 errors.Is 处理嵌套错误。因为网络超时抛出的错误通常是被包装过的
+	if err != nil && err != io.EOF && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		return 0, 0, err
 	}
 
@@ -155,7 +157,12 @@ func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket, getNetBytes f
 	// 计算速度 (KB/s)
 	speed := int(float64(totalBytes) / 1024.0 / duration)
 
-	slog.Debug(fmt.Sprintf("测速完成: %d KB/s, 耗时: %.2fs, 流量: %d 字节, 方式: %v", speed, duration, totalBytes, useNetBytes))
+	slog.Debug("测速完成",
+		"speed_KB_s", speed,
+		"duration_s", fmt.Sprintf("%.2f", duration),
+		"bytes", totalBytes,
+		"use_net_bytes", useNetBytes,
+	)
 
 	return speed, totalBytes, nil
 }
