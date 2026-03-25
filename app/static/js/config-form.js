@@ -193,7 +193,7 @@ const SCHEMA = [
         fields: [
           {
             key: 'node-type', label: '协议筛选', type: 'chips',
-            hint: '留空 = 检测全部协议',
+            hint: '留空=全部；推荐：VLESS / VMess / Trojan；谨慎：SS/SSR；不建议：Hysteria2 / TUIC；不稳定：HTTP / Socks5',
             options: ['ss', 'ssr', 'vmess', 'vless', 'snell', 'trojan', 'hysteria', 'hysteria2', 'tuic', 'wireguard', 'ssh', 'mieru', 'anytls', 'sudoku', 'masque', 'trusttunnel', 'socks5', 'http'],
           },
         ],
