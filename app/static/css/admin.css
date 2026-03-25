@@ -1750,6 +1750,20 @@ main {
   display: none;
 }
 
+.logs-icon-upper,
+.logs-icon-lower {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 折叠状态：两箭头向中间靠拢并翻转 → ∨ ∧ 相对 */
+.logs-collapse-btn[aria-expanded='false'] .logs-icon-upper {
+  transform: translateY(5px) rotate(180deg);
+  transform-origin: 12px 5.5px;
+}
+.logs-collapse-btn[aria-expanded='false'] .logs-icon-lower {
+  transform: translateY(-5px) rotate(180deg);
+  transform-origin: 12px 18.5px;
+}
 /* 状态标签 */
 .status-label {
   align-items: center;
@@ -2592,7 +2606,7 @@ main {
   }
   /* ── 折叠箭头过渡动效 ── */
   .logs-chevron {
-    transition: transform 0.25s ease;
+    transition: transform 0.3s ease;
   }
   /* 折叠后日志卡片高度收缩（避免撑高页面） */
   .logsCard.logs-card-collapsed {
@@ -2603,11 +2617,10 @@ main {
 
   /* ── 日志内容区：折叠状态 ── */
   .logs-wrapper {
-    /* 在原有样式基础上添加过渡 */
-    transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease;
-    max-height: 2000px; /* 足够大的展开高度上限 */
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease,
+      padding 0.25s ease;
+    max-height: 2000px;
     opacity: 1;
-    overflow-y: auto;
   }
 
   /* 折叠状态：高度归零 + 淡出 */
@@ -2616,13 +2629,8 @@ main {
     opacity: 0;
     padding-top: 0;
     padding-bottom: 0;
-    pointer-events: none; /* 折叠后禁止交互 */
+    pointer-events: none;
     overflow: hidden;
-  }
-
-  /* 折叠时按钮箭头向下翻转 */
-  .logs-collapse-btn[aria-expanded='false'] .logs-chevron {
-    transform: rotate(180deg);
   }
 
   /* ── 历史记录 ── */

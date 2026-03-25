@@ -386,14 +386,18 @@
                     <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
                   </svg>
                 </button>
-                <button id="toggleLogsBtn" class="btn btn-round logs-collapse-btn" title="折叠日志" aria-label="折叠日志区域"
-                  aria-expanded="true">
-                  <svg class="btn-icon icon-md-btn logs-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                    fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <!-- 向上箭头：展开状态时显示（点击可折叠） -->
-                    <polyline points="18 15 12 9 6 15"></polyline>
-                  </svg>
-                </button>
+<button id="toggleLogsBtn" class="btn btn-round logs-collapse-btn"
+  title="折叠日志" aria-label="折叠日志区域" aria-expanded="true">
+  <svg class="btn-icon icon-md-btn logs-toggle-icon"
+    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+    xmlns="http://www.w3.org/2000/svg">
+    <!-- 上箭头：展开时朝上，折叠时朝下靠近中线 -->
+    <polyline class="logs-icon-upper" points="6 8 12 3 18 8"/>
+    <!-- 下箭头：展开时朝下，折叠时朝上靠近中线 -->
+    <polyline class="logs-icon-lower" points="6 16 12 21 18 16"/>
+  </svg>
+</button>
               </div>
             </div>
             <div class="card-tip muted">

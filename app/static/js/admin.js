@@ -2991,42 +2991,40 @@ import { initQuickPreview } from './cfg-quickpreview.js';
  * 点击 #toggleLogsBtn 切换 .logs-wrapper 的显隐
  */
   function initLogsCollapseBtn() {
+    const STORAGE_KEY = 'logs_collapsed';
+
     const toggleBtn = document.getElementById('toggleLogsBtn');
     const logsWrapper = document.getElementById('logContainer');
     const logsCard = document.getElementById('logArea');
-
-    // 找到日志卡片内的 .card-tip 元素
     const cardTip = logsCard?.querySelector('.card-tip');
 
     if (!toggleBtn || !logsWrapper || !logsCard) return;
 
-    // 记录原始提示文案，折叠时替换，展开时还原
     const originalTip = cardTip?.textContent ?? '';
     const collapsedTip = '日志已折叠，点击右上角按钮展开';
 
-    // 折叠操作封装
-    function collapseLog() {
+    function collapseLog(persist = true) {
       logsWrapper.classList.add('logs-collapsed');
       logsCard.classList.add('logs-card-collapsed');
       toggleBtn.setAttribute('aria-expanded', 'false');
       toggleBtn.setAttribute('title', '展开日志');
       toggleBtn.setAttribute('aria-label', '展开日志区域');
       if (cardTip) cardTip.textContent = collapsedTip;
+      if (persist) safeLS(STORAGE_KEY, '1');
     }
 
-    // 展开操作封装
-    function expandLog() {
+    function expandLog(persist = true) {
       logsWrapper.classList.remove('logs-collapsed');
       logsCard.classList.remove('logs-card-collapsed');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('title', '折叠日志');
       toggleBtn.setAttribute('aria-label', '折叠日志区域');
       if (cardTip) cardTip.textContent = originalTip;
+      if (persist) safeLS(STORAGE_KEY, '0');
     }
 
-    // 小屏时默认折叠
     if (window.innerWidth <= 899) {
-      collapseLog();
+      safeLS(STORAGE_KEY) === '0' ? expandLog(false) : collapseLog(false);
     }
 
     toggleBtn.addEventListener('click', () => {
