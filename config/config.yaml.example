@@ -243,6 +243,9 @@ platforms:
   # - disney
   - x
 
+# 流媒体检测超时设置
+media-check-timeout: 10
+
 # 增强的位置显示开关,默认开启
 # 无法访问 CF 的 CF 节点: HK⁻¹
 # 正常访问 CF: a.出口位置与cdn位置一致: HK¹⁺; b.位置不一致: HK¹-US⁰

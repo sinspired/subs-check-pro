@@ -816,7 +816,19 @@ func needsCF(platforms []string) bool {
 
 // mediaCheck 根据平台类型分发到相应的检测函数。
 func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Context) {
-	// TODO: 似乎需要少大一点的超时
+
+	// 设置流媒体/AI检测独立的超时时间
+	mediaTimeout := config.GlobalConfig.MediaCheckTimeout
+	if mediaTimeout <= 0 {
+		mediaTimeout = 10 // 默认 10 秒
+	}
+
+	// 构造 mediaClient
+	mediaClient := &http.Client{
+		Transport: job.Client.Client.Transport,
+		Timeout:   time.Duration(mediaTimeout) * time.Second,
+	}
+
 	switch plat {
 	case "x":
 		if job.NeedCF && !job.IsCfAccessible {
@@ -827,7 +839,7 @@ func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Co
 		if job.NeedCF && !job.IsCfAccessible {
 			break
 		}
-		cookiesOK, clientOK := platform.CheckOpenAI(job.Client.Client)
+		cookiesOK, clientOK := platform.CheckOpenAI(mediaClient)
 		if clientOK && cookiesOK {
 			job.Result.Openai = true
 		} else if clientOK || cookiesOK {
@@ -837,40 +849,40 @@ func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Co
 		if job.NeedCF && !job.IsCfAccessible {
 			break
 		}
-		job.Result.Copilot, job.Result.CopilotAPI = platform.CheckCopilot(job.Client.Client)
+		job.Result.Copilot, job.Result.CopilotAPI = platform.CheckCopilot(mediaClient)
 	case "youtube":
-		if region, _ := platform.CheckYoutube(job.Client.Client); region != "" {
+		if region, _ := platform.CheckYoutube(mediaClient); region != "" {
 			job.Result.Youtube = region
 		}
 	case "netflix":
-		if ok, _ := platform.CheckNetflix(job.Client.Client); ok {
+		if ok, _ := platform.CheckNetflix(mediaClient); ok {
 			job.Result.Netflix = true
 		}
 	case "disney":
-		if ok, _ := platform.CheckDisney(job.Client.Client); ok {
+		if ok, _ := platform.CheckDisney(mediaClient); ok {
 			job.Result.Disney = true
 		}
 	case "gemini":
-		if status, err := platform.CheckGemini(job.Client.Client); err == nil {
+		if status, err := platform.CheckGemini(mediaClient); err == nil {
 			job.Result.Gemini = status
 		}
 	case "tiktok":
-		if region, _ := platform.CheckTikTok(job.Client.Client); region != "" {
+		if region, _ := platform.CheckTikTok(mediaClient); region != "" {
 			job.Result.TikTok = region
 		}
 	case "iprisk":
-		country, ip, countryCodeTag, _ := proxyutils.GetProxyCountry(job.Client.Client, db, ctx, job.CfLoc, job.CfIP)
+		country, ip, countryCodeTag, _ := proxyutils.GetProxyCountry(mediaClient, db, ctx, job.CfLoc, job.CfIP)
 		if ip == "" {
 			break
 		}
 		job.Result.IP = ip
 		job.Result.Country = country
 		job.Result.CountryCodeTag = countryCodeTag
-		if risk, err := platform.CheckIPRisk(job.Client.Client, ip); err == nil {
+		if risk, err := platform.CheckIPRisk(mediaClient, ip); err == nil {
 			job.Result.IPRisk = risk
 		} else {
 			// 失败的可能性高，所以放上日志
-			slog.Debug(fmt.Sprintf("查询IP风险失败: %v", err))
+			slog.Debug("查询IP风险失败", "error", err)
 		}
 	}
 }

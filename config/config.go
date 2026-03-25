@@ -46,13 +46,14 @@ type Config struct {
 	EnableIPv6           bool     `yaml:"ipv6"`
 	CheckInterval        int      `yaml:"check-interval"`
 	CronExpression       string   `yaml:"cron-expression"`
+	Timeout              int      `yaml:"timeout"`
 	SpeedTestURL         string   `yaml:"speed-test-url"`
 	DownloadTimeout      int      `yaml:"download-timeout"`
 	DownloadMB           int      `yaml:"download-mb"`
 	TotalSpeedLimit      int      `yaml:"total-speed-limit"`
 	Threshold            float32  `yaml:"threshold"`
 	MinSpeed             int      `yaml:"min-speed"`
-	Timeout              int      `yaml:"timeout"`
+	MediaCheckTimeout    int      `yaml:"media-check-timeout"`
 	FilterRegex          string   `yaml:"filter-regex"`
 	SaveMethod           string   `yaml:"save-method"`
 	WebDAVURL            string   `yaml:"webdav-url"`
