@@ -175,6 +175,7 @@ const SCHEMA = [
               "openai: GPT", "gemini: GM", "copilot: CP", "Youtube: YT", "tiktok: TK", "netflix: NF", "Disney: D+", "X: Twitter"
             ]
           },
+          { key: 'media-check-timeout', label: '检测超时 (s)', type: 'number', min: 0, max: 30, placeholder: '10', hint: '流媒体、AI解锁检测超时，建议 5-10s' },
         ],
       },
       {
