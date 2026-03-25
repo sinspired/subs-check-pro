@@ -22,8 +22,10 @@ func CheckTikTok(httpClient *http.Client) (string, error) {
 		return "", nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	limitReader := io.LimitReader(resp.Body, 128*1024)
+
+	body, err := io.ReadAll(limitReader)
+	if err != nil && err != io.EOF {
 		return "", err
 	}
 

@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"io"
 	"net/http"
 	"strings"
 )
@@ -14,6 +13,7 @@ import (
 func CheckCopilot(httpClient *http.Client) (homeOK, apiOK bool) {
 	const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+	// 探测主页
 	req, _ := http.NewRequest("GET", "https://copilot.microsoft.com/", nil)
 	req.Header.Set("User-Agent", ua)
 
@@ -21,18 +21,21 @@ func CheckCopilot(httpClient *http.Client) (homeOK, apiOK bool) {
 	if err != nil {
 		return false, false
 	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 
 	finalURL := strings.ToLower(resp.Request.URL.String())
-	if resp.StatusCode >= 400 ||
+	statusCode := resp.StatusCode
+
+	// 触发 RST_STREAM 阻断下载，同时保持 TCP/TLS 连接活跃
+	resp.Body.Close()
+
+	if statusCode >= 400 ||
 		strings.Contains(finalURL, "cn.bing") ||
 		strings.Contains(finalURL, "blocked") ||
 		strings.Contains(finalURL, "sorry") {
 		return false, false
 	}
 
-	// 主页可达
+	// 探测 API
 	apiReq, _ := http.NewRequest("GET", "https://copilot.microsoft.com/c/api/user", nil)
 	apiReq.Header.Set("User-Agent", ua)
 
@@ -41,7 +44,6 @@ func CheckCopilot(httpClient *http.Client) (homeOK, apiOK bool) {
 		return true, false
 	}
 	defer apiResp.Body.Close()
-	_, _ = io.Copy(io.Discard, apiResp.Body)
 
 	switch apiResp.StatusCode {
 	case http.StatusOK, http.StatusUnauthorized:

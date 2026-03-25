@@ -10,6 +10,7 @@ import (
 )
 
 func CheckIPRisk(httpClient *http.Client, ip string) (string, error) {
+	// TODO: 增加 "https://www.abuseipdb.com/check/${LOCAL_IP}"
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://scamalytics.com/ip/%s", ip), nil)
 	if err != nil {
 		return "", err
@@ -23,8 +24,9 @@ func CheckIPRisk(httpClient *http.Client, ip string) (string, error) {
 
 	if resp.StatusCode == 200 {
 		// 读取响应内容
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
+		limitReader := io.LimitReader(resp.Body, 64*1024)
+		body, err := io.ReadAll(limitReader)
+		if err != nil && err != io.EOF {
 			return "", err
 		}
 		bodyStr := string(body)

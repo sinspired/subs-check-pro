@@ -657,8 +657,8 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		// 读取并丢弃 Body，有助于复用 TCP 连接（Keep-Alive）
-		_, _ = io.Copy(io.Discard, resp.Body)
+		// 读取128KB，超过的放弃连接复用
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 128*1024))
 		slog.Debug("错误", "url", req.URL, "代理", useProxy, "状态码", resp.StatusCode, "UA", req.UserAgent())
 		fatal := resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 || resp.StatusCode == 410
 		return nil, fmt.Errorf("%d", resp.StatusCode), fatal

@@ -42,26 +42,41 @@ func cfCommonHeaders() map[string]string {
 		"Sec-Ch-Ua-Mobile":   "?0",
 		"Sec-Ch-Ua-Platform": "\"Windows\"",
 		"Accept":             "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-		"Connection":         "close",
 	}
 }
 
 // CheckCloudflare 检测当前客户端是否可以访问 Cloudflare CDN
 func CheckCloudflare(httpClient *http.Client) (cloudflare bool, cfRelayLoc string, cfRelayIP string) {
-	ok, err := checkCFEndpoint(httpClient, "http://cp.cloudflare.com/generate_204", 204)
-	if err == nil && !ok {
-		slog.Debug("Cloudflare 不可达")
+	const retries = 3
+	var ok bool
+	var err error
+
+	for i := range retries {
+		ok, err = checkCFEndpoint(httpClient, "http://cp.cloudflare.com/generate_204", 204)
+		if ok {
+			break
+		}
+		if err == nil && !ok {
+			break
+		}
+		if i < retries-1 {
+			time.Sleep(time.Duration(i+1) * 300 * time.Millisecond)
+		}
+	}
+
+	if err != nil || !ok {
+		slog.Debug("Cloudflare 204 连通性预检失败", "error", err, "ok", ok)
+		cfRelayLoc, cfRelayIP = GetCFTrace(httpClient)
+
+		if cfRelayLoc != "" && cfRelayIP != "" {
+			slog.Debug("Cloudflare CDN 检测成功", "loc", cfRelayLoc, "ip", cfRelayIP)
+			return true, cfRelayLoc, cfRelayIP
+		}
+
 		return false, "", ""
 	}
-
-	cfRelayLoc, cfRelayIP = GetCFTrace(httpClient)
-
-	if cfRelayLoc != "" && cfRelayIP != "" {
-		slog.Debug(fmt.Sprintf("Cloudflare CDN 检测成功: loc=%s, ip=%s", cfRelayLoc, cfRelayIP))
-		return true, cfRelayLoc, cfRelayIP
-	}
-
-	return false, "", ""
+	slog.Debug("Cloudflare 204 连通性 OK")
+	return true, "", ""
 }
 
 // GetCFTrace 获取 Cloudflare Trace 的 loc 和 ip,并设置 10s 超时
@@ -153,15 +168,16 @@ func FetchCFTrace(httpClient *http.Client, ctx context.Context, baseURL string) 
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	// 增加 LimitReader，防止罕见的恶意节点返回无限数据
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024))
+	if err != nil && err != io.EOF {
 		return "", ""
 	}
 
 	var loc, ip string
 	for _, line := range strings.Split(string(body), "\n") {
-		if strings.HasPrefix(line, "loc=") {
-			loc = strings.TrimPrefix(line, "loc=")
+		if after, ok := strings.CutPrefix(line, "loc="); ok {
+			loc = after
 		}
 		if strings.HasPrefix(line, "ip=") {
 			ip = strings.TrimPrefix(line, "ip=")
@@ -172,10 +188,15 @@ func FetchCFTrace(httpClient *http.Client, ctx context.Context, baseURL string) 
 
 // checkCFEndpoint 检查指定的 Cloudflare 端点是否可达，并返回是否成功和错误信息
 func checkCFEndpoint(httpClient *http.Client, url string, expectedStatus int) (bool, error) {
-	req, err := http.NewRequest("HEAD", url, nil)
+	timeout := 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
 		return false, err
 	}
+
 	for key, value := range cfCommonHeaders() {
 		req.Header.Set(key, value)
 	}
@@ -188,12 +209,11 @@ func checkCFEndpoint(httpClient *http.Client, url string, expectedStatus int) (b
 
 	switch resp.StatusCode {
 	case expectedStatus:
-		slog.Debug("正常访问CF")
+		slog.Debug("正常访问 CF 204")
 		return true, nil
 	case 403:
-		// 403 同样是 CF 拒绝自身请求的表现，剔除
 		slog.Debug("CF 代理访问自身返回 403，剔除")
-		return false, nil  // ← 改为 false
+		return false, nil
 	default:
 		slog.Debug("CF 返回非预期状态码", "code", resp.StatusCode)
 		return false, nil

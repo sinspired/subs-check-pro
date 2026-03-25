@@ -424,6 +424,9 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		}
 	}()
 
+	// 启动流水线任务前设置 mihomo 变量
+	resolver.DisableIPv6 = !config.GlobalConfig.EnableIPv6
+
 	// 启动流水线阶段
 	go pc.distributeJobs(proxies, ctx)
 	go pc.runAliveStage(ctx)
@@ -813,6 +816,7 @@ func needsCF(platforms []string) bool {
 
 // mediaCheck 根据平台类型分发到相应的检测函数。
 func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Context) {
+	// TODO: 似乎需要少大一点的超时
 	switch plat {
 	case "x":
 		if job.NeedCF && !job.IsCfAccessible {
@@ -1018,12 +1022,11 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 	pc := &ProxyClient{}
 
 	var err error
-	resolver.DisableIPv6 = !config.GlobalConfig.EnableIPv6
 
 	// 解析代理
 	pc.mProxy, err = adapter.ParseProxy(mapping)
 	if err != nil {
-		slog.Debug(fmt.Sprintf("底层mihomo创建代理Client失败: %v", err))
+		slog.Debug("底层mihomo创建代理Client失败", "error", err)
 		return nil
 	}
 
@@ -1033,10 +1036,9 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 	clientCtx := pc.ctx
 
 	statsTransport := &StatsTransport{}
-	var baseTransport *http.Transport
 	networkLimitDefault := true
 
-	baseTransport = &http.Transport{
+	baseTransport := &http.Transport{
 		DialContext: func(reqCtx context.Context, network, addr string) (net.Conn, error) {
 			// 基于请求的 ctx 创建合并 ctx
 			mergedCtx, mergedCancel := context.WithCancel(reqCtx)
@@ -1079,6 +1081,7 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 				networkLimit: networkLimitDefault,
 			}, nil
 		},
+		ForceAttemptHTTP2:   true, // 强制尝试 HTTP/2 协议
 		DisableKeepAlives:   false,
 		Proxy:               nil,
 		IdleConnTimeout:     5 * time.Second,
@@ -1118,7 +1121,7 @@ func (pc *ProxyClient) Close() {
 	// 关闭 HTTP 连接池
 	// 这里无法关闭mihomo建立的连接
 	if pc.Client != nil {
-		pc.Client.CloseIdleConnections()
+		pc.CloseIdleConnections()
 	}
 
 	// 统计数据：同时累加 BytesRead 和 BytesWritten（避免漏计上行）

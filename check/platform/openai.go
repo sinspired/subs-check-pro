@@ -30,7 +30,7 @@ func CheckCookies(httpClient *http.Client) bool {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		return false
 	}
@@ -67,7 +67,7 @@ func CheckClient(httpClient *http.Client) bool {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		return false
 	}

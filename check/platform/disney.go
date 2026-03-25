@@ -33,8 +33,12 @@ func CheckDisney(httpClient *http.Client) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	limitReader := io.LimitReader(resp.Body, 64*1024)
+
+	body, err := io.ReadAll(limitReader)
+
+	// 忽略 EOF 错误
+	if err != nil && err != io.EOF {
 		return false, err
 	}
 
@@ -65,8 +69,11 @@ func CheckDisney(httpClient *http.Client) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
+	limitReader = io.LimitReader(resp.Body, 64*1024)
+
+	body, err = io.ReadAll(limitReader)
+	// 忽略 EOF 错误
+	if err != nil && err != io.EOF {
 		return false, err
 	}
 
@@ -101,8 +108,11 @@ func CheckDisney(httpClient *http.Client) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
+	limitReader = io.LimitReader(resp.Body, 64*1024)
+
+	body, err = io.ReadAll(limitReader)
+	// 忽略 EOF 错误
+	if err != nil && err != io.EOF {
 		return false, err
 	}
 

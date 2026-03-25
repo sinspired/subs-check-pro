@@ -35,8 +35,11 @@ func CheckYoutube(httpClient *http.Client) (string, error) {
 	defer resp.Body.Close()
 
 	// 读取响应内容
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	// YouTube 的区域代码通常在前面的 JSON state 中
+	limitReader := io.LimitReader(resp.Body,  128*1024)
+	body, err := io.ReadAll(limitReader)
+	if err != nil && err != io.EOF { 
+        // 注意：LimitReader 读满并不会报错，如果是真正的网络断开才返回错
 		return "", err
 	}
 

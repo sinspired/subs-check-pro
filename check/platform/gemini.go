@@ -57,10 +57,14 @@ var blockedRegions = map[string]bool{
 
 // https://github.com/clash-verge-rev/clash-verge-rev/blob/main/src-tauri/src/cmd/media_unlock_checker/gemini.rs
 
-
 // CheckGemini 检测 Gemini 访问状态，Region 为空表示不可访问或解析失败
 func CheckGemini(client *http.Client) (GeminiStatus, error) {
-	resp, err := client.Get("https://gemini.google.com/")
+	req, err := http.NewRequest("GET", "https://gemini.google.com/", nil)
+	if err != nil {
+		return GeminiStatus{}, err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return GeminiStatus{}, err
 	}
@@ -70,8 +74,10 @@ func CheckGemini(client *http.Client) (GeminiStatus, error) {
 		return GeminiStatus{}, nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	limitReader := io.LimitReader(resp.Body, 1024*1024) 
+
+	body, err := io.ReadAll(limitReader)
+	if err != nil && err != io.EOF {
 		return GeminiStatus{}, err
 	}
 
