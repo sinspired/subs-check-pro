@@ -2740,6 +2740,9 @@ import { initQuickPreview } from './cfg-quickpreview.js';
 
     // 分享菜单逻辑
     const setupShare = id => {
+
+
+
       const btn = document.getElementById(id)
       if (!btn) return
       btn.addEventListener('click', async e => {
@@ -2765,6 +2768,11 @@ import { initQuickPreview } from './cfg-quickpreview.js';
         }
 
         const menu = document.getElementById('shareMenu')
+        const pm = document.getElementById('projectMenu')
+
+        // 打开分享菜单时，先关闭项目菜单
+        pm?.classList.remove('active')
+
         if (menu.classList.contains('active')) {
           menu.classList.remove('active')
           return
@@ -2871,7 +2879,12 @@ import { initQuickPreview } from './cfg-quickpreview.js';
 
     function openProjectMenu(anchorEl) {
       const pm = els.projectMenu
+      const sm = document.getElementById('shareMenu')
       if (!pm) return
+
+      // 打开项目菜单时，先关闭分享菜单
+      sm?.classList.remove('active')
+
       if (pm.classList.contains('active')) {
         pm.classList.remove('active')
         return
