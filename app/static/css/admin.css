@@ -188,18 +188,6 @@ body {
   font-size: 14px;
 }
 
-.btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--glass-shadow);
-  background: linear-gradient(
-    180deg,
-    var(--glass-bg),
-    rgba(250, 250, 250, 0.02)
-  );
-  border-color: var(--glass-border);
-  color: var(--fg);
-}
-
 .btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -431,11 +419,6 @@ header.card {
   display: flex;
   flex-direction: row;
   align-items: center;
-}
-
-.theme-toggle:hover {
-  background: var(--card-bg);
-  transform: rotate(15deg);
 }
 
 .icon-btn {
@@ -1042,7 +1025,7 @@ main {
 .history-placeholder {
   padding: 0px 0px;
   border-radius: 8px;
-  background: var(--card-bg, transparent);
+  background: var(--card, transparent);
 }
 
 .history-title-row {
@@ -1750,20 +1733,37 @@ main {
   display: none;
 }
 
-.logs-icon-upper,
-.logs-icon-lower {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.collapse-icon .arrow-top,
+.collapse-icon .arrow-bot,
+.collapse-icon .dash-mid {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease,
+    stroke-dashoffset 0.5s ease;
 }
 
-/* 折叠状态：两箭头向中间靠拢并翻转 → ∨ ∧ 相对 */
-.logs-collapse-btn[aria-expanded='false'] .logs-icon-upper {
-  transform: translateY(5px) rotate(180deg);
-  transform-origin: 12px 5.5px;
+.collapse-icon .arrow-top {
+  transform-origin: 12px 4.5px;
 }
-.logs-collapse-btn[aria-expanded='false'] .logs-icon-lower {
-  transform: translateY(-5px) rotate(180deg);
-  transform-origin: 12px 18.5px;
+.collapse-icon .arrow-bot {
+  transform-origin: 12px 19.5px;
 }
+
+/* 展开态（默认）：箭头朝内 ↓—↑，暗示"点击可折叠" */
+.collapse-icon .dash-mid {
+  opacity: 0.2;
+}
+
+/* 折叠态：旋转 180° */
+.logs-collapse-btn[aria-expanded='false'] .arrow-top {
+  transform: rotate(180deg);
+}
+.logs-collapse-btn[aria-expanded='false'] .arrow-bot {
+  transform: rotate(180deg);
+}
+.logs-collapse-btn[aria-expanded='false'] .dash-mid {
+  opacity: 0.1;
+  stroke-dashoffset: 2;
+}
+
 /* 状态标签 */
 .status-label {
   align-items: center;
@@ -2759,5 +2759,80 @@ main {
     text-align-last: justify;
     white-space: nowrap;
     padding-right: 6px;
+  }
+}
+
+/* 避免在触屏上残留 hover 状态，整体移入 media query */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--glass-shadow);
+    background: linear-gradient(
+      180deg,
+      var(--glass-bg),
+      rgba(250, 250, 250, 0.02)
+    );
+    border-color: var(--glass-border);
+    color: var(--fg);
+    transition: all 0.3s ease;
+  }
+}
+
+/* 触屏：改用 :active，按下有反馈，松开立即复原，不残留 */
+@media (hover: none) {
+  .btn:active:not(:disabled) {
+    /* 只保留轻量反馈，去掉位移和阴影（位移在触屏上感觉"抖动"） */
+    background: linear-gradient(
+      180deg,
+      var(--glass-bg),
+      rgba(250, 250, 250, 0.02)
+    );
+    border-color: var(--glass-border);
+    color: var(--fg);
+    /* 按下瞬间响应，不需要过渡 */
+    transition: all 0.3s ease;
+  }
+}
+
+/* 鼠标/触控板 */
+@media (hover: hover) and (pointer: fine) {
+  .btn-round:hover {
+    background: linear-gradient(
+      180deg,
+      var(--glass-bg),
+      rgba(250, 250, 250, 0.005)
+    );
+    border-color: var(--glass-border);
+    /* 只过渡实际变化的属性，避免 all 触发不必要的重绘 */
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+}
+
+/* 触屏：瞬间反馈，松开立即复原 */
+@media (hover: none) {
+  .btn-round:active {
+    background: linear-gradient(
+      180deg,
+      var(--glass-bg),
+      rgba(250, 250, 250, 0.001)
+    );
+    border-color: var(--glass-border);
+    transition: none;
+  }
+}
+
+/* 仅鼠标设备启用 hover */
+@media (hover: hover) and (pointer: fine) {
+  .theme-toggle:hover {
+    transform: rotate(45deg);
+    transition: all 0.3s ease;
+  }
+}
+
+/* 触屏：:active 瞬间反馈，去掉 rotate（旋转在触屏上同样会"抖动"后粘住） */
+@media (hover: none) {
+  .theme-toggle:active {
+    transition: all 0.3s ease;
+    /* 不加 rotate，触屏上位移/旋转类效果体验差 */
   }
 }
