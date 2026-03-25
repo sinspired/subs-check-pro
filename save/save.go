@@ -123,7 +123,7 @@ func (cs *ConfigSaver) categorizeProxies() {
 // saveCategory 保存单个类别的代理
 func (cs *ConfigSaver) saveCategory(category ProxyCategory) error {
 	if len(category.Proxies) == 0 {
-		slog.Warn(fmt.Sprintf("yaml节点为空，跳过保存: %s, saveMethod: %s", category.Name, config.GlobalConfig.SaveMethod))
+		slog.Warn("节点为空，跳过保存","文件", category.Name,"保存方法" ,config.GlobalConfig.SaveMethod)
 		return nil
 	}
 	if category.Name == "history.yaml" {
