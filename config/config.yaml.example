@@ -229,6 +229,8 @@ isp-check: false
 
 # 是否开启流媒体检测，其中IP欺诈依赖重命名
 media-check: true
+# 流媒体检测超时设置(s)，建议 5-10 秒
+media-check-timeout: 5
 # iprisk: 0%;
 # openai: GPT; gemini: GM; copilot: CP;
 # Youtube: YT; tiktok: TK; netflix: NF; Disney: D+
@@ -242,9 +244,6 @@ platforms:
   # - netflix
   # - disney
   - x
-
-# 流媒体检测超时设置
-media-check-timeout: 10
 
 # 增强的位置显示开关,默认开启
 # 无法访问 CF 的 CF 节点: HK⁻¹
