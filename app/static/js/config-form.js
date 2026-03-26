@@ -568,6 +568,7 @@ const FIELD_VALIDATORS = {
   'download-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，极慢节点会阻塞测速队列，建议设为 10s' }; if (Number(v) > 15) return { level: 'warn', msg: '下载超时不宜设置过高，节点易被测死' }; return null; },
   'download-mb': v => { if (Number(v) === 0) return { level: 'info', msg: '未限制单节点下载量，高并发时可能消耗大量流量，建议 20 MB' }; if (Number(v) >= 100) return { level: 'warn', msg: '过大的下载量将对代理节点造成较大压力，建议 20 MB' }; return null; },
   'success-limit': v => { const n = Number(v); if (n > 0 && n < 5) return { level: 'info', msg: `保存上限 ${n} 较少，建议 100-200` }; if (n >= 100 && n < 200) return { level: 'info', msg: `保存上限 ${n}，视手机性能，mihomo 类 VPN 超过 100 个节点会增加分组切换压力` }; if (n > 200) return { level: 'warn', msg: `保存上限 ${n} 较多，建议不超过 200` }; return null; },
+  'media-check-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，默认为 10s' };if (Number(v) < 5) return { level: 'warn', msg: '媒体解锁超时太小，可能无法获取结果' }; if (Number(v) > 15) return { level: 'warn', msg: '媒体解锁检测超时太高，建议 5-15 秒' }; return null; },
 
   /* success-rate 校验：入参为界面显示值（0–100%），存储值为其 ÷1000 */
   'success-rate': v => {
