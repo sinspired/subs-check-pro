@@ -25,7 +25,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   const LOG_INTERVAL_FAST = 1000 // 检测中：日志刷新 1秒
   const LOG_INTERVAL_SLOW = 3000 // 空闲时：日志刷新 3秒
 
-  const MAX_LOG_LINES = 1000
+  const MAX_LOG_LINES = 100
   const MAX_FAILURE_DURATION_MS = 10000
   const ACTION_CONFIRM_TIMEOUT_MS = 600000
   const THEME_KEY = 'theme'
@@ -2648,10 +2648,23 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       window.open('/analysis', '_blank', 'noopener,noreferrer');
     });
 
-    els.downloadLogsBtnSide?.addEventListener('click', () => {
+    els.downloadLogsBtnSide?.addEventListener('click', async () => {
+      // const r = await sfetch(API.logs)
+      // if (!r.ok) return
+
+      // let lines = []
+      // const p = r.payload
+      // if (Array.isArray(p?.logs)) lines = p.logs.map(String)
+      // else if (typeof p?.logs === 'string') lines = p.logs.split('\n')
+      // else if (typeof p === 'string') lines = p.split('\n')
+      // else lines = [JSON.stringify(p)]
+      // if (!lines) return showToast('日志为空', 'warn')
+      // const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' })
+
       const t = els.logContainer?.innerText || ''
       if (!t) return showToast('日志为空', 'warn')
       const blob = new Blob([t], { type: 'text/plain;charset=utf-8' })
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

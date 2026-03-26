@@ -28,7 +28,7 @@ import (
 const (
 	DefaultPort     = ":8199"
 	LogTimeFormat   = "2006-01-02 15:04:05"
-	MaxLogLines     = 2000
+	MaxLogLines     = 100
 	ShareDirName    = "more"
 	TemplatePattern = "templates/*.html"
 	StaticPrefix    = "/static"
