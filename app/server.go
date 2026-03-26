@@ -473,8 +473,9 @@ func loadHistoricalCheckRate() {
 
 	var report struct {
 		CheckInfo struct {
-			CheckCountRaw    string `yaml:"check_count_raw"`
-			CheckDurationRaw int64  `yaml:"check_duration_raw"` // 已统一为秒
+			CheckCountRaw     string `yaml:"check_count_raw"`
+			CheckDurationRaw  int64  `yaml:"check_duration_raw"`
+			CheckSuccessLimit int64  `yaml:"check_success_limit"`
 		} `yaml:"check_info"`
 	}
 	if err := yaml.Unmarshal(data, &report); err != nil {
@@ -485,6 +486,9 @@ func loadHistoricalCheckRate() {
 	durSec := float64(report.CheckInfo.CheckDurationRaw)
 	if count > 0 && durSec > 0 {
 		rate := count / durSec
+		if report.CheckInfo.CheckSuccessLimit > 0 && config.GlobalConfig.SuccessLimit == 0 {
+			rate *= 0.85
+		}
 		check.SetHistoricalRate(rate)
 		slog.Debug("历史检测速率加载", "rate", fmt.Sprintf("%.1f 节点/秒", rate))
 	}
