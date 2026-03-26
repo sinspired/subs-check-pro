@@ -195,6 +195,7 @@ const SCHEMA = [
           {
             key: 'media-check', label: '流媒体检测', type: 'toggle', hint: '检测流媒体和 AI 服务解锁情况'
           },
+          { key: 'media-check-timeout', label: '检测超时 (s)', type: 'number', min: 0, max: 30, placeholder: '10', hint: '流媒体、AI解锁检测超时，建议 5-10s' },
           {
             key: 'platforms', label: '检测平台', type: 'chips',
             options: ['iprisk', 'openai', 'gemini', 'copilot', 'youtube', 'tiktok', 'netflix', 'disney', 'x'],
@@ -204,7 +205,6 @@ const SCHEMA = [
               "openai: GPT", "gemini: GM", "copilot: CP", "Youtube: YT", "tiktok: TK", "netflix: NF", "Disney: D+", "X: Twitter"
             ]
           },
-          { key: 'media-check-timeout', label: '检测超时 (s)', type: 'number', min: 0, max: 30, placeholder: '10', hint: '流媒体、AI解锁检测超时，建议 5-10s' },
         ],
       },
       {
@@ -1087,6 +1087,22 @@ function mkChips(field, values) {
     chip.append(cb, document.createTextNode(opt));
     wrap.appendChild(chip);
   }
+
+  // 重置按钮，挂到 wrap 上供 mkField 取用
+  const resetBtn = el('button', {
+    type: 'button',
+    class: 'cfg-chips-reset',
+    title: '清空所有选择',
+    textContent: '↺',
+  });
+  resetBtn.addEventListener('click', () => {
+    wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = false;
+      cb.closest('.cfg-chip')?.classList.remove('active');
+    });
+  });
+  wrap._resetBtn = resetBtn;
+
   return wrap;
 }
 
@@ -1572,6 +1588,14 @@ function mkField(fieldDef, value) {
     const toggle = ctrl?._wrapToggle;
     if (toggle) {
       row.querySelector('.cfg-label-row')?.appendChild(toggle);
+    }
+  }
+
+  // chips：将重置按钮插入 label 行右侧
+  if (fieldDef.type === 'chips') {
+    const resetBtn = ctrl?._resetBtn;
+    if (resetBtn) {
+      row.querySelector('.cfg-label-row')?.appendChild(resetBtn);
     }
   }
 
