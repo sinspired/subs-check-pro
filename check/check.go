@@ -654,7 +654,7 @@ func (pc *ProxyChecker) runSpeedStage(ctx context.Context, cancel context.Cancel
 					job.Close()
 					continue
 				}
-				getBytes := func() uint64 { return job.Client.Transport.BytesRead.Load() }
+				getBytes := func() uint64 { return job.Client.BytesRead.Load() }
 				speed, _, err := platform.CheckSpeed(job.Client.Client, Bucket, getBytes)
 				success := err == nil && speed >= config.GlobalConfig.MinSpeed
 				if job.speedMarked.CompareAndSwap(false, true) {
@@ -1023,10 +1023,12 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 
 type ProxyClient struct {
 	*http.Client
-	Transport *StatsTransport
-	ctx       context.Context
-	cancel    context.CancelFunc
-	mProxy    constant.Proxy
+	baseTransport *http.Transport
+	BytesRead     atomic.Uint64
+	BytesWritten  atomic.Uint64
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mProxy        constant.Proxy
 }
 
 // CreateClient 创建独立的代理客户端
@@ -1047,7 +1049,6 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 	// 捕获 ctx 用于闭包，防止 pc 指针后续变化（防御性，避免某次测试出现的nil指针错误）
 	clientCtx := pc.ctx
 
-	statsTransport := &StatsTransport{}
 	networkLimitDefault := true
 
 	baseTransport := &http.Transport{
@@ -1088,8 +1089,8 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 
 			return &countingConn{
 				Conn:         rawConn,
-				readCounter:  &statsTransport.BytesRead,
-				writeCounter: &statsTransport.BytesWritten,
+				readCounter:  &pc.BytesRead,
+				writeCounter: &pc.BytesWritten,
 				networkLimit: networkLimitDefault,
 			}, nil
 		},
@@ -1100,12 +1101,10 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 		MaxIdleConnsPerHost: 5,
 	}
 
-	statsTransport.Base = baseTransport
-	pc.Transport = statsTransport
-
+	pc.baseTransport = baseTransport
 	pc.Client = &http.Client{
 		Timeout:   time.Duration(config.GlobalConfig.Timeout) * time.Millisecond,
-		Transport: statsTransport,
+		Transport: baseTransport,
 	}
 
 	return pc
@@ -1131,42 +1130,21 @@ func (pc *ProxyClient) Close() {
 	}
 
 	// 关闭 HTTP 连接池
-	// 这里无法关闭mihomo建立的连接
 	if pc.Client != nil {
 		pc.CloseIdleConnections()
 	}
 
-	// 统计数据：同时累加 BytesRead 和 BytesWritten（避免漏计上行）
-	if pc.Transport != nil {
-		bytesRead := pc.Transport.BytesRead.Load()
-		bytesWritten := pc.Transport.BytesWritten.Load()
-
-		if bytesRead > 0 {
-			DOWN.Add(bytesRead)
-			TotalBytes.Add(bytesRead)
-		}
-		if bytesWritten > 0 {
-			UP.Add(bytesWritten)
-			TotalBytes.Add(bytesWritten)
-		}
-
-		if pc.Transport.Base != nil {
-			// 关闭mihomo连接，mihomo的bug？有时间去看一下mihomo代码
-			pc.Transport.Base.CloseIdleConnections()
-		}
+	// 流量统计
+	bytesRead := pc.BytesRead.Load()
+	bytesWritten := pc.BytesWritten.Load()
+	if bytesRead > 0 {
+		DOWN.Add(bytesRead)
+		TotalBytes.Add(bytesRead)
 	}
-}
-
-// StatsTransport 是一个 http.RoundTripper 的封装，用于统计从响应体中读取的字节数。
-type StatsTransport struct {
-	Base         *http.Transport
-	BytesRead    atomic.Uint64
-	BytesWritten atomic.Uint64
-}
-
-// RoundTrip 为 StatsTransport 实现 http.RoundTripper 接口。
-func (s *StatsTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return s.Base.RoundTrip(req)
+	if bytesWritten > 0 {
+		UP.Add(bytesWritten)
+		TotalBytes.Add(bytesWritten)
+	}
 }
 
 // countingConn 包裹 net.Conn，在网络连接层统计读/写字节数。
