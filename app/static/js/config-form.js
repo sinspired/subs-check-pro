@@ -16,6 +16,35 @@
  *   · MutationObserver 监听 editorContainer class 变化，同步按钮外观
  */
 
+/* ═══════════════════════════ 模块级共享状态 ═══════════════════════════ */
+let _cfg = {};
+const _built = new Set();
+
+let _leftTab = null;
+let _rightTab = null;
+let _splitOn = false;
+let _pendingSlot = null;
+let _lastTab = null;
+let _resizeTimer = null;
+
+// 是否记住各 tab 的滚动位置（true = 记住，false = 每次回到顶部）
+let _rememberScroll = true;
+// 各 tab 滚动位置缓存，key = tabId，value = scrollTop
+const _scrollCache = new Map();
+
+
+/* ════════════════════════════════════════════════════════════
+   宽度计算
+════════════════════════════════════════════════════════════ */
+const SIDEBAR_W = 160;
+const LAYOUT_GAPS = 16;          // ← 补回这行
+const MIN_PANEL_W_SHOW = 280;
+const MIN_PANEL_W_AUTO = 340;
+
+function _editorW() { return (window.innerWidth - SIDEBAR_W - LAYOUT_GAPS) / 2; }
+function _canShowSplitBtn() { return _editorW() >= MIN_PANEL_W_SHOW * 2; }
+function _canSplit() { return _editorW() >= MIN_PANEL_W_AUTO * 2; }
+
 const SCHEMA = [
   /* ── 1. 任务 ──────────────────── */
   {
@@ -471,56 +500,6 @@ const SCHEMA = [
   },
 ];
 
-/* ════════════════════════════════════════════════════════════
-   并发估算工具（对应后端 NewLogDecay / NewExpDecay / NewPowerDecay）
-════════════════════════════════════════════════════════════ */
-
-const _logDecay = (amp, k, base) => x => { const v = Math.log(1 + k * x); return base + amp * (v > 0 ? v / (1 + v) : 0); };
-const _expDecay = (amp, b, base) => x => base + amp * (1 - Math.exp(-b * x));
-const _powerDecay = (amp, p, alpha, base) => x => { if (x <= 0) return base; const xp = x ** p; return base + amp * xp / (xp + alpha); };
-const _roundInt = v => Math.round(v);
-
-/** 从表单读取 number 字段当前值，找不到则返回 fallback */
-function _readNum(key, fallback = 0) {
-  const inp = document.querySelector(`input[type="number"][data-key="${key}"]`);
-  const v = parseFloat(inp?.value);
-  return (isNaN(v) || v < 0) ? fallback : v;
-}
-
-/**
- * _estimateAuto — 根据 concurrent 基准估算三个阶段的自动并发数。
- * 对应后端 NewProxyChecker 中的自动分支，proxyCount 未知时以 concurrent 代替。
- *
- * @returns {{ alive: number, speed: number, media: number, base: number }}
- */
-function _estimateAuto() {
-  const base = Math.max(1, _readNum('concurrent', 20));
-
-  const alive = _roundInt(_logDecay(400, 0.005, 400)(base));
-
-  // 测速：有 total-speed-limit 时按带宽/速度比估算，否则用 PowerDecay
-  const totalLimit = _readNum('total-speed-limit', 0);
-  const minSpeedKB = Math.max(1, _readNum('min-speed', 128));
-  let speed;
-  if (totalLimit > 0) {
-    const r = minSpeedKB / 1024;          // KB/s → MB/s
-    speed = Math.max(1, Math.min(Math.round(totalLimit / r), base));
-  } else {
-    speed = Math.min(base, _roundInt(_powerDecay(32, 1.1, 32, 1)(base)));
-  }
-
-  const media = _roundInt(_expDecay(400, 0.001, 100)(base));
-
-  return { alive, speed, media, base };
-}
-
-/** 判断三个并发字段中是否有任意一个为 0（触发联动自动模式）*/
-function _anyAutoMode() {
-  return _readNum('alive-concurrent') === 0
-    || _readNum('speed-concurrent') === 0
-    || _readNum('media-concurrent') === 0;
-}
-
 /* ═══════════════════════════ 字段校验规则 ═══════════════════════════ */
 const FIELD_VALIDATORS = {
   'concurrent': v => {
@@ -568,7 +547,7 @@ const FIELD_VALIDATORS = {
   'download-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，极慢节点会阻塞测速队列，建议设为 10s' }; if (Number(v) > 15) return { level: 'warn', msg: '下载超时不宜设置过高，节点易被测死' }; return null; },
   'download-mb': v => { if (Number(v) === 0) return { level: 'info', msg: '未限制单节点下载量，高并发时可能消耗大量流量，建议 20 MB' }; if (Number(v) >= 100) return { level: 'warn', msg: '过大的下载量将对代理节点造成较大压力，建议 20 MB' }; return null; },
   'success-limit': v => { const n = Number(v); if (n > 0 && n < 5) return { level: 'info', msg: `保存上限 ${n} 较少，建议 100-200` }; if (n >= 100 && n < 200) return { level: 'info', msg: `保存上限 ${n}，视手机性能，mihomo 类 VPN 超过 100 个节点会增加分组切换压力` }; if (n > 200) return { level: 'warn', msg: `保存上限 ${n} 较多，建议不超过 200` }; return null; },
-  'media-check-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，默认为 10s' };if (Number(v) < 5) return { level: 'warn', msg: '媒体解锁超时太小，可能无法获取结果' }; if (Number(v) > 15) return { level: 'warn', msg: '媒体解锁检测超时太高，建议 5-15 秒' }; return null; },
+  'media-check-timeout': v => { if (Number(v) === 0) return { level: 'warn', msg: '未设置，默认为 10s' }; if (Number(v) < 5) return { level: 'warn', msg: '媒体解锁超时太小，可能无法获取结果' }; if (Number(v) > 15) return { level: 'warn', msg: '媒体解锁检测超时太高，建议 5-15 秒' }; return null; },
 
   /* success-rate 校验：入参为界面显示值（0–100%），存储值为其 ÷1000 */
   'success-rate': v => {
@@ -668,6 +647,74 @@ const _CRON_SEGMENTS = [
   { label: '星期', title: '星期 (0–7，0=周日)' },
 ];
 
+/* ── Cron 字段元数据（复用于校验提示） ── */
+const _CRON_FIELD_RANGES = [
+  { name: '分钟', min: 0, max: 59 },
+  { name: '小时', min: 0, max: 23 },
+  { name: '日期', min: 1, max: 31 },
+  { name: '月份', min: 1, max: 12 },
+  { name: '星期', min: 0, max: 7 },
+];
+
+/* ════════════════════════════════════════════════════════════
+   并发估算工具（对应后端 NewLogDecay / NewExpDecay / NewPowerDecay）
+════════════════════════════════════════════════════════════ */
+
+const _logDecay = (amp, k, base) => x => { const v = Math.log(1 + k * x); return base + amp * (v > 0 ? v / (1 + v) : 0); };
+const _expDecay = (amp, b, base) => x => base + amp * (1 - Math.exp(-b * x));
+const _powerDecay = (amp, p, alpha, base) => x => { if (x <= 0) return base; const xp = x ** p; return base + amp * xp / (xp + alpha); };
+const _roundInt = v => Math.round(v);
+
+/** 从表单读取 number 字段当前值，找不到则返回 fallback */
+function _readNum(key, fallback = 0) {
+  const inp = document.querySelector(`input[type="number"][data-key="${key}"]`);
+  const v = parseFloat(inp?.value);
+  return (isNaN(v) || v < 0) ? fallback : v;
+}
+
+/**
+ * _estimateAuto — 根据 concurrent 基准估算三个阶段的自动并发数。
+ * 对应后端 NewProxyChecker 中的自动分支，proxyCount 未知时以 concurrent 代替。
+ *
+ * @returns {{ alive: number, speed: number, media: number, base: number }}
+ */
+function _estimateAuto() {
+  // 优先从 _cfg 读（renderConfigForm 后始终最新），DOM 作为兜底（用户正在编辑时）
+  const _num = (key, fallback = 0) => {
+    const cfgVal = parseFloat(_cfg?.[key]);
+    if (!isNaN(cfgVal) && cfgVal >= 0) return cfgVal;
+    return _readNum(key, fallback);
+  };
+
+  const base = Math.max(1, _num('concurrent', 20));
+  const totalLimit = _num('total-speed-limit', 0);
+  const minSpeedKB = Math.max(1, _num('min-speed', 128));
+
+  const alive = _roundInt(_logDecay(400, 0.005, 400)(base));
+
+  let speed;
+  if (totalLimit > 0) {
+    const r = minSpeedKB / 1024;
+    speed = Math.max(1, Math.min(Math.round(totalLimit / r), base));
+  } else {
+    speed = Math.min(base, _roundInt(_powerDecay(32, 1.1, 32, 1)(base)));
+  }
+
+  const media = _roundInt(_expDecay(400, 0.001, 100)(base));
+  return { alive, speed, media, base };
+}
+
+/** 判断三个并发字段中是否有任意一个为 0（触发联动自动模式）*/
+function _anyAutoMode() {
+  const _num = key => {
+    const cfgVal = parseFloat(_cfg?.[key]);
+    return (!isNaN(cfgVal) && cfgVal >= 0) ? cfgVal : _readNum(key, 0);
+  };
+  return _num('alive-concurrent') === 0
+    || _num('speed-concurrent') === 0
+    || _num('media-concurrent') === 0;
+}
+
 
 /* ═══════════════════════════ Cron 值解析 ═══════════════════════════ */
 function _parseCronValue(v) {
@@ -679,36 +726,6 @@ function _parseCronValue(v) {
   const valid = _isValidCron(expr);
   return { raw, commented, expr, parts, valid };
 }
-
-/* ═══════════════════════════ 模块级共享状态 ═══════════════════════════ */
-let _cfg = {};
-const _built = new Set();
-
-let _leftTab = null;
-let _rightTab = null;
-let _splitOn = false;
-let _pendingSlot = null;
-let _lastTab = null;
-let _resizeTimer = null;
-
-// 是否记住各 tab 的滚动位置（true = 记住，false = 每次回到顶部）
-let _rememberScroll = true;
-// 各 tab 滚动位置缓存，key = tabId，value = scrollTop
-const _scrollCache = new Map();
-
-
-/* ════════════════════════════════════════════════════════════
-   宽度计算
-════════════════════════════════════════════════════════════ */
-const SIDEBAR_W = 160;
-const LAYOUT_GAPS = 16;          // ← 补回这行
-const MIN_PANEL_W_SHOW = 280;
-const MIN_PANEL_W_AUTO = 340;
-
-function _editorW() { return (window.innerWidth - SIDEBAR_W - LAYOUT_GAPS) / 2; }
-function _canShowSplitBtn() { return _editorW() >= MIN_PANEL_W_SHOW * 2; }
-function _canSplit() { return _editorW() >= MIN_PANEL_W_AUTO * 2; }
-
 
 /* ════════════════════════════════════════════════════════════
    嵌套对象 ↔ 点分隔键 互转
@@ -1569,14 +1586,6 @@ function mkField(fieldDef, value) {
   return row;
 }
 
-/* ── Cron 字段元数据（复用于校验提示） ── */
-const _CRON_FIELD_RANGES = [
-  { name: '分钟', min: 0, max: 59 },
-  { name: '小时', min: 0, max: 23 },
-  { name: '日期', min: 1, max: 31 },
-  { name: '月份', min: 1, max: 12 },
-  { name: '星期', min: 0, max: 7 },
-];
 
 /**
  * _validateCronSegment — 校验 Cron 单个段（不含逗号）
