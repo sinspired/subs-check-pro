@@ -223,6 +223,7 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 		speedText = "0"
 	}
 	sb.WriteString("  check_min_speed: " + speedText + "\n")
+	sb.WriteString("  check_success_limit: " + strconv.FormatInt(int64(config.GlobalConfig.SuccessLimit), 10) + "\n")
 	sb.WriteString("\n")
 
 	// 2. 全局统计 (可视化友好结构)

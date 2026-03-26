@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sinspired/subs-check-pro/config"
 )
 
 // ETASeconds 供 /api/status 读取：-1=计算中, 0=空闲/完成, >0=剩余秒数
@@ -68,7 +70,28 @@ func UpdateETA() {
 		return
 	}
 
-	remaining := total - done
+	var remaining int64
+	limit := int64(config.GlobalConfig.SuccessLimit)
+	if limit > 0 {
+		got := int64(Available.Load())
+		if got >= limit {
+			ETASeconds.Store(0)
+			return
+		}
+		// 还差几个可用节点 / 当前可用节点产出速率
+		// 用 Progress 推进速率折算：remaining 等价于还需处理多少总节点
+		// 避免可用率为0时除零：用 done 兜底
+		if got > 0 {
+			// 平均每产出1个可用节点需要处理多少总节点
+			nodesPerAvail := float64(done) / float64(got)
+			remaining = int64(math.Ceil(float64(limit-got) * nodesPerAvail))
+		} else {
+			remaining = total - done // 冷启动兜底
+		}
+	} else {
+		remaining = total - done
+	}
+
 	pct := float64(done) / float64(total) * 100
 
 	// 滑动窗口实时速率
@@ -99,12 +122,12 @@ func UpdateETA() {
 		switch {
 		case rtRate <= 0:
 			finalRate = hr
-		case pct < 15:
-			if rtRate > hr {
-				finalRate = hr // 冷启动保守：取慢值防高估
-			}
 		default:
-			w := 0.3 + (pct-15)/85*0.7
+			// 统一用线性融合，冷启动时历史权重更高（0.8→0.3），平滑过渡
+			// pct=0   → w=0.2（历史占80%）
+			// pct=15  → w=0.35
+			// pct=100 → w=1.0（完全实时）
+			w := 0.2 + (pct/100)*0.8
 			if w > 1 {
 				w = 1
 			}
