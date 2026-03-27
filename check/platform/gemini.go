@@ -49,10 +49,11 @@ var euMembers = map[string]bool{
 }
 
 // blockedRegions Gemini 不运营的地区（ISO 3166-1 alpha-3）
+// Google 于 2026 年 3 月 16-17 日左右 开始逐步向香港所有用户开放 Gemini Web 应用，随后会开放移动 App。
 var blockedRegions = map[string]bool{
 	"CHN": true, "RUS": true, "BLR": true,
 	"CUB": true, "IRN": true, "PRK": true,
-	"SYR": true, "HKG": true, "MAC": true,
+	"SYR": true, "HKG": false, "MAC": false,
 }
 
 // https://github.com/clash-verge-rev/clash-verge-rev/blob/main/src-tauri/src/cmd/media_unlock_checker/gemini.rs
@@ -74,7 +75,7 @@ func CheckGemini(client *http.Client) (GeminiStatus, error) {
 		return GeminiStatus{}, nil
 	}
 
-	limitReader := io.LimitReader(resp.Body, 1024*1024) 
+	limitReader := io.LimitReader(resp.Body, 1024*1024)
 
 	body, err := io.ReadAll(limitReader)
 	if err != nil && err != io.EOF {
