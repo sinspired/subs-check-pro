@@ -212,7 +212,10 @@ const SCHEMA = [
         fields: [
           { key: 'keep-success-proxies', label: '保留历次成功节点', type: 'toggle', hint: '防上游更新丢失节点，建议开启' },
           { key: 'rename-node', label: '重命名节点', type: 'toggle', hint: '根据节点 IP 归属地自动重命名' },
-          { key: 'enhanced-tag', label: '增强位置标签', type: 'toggle', hint: '添加形如 KR¹-US⁰，SG² 的角标，精确位置' },
+          {
+            key: 'enhanced-tag', label: '增强位置标签', type: 'toggle', hint: '添加 KR¹-US⁰，SG² 类角标',
+            links: [{ label: '标签说明', href: 'https://github.com/sinspired/subs-check-pro/blob/main/config/config.yaml.example#L248-L254', icon: 'github' }],
+          },
           { key: 'isp-check', label: 'ISP 类型检测', type: 'toggle', hint: '检测 isp 类型，比如: [原生|住宅]、[广播|机房]' },
           { key: 'drop-bad-cf-nodes', label: '丢弃 CF 不可达', type: 'toggle', hint: '可能误杀，谨慎开启' },
           { key: 'ipv6', label: '启用 IPv6', type: 'toggle', hint: '建议关闭' },
