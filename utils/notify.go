@@ -270,7 +270,15 @@ func GetCurrentTime() string {
 // SendNotifyCheckResult 发送节点检查结果通知
 func SendNotifyCheckResult(length int, checkTraffic string) {
 	title := config.GlobalConfig.NotifyTitle
-	body := fmt.Sprintf("✅ 可用节点：%d\n📊 消耗流量：%s\n🕒 %s", length, checkTraffic, GetCurrentTime())
+	var body string
+	if checkTraffic != "" {
+		body = fmt.Sprintf("✅ 可用节点：%d\n📊 消耗流量：%s\n🕒 %s",
+			length, checkTraffic, GetCurrentTime())
+	} else {
+		body = fmt.Sprintf("✅ 可用节点：%d\n⚠️ 网络异常或手动取消%s\n🕒 %s",
+			length, GetCurrentTime())
+	}
+
 	broadcastNotify(NotifyNodeStatus, title, body, "")
 }
 

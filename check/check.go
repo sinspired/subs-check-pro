@@ -816,6 +816,7 @@ func needsCF(platforms []string) bool {
 
 // mediaCheck 根据平台类型分发到相应的检测函数。
 func mediaCheck(job *ProxyJob, plat string, db *maxminddb.Reader, ctx context.Context) {
+	// TODO: 不涉及网络下载的任务并发处理
 
 	// 设置流媒体/AI检测独立的超时时间
 	mediaTimeout := config.GlobalConfig.MediaCheckTimeout
