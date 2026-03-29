@@ -8,7 +8,6 @@ subs-check-pro 会在测试完后保存三个文件到 `output/sub` 目录中；
 
 ![file-hub](https://raw.githubusercontent.com/sinspired/subs-check-pro/main/doc/images/file-hub.png)
 
-
 ## 🔐 使用分享码分享（推荐）
 
 设置 `share-password`，使用分享码进行分享。可分享 `/output/sub` 目录的文件，比如 `all.yaml`、`mihomo.yaml`：
