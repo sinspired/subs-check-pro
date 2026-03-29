@@ -1,18 +1,6 @@
 /**
  * cfg-quickpreview.js — 快速配置预览浮动面板
  *
- * 用法（在 admin.js 末尾）：
- *   import { initQuickPreview } from './cfg-quickpreview.js';
- *   // 在登录成功、获得 sessionKey 之后调用：
- *   initQuickPreview(() => sessionKey);
- *
- * HTML 依赖（加在 #reloadCfg 按钮前）：
- *   <button id="cfgPreviewBtn" class="btn btn-round" disabled title="快速预览关键配置">
- *     <svg class="btn-icon icon-md-btn" ...>...</svg>
- *   </button>
- *
- * CSS 依赖：在 admin-cfg-form.css 末尾追加 cfg-quickpreview.css 的内容，
- *           或单独 <link> 引入。
  */
 
 import { FIELD_VALIDATORS } from './config-form.js';

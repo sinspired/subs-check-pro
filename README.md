@@ -78,10 +78,15 @@ High-performance proxy subscription checker.
 
 ### ✨ 重新设计的 WebUI管理界面
 
+`http://localhost:8199/admin`
+
 ![login](./doc/images/login-white.png)
 ![WebUI](./doc/images/WebUI.png)
 
 ### 📊 检测结果分析报告
+
+`http://localhost:8199/analysis`
+
 ![analysis](./doc/images/analysis.png)
 
 ### ⚡新增分享菜单项，自动生成singbox订阅，支持一键分享
@@ -99,7 +104,17 @@ High-performance proxy subscription checker.
 > 首次运行会在当前目录生成默认配置文件。完整安装与部署见 Wiki：
 > [安装与部署](https://github.com/sinspired/subs-check-pro/wiki/Deployment)
 
-### 二进制文件运行
+### 🌏 WebUI 控制面板
+
+WebUI 集成了配置编辑、订阅分享、订阅管理，内置文件服务，检测结果分析报告，日志查看等功能，请务必使用 WebUI 作为主要管理入口
+
+请主动修改 `config.yaml` `api-key` 作为 WebUI 访问密码，如未设置，请查看终端日志获取 `api-key`
+
+浏览器输入 `http://localhost:8199/admin` 或 `http://127.0.0.1:8199/admin` 访问 WebUI
+
+注意 `8199` 为默认监听端口，如已修改，请替换为实际端口
+
+### 📦 二进制文件运行
 
 下载 Releases 中适合的版本，解压后直接运行：
 
@@ -107,7 +122,11 @@ High-performance proxy subscription checker.
 ./subs-check-pro.exe -f ./config/config.yaml
 ```
 
-### Docker 运行（最简）
+记录 `api-key`，访问 WebUi
+
+`http://localhost:8199/admin`
+
+### 🐳 Docker 运行（最简）
 
 ```bash
 docker run -d \
@@ -119,6 +138,10 @@ docker run -d \
   --restart always \
   ghcr.io/sinspired/subs-check-pro:latest
 ```
+
+💡 记录 `api-key`，访问 WebUi
+
+`http://localhost:8199/admin`
 
 > 代理设置见 Wiki：[系统与 GitHub 代理](https://github.com/sinspired/subs-check-pro/wiki/System-Proxy)
 >

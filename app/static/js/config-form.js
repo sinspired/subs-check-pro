@@ -37,7 +37,7 @@ const _scrollCache = new Map();
    宽度计算
 ════════════════════════════════════════════════════════════ */
 const SIDEBAR_W = 160;
-const LAYOUT_GAPS = 16;          // ← 补回这行
+const LAYOUT_GAPS = 16;
 const MIN_PANEL_W_SHOW = 280;
 const MIN_PANEL_W_AUTO = 340;
 
