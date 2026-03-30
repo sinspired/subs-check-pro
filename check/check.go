@@ -805,6 +805,7 @@ func (pc *ProxyChecker) runMediaStageAndCollect(db *maxminddb.Reader, ctx contex
 
 	// 等待所有 worker 完成，再关闭 pc.resultChan，让 collector 退出
 	wg.Wait()
+	ProcessResults.Store(true)
 	close(pc.resultChan)
 	collectorWg.Wait()
 
