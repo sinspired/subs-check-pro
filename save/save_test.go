@@ -10,6 +10,10 @@ import (
 )
 
 func TestSaveCategoryMihomoFallsBackWithoutSubStore(t *testing.T) {
+	// 防止 GlobalConfig 为 nil 导致 panic
+	if config.GlobalConfig == nil {
+		config.GlobalConfig = &config.Config{}
+	}
 	original := *config.GlobalConfig
 	t.Cleanup(func() {
 		*config.GlobalConfig = original
@@ -36,7 +40,15 @@ func TestSaveCategoryMihomoFallsBackWithoutSubStore(t *testing.T) {
 
 	var gotFile string
 	var gotData []byte
+
+	// 适配重构后的 ConfigSaver 结构
 	saver := &ConfigSaver{
+		methodName: "mock_test",
+		// 直接将要测试的类别注入 categories
+		categories: []ProxyCategory{
+			{Name: "mihomo.yaml", Proxies: proxies},
+		},
+		// 拦截 saveMethod 来验证输出
 		saveMethod: func(data []byte, filename string) error {
 			gotFile = filename
 			gotData = append([]byte(nil), data...)
@@ -44,8 +56,9 @@ func TestSaveCategoryMihomoFallsBackWithoutSubStore(t *testing.T) {
 		},
 	}
 
-	if err := saver.saveCategory(ProxyCategory{Name: "mihomo.yaml", Proxies: proxies}); err != nil {
-		t.Fatalf("saveCategory returned error: %v", err)
+	// 触发整个保存与生成流程
+	if err := saver.Save(); err != nil {
+		t.Fatalf("Save returned error: %v", err)
 	}
 
 	if gotFile != "mihomo.yaml" {
