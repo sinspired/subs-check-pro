@@ -990,8 +990,12 @@ import { initQuickPreview } from './cfg-quickpreview.js';
         } else if (!etaText) {
           els.statusEl.innerHTML = `<span>正在保存检测结果...</span>`
           els.statusEl.className = 'muted status-label status-process'
-        } else {
+        } else if (etaText) {
           els.statusEl.innerHTML = `${checking_SPINNER}<span>运行中, 预计剩余: ${etaText}</span>`
+          els.statusEl.className = 'muted status-label status-checking'
+        } else {
+          // stage 模式：eta=0 且仍在检测，只显示 spinner + 阶段名
+          els.statusEl.innerHTML = `${checking_SPINNER}<span>${stepName}即将完成...</span>`
           els.statusEl.className = 'muted status-label status-checking'
         }
       } else if (lastChecked || (processed >= total && total > 0)) {

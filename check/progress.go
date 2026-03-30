@@ -114,8 +114,14 @@ func (pt *ProgressTracker) FinishAliveStage() {
 		pt.Finalize()
 		return
 	}
-	// 切换为测速阶段
-	pt.currentStage.Store(1)
+
+	// 根据配置动态决定下一个阶段
+	if speedON {
+		pt.currentStage.Store(1) // 进入测速阶段
+	} else if mediaON {
+		pt.currentStage.Store(2) // 跳过测速，直接进入媒体检测阶段
+	}
+
 	pt.refresh()
 }
 
@@ -246,26 +252,17 @@ func (pt *ProgressTracker) refreshDynamic() {
 		finalPercent = 100.0
 	}
 
-	// 为了兼容 GUI/CLI 显示，我们将百分比映射回 realTotal
+	// 为了兼容 GUI/CLI 显示，将百分比映射回 realTotal
 	// ProxyCount 存储当前的“有效总数”
 	ProxyCount.Store(uint32(realTotal))
 
-	mappedProgress := uint32(math.Ceil(finalPercent / 100.0 * float64(realTotal)))
-	if mappedProgress > uint32(realTotal) {
-		mappedProgress = uint32(realTotal)
-	}
+	mappedProgress := min(uint32(math.Ceil(finalPercent/100.0*float64(realTotal))), uint32(realTotal))
 	Progress.Store(mappedProgress)
 }
 
-// refreshStage 修复后的分阶段算法：分母动态切换
+// refreshStage 分阶段算法：分母动态切换
 func (pt *ProgressTracker) refreshStage() {
-	// TODO: 仅测活模式，不应该有测速阶段，目前存在前端适配bug
 	stage := int(pt.currentStage.Load())
-
-	// 处理停止信号下的显示文字
-	if Successlimited.Load() {
-		CurrentStepName.Store("收尾")
-	}
 
 	switch stage {
 	case 0: // 存活检测阶段
@@ -328,6 +325,11 @@ func (pt *ProgressTracker) refreshStage() {
 
 		ProxyCount.Store(total)
 		Progress.Store(done)
+	}
+
+	// 处理停止信号下的显示文字
+	if ProcessResults.Load() {
+		CurrentStepName.Store("保存中")
 	}
 }
 
