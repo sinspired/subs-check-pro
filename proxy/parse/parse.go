@@ -53,17 +53,17 @@ func ParseSubscriptionData(data []byte, subURL string) ([]map[string]any, error)
 		case map[string]any:
 			// Clash 格式
 			if proxies, ok := val["proxies"].([]any); ok {
-				slog.Info("解析成功", "订阅", subURL, "格式", "Mihomo/Clash")
+				slog.Debug("解析成功", "订阅", subURL, "格式", "Mihomo/Clash")
 				return convertListToNodes(proxies), nil
 			}
 			// Sing-Box 纯 JSON 格式
 			if outbounds, ok := val["outbounds"].([]any); ok {
-				slog.Info("解析成功", "订阅", subURL, "格式", "Sing-Box(JSON)")
+				slog.Debug("解析成功", "订阅", subURL, "格式", "Sing-Box(JSON)")
 				return ConvertSingBoxOutbounds(outbounds), nil
 			}
 			// 非标准 JSON (协议名为 Key, e.g. {"vless": [...], "hysteria": [...]})
 			if nodes := ConvertProtocolMap(val); len(nodes) > 0 {
-				slog.Info("解析成功", "订阅", subURL, "格式", "Non-Standard JSON", "数量", len(nodes))
+				slog.Debug("解析成功", "订阅", subURL, "格式", "Non-Standard JSON", "数量", len(nodes))
 				return nodes, nil
 			}
 		case []any:
@@ -71,7 +71,7 @@ func ParseSubscriptionData(data []byte, subURL string) ([]map[string]any, error)
 				return nil, nil
 			}
 			if _, ok := val[0].(string); ok {
-				slog.Info("解析成功", "订阅", subURL, "格式", "String List")
+				slog.Debug("解析成功", "订阅", subURL, "格式", "String List")
 				strList := make([]string, 0, len(val))
 				for _, v := range val {
 					if s, ok := v.(string); ok {

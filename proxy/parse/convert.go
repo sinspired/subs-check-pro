@@ -298,7 +298,7 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
 
 			// 标准转换 ConvertsV2Ray 处理标准协议链接
 			if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
-				slog.Info("标准转换成功", "数量", len(nodes))
+				slog.Debug("标准转换成功", "数量", len(nodes))
 				for i, node := range nodes {
 					nodeJSON, _ := json.Marshal(node)
 					slog.Debug("标准节点", "index", i, "node", string(nodeJSON))
@@ -308,7 +308,8 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
 			}
 			// 扩展转换 ConvertsV2RayExtra 处理非标准/扩展协议链接
 			if nodes, err := ConvertsV2RayExtra(data); err == nil && len(nodes) > 0 {
-				slog.Info("扩展转换成功", "数量", len(nodes))
+				slog.Debug("扩展转换成功", "数量", len(nodes))
+				patchXhttpOpts(nodes, data)
 				finalNodes = append(finalNodes, ToNormalizeNodes(nodes)...)
 			}
 		}

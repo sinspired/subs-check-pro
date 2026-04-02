@@ -827,7 +827,7 @@ func checkAlive(job *ProxyJob, ctx context.Context) bool {
 	if err == nil && gstatic {
 		return true
 	}
-	slog.Info("测活出错", "Name", job.Client.mProxy.Name(), "error", err)
+	slog.Debug("测活出错", "Name", job.Client.mProxy.Name(), "error", err)
 	return false
 }
 
