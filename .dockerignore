@@ -6,7 +6,7 @@ Dockerfile
 *.md
 .github
 .idea
-.vscode 
+.vscode
 test
 
 *.ps1
@@ -17,3 +17,21 @@ test_*.*
 output/*
 subs-check-pro*
 mihomo-check*
+
+openipdb.ipdb
+config.yaml
+mihomo.yaml
+.golangci-lint.yml
+
+.DS_Store
+
+test_*/
+*.csv
+
+*.old
+*.new
+
+*.exe
+*.syso
+.wiki/
+!bin/subs-check-pro-linux-*
