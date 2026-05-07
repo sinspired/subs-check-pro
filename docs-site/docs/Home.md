@@ -59,14 +59,11 @@ docker run -d \
 
 ## 🤝 贡献
 
-欢迎提交 PR 与 Issue。如果要本地开发，请注意仓库使用 Git LFS 管理大文件：
+欢迎提交 PR 与 Issue：
 
 ```bash
-git lfs install
 git clone https://github.com/sinspired/subs-check-pro
 cd subs-check-pro
-# 如已克隆后再启用 LFS：
-git lfs pull
 ```
 
 更多文档请通过左侧侧边栏或以上入口访问对应页面
