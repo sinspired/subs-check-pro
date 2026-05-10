@@ -74,7 +74,7 @@ High-performance proxy subscription checker.
 ![preview](./doc/images/preview.png)  
 ![result](./doc/images/results.png)
 
-### ✨ 重新设计的 WebUI管理界面
+### ✨ 现代 WebUI管理界面
 
 `http://localhost:8199/admin`
 
