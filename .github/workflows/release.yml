@@ -49,7 +49,7 @@ jobs:
           fetch-depth: 0
           lfs: false
 
-      - name: Download and stage binaries
+      - name: Stage binaries for Docker build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -58,15 +58,12 @@ jobs:
             --pattern "subs-check-pro_Linux_*.tar.gz" \
             --dir /tmp/assets
 
-          # 文件名对齐 Docker TARGETARCH: amd64 / arm64 / arm
           declare -A arch_map=([x86_64]=amd64 [aarch64]=arm64 [armv7]=arm)
-          for file in /tmp/assets/subs-check-pro_Linux_*.tar.gz; do
-            key="${file##*_}"; key="${key%.tar.gz}"
-            arch="${arch_map[$key]}"
-            [ -z "$arch" ] && echo "Skip: $file" && continue
-            tar xzf "$file" -C /tmp subs-check-pro
-            mv /tmp/subs-check-pro "bin/subs-check-pro-linux-${arch}"
-            echo "✓  bin/subs-check-pro-linux-${arch}"
+          for key in "${!arch_map[@]}"; do
+            file="/tmp/assets/subs-check-pro_Linux_${key}.tar.gz"
+            [ -f "$file" ] || { echo "Missing: $file"; continue; }
+            tar xzf "$file" -C bin --transform="s/.*/subs-check-pro-linux-${arch_map[$key]}/" subs-check-pro
+            echo "✓ bin/subs-check-pro-linux-${arch_map[$key]}"
           done
 
       - name: Docker meta
@@ -117,7 +114,7 @@ jobs:
   notify:
     # Telegram 通知
     runs-on: ubuntu-latest
-    needs: [ releaser, docker ] # 依赖前两个 job，确保成功后运行
+    needs: [releaser, docker] # 依赖前两个 job，确保成功后运行
     steps:
       - name: Determine Notification Title
         id: meta
