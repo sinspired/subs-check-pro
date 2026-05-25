@@ -118,8 +118,10 @@ func (app *App) createDefaultConfig() error {
 
 	slog.Info("默认配置文件创建成功")
 	slog.Info("请编辑配置文件", "路径", app.configPath)
-	os.Exit(0)
-	return nil
+	// 不再直接调用 os.Exit(0)：
+	//   - CLI 模式：main.go 检测到 ErrFirstRun 后自行退出
+	//   - GUI 模式：frontend/run.go 检测到 ErrFirstRun 后通知前端展示引导信息，不退出进程
+	return ErrFirstRun
 }
 
 // initConfigWatcher 初始化配置文件监听

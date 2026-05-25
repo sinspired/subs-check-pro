@@ -112,12 +112,18 @@ func (app *App) initHTTPServer() error {
 		app.registerAPIRoutes(router)
 	}
 
+	router.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, AdminPath)
+	})
+
 	listenAddr := normalizeListenAddr(config.GlobalConfig.ListenPort)
 	srv := &http.Server{
 		Addr:    listenAddr,
 		Handler: router,
 	}
 	app.httpServer = srv
+
+	app.router = router
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -144,6 +150,7 @@ func (app *App) ensureAPIKey() {
 		} else {
 			config.GlobalConfig.APIKey = utils.GenerateRandomString(10)
 			geneAPIKey = config.GlobalConfig.APIKey
+			os.Setenv("GUI_KEY_IS_RANDOM", "1") // ← 新增：告知 GUI 主页显示提示
 			slog.Warn("未设置api-key，已随机生成", "api-key", config.GlobalConfig.APIKey)
 		}
 	}
@@ -270,6 +277,17 @@ func (app *App) authMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// checkPortFree 在启动服务前检测端口是否可用。
+// 返回 true 表示端口空闲，可以绑定；返回 false 表示已被其他进程占用。
+func checkPortFree(listenAddr string) bool {
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return false
+	}
+	_ = ln.Close()
+	return true
 }
 
 // normalizeListenAddr 处理监听端口
@@ -512,4 +530,24 @@ func parseHistNodeCount(s string) float64 {
 		return n
 	}
 	return 0
+}
+
+// EnsureRouter 确保 router 已初始化，供 GUI 模式调用。
+// 若 initHTTPServer 已执行（router != nil）则直接返回。
+// 若 Initialize() 检测到端口冲突并跳过了 HTTP 服务启动，则此处同样跳过，
+// 由 GUI 展示冲突提示，让用户修改端口后重启。
+func (app *App) EnsureRouter() error {
+	if app.router != nil {
+		return nil
+	}
+	if app.portConflictHTTP {
+		slog.Warn("HTTP 端口冲突，HTTP 服务未能启动，请在 GUI 中修改端口后重启")
+		return nil // 不作为致命错误，由 GUI 向用户展示冲突信息
+	}
+	// GUI 模式：强制启用 WebUI，使用默认端口
+	config.GlobalConfig.EnableWebUI = true
+	if config.GlobalConfig.ListenPort == "" {
+		config.GlobalConfig.ListenPort = DefaultPort
+	}
+	return app.initHTTPServer()
 }

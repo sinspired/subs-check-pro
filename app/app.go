@@ -1,4 +1,4 @@
-// Package app 应用程序主入口
+// Package app 应用程序主入口，app\app.go
 package app
 
 import (
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gin-gonic/gin"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/robfig/cron/v3"
 	"github.com/sinspired/subs-check-pro/v2/app/monitor"
@@ -46,6 +47,13 @@ type App struct {
 	stopCh        <-chan struct{}
 
 	lastCheck lastCheckResult
+
+	router *gin.Engine
+
+	// portConflictHTTP / portConflictSubStore 记录服务启动前的端口预检结果。
+	// 在 Initialize() 中、启动对应服务之前赋值，供 GUI 读取展示冲突提示。
+	portConflictHTTP     bool
+	portConflictSubStore bool
 }
 
 type lastCheckResult struct {
@@ -101,8 +109,21 @@ func (app *App) Initialize() error {
 	}()
 
 	if config.GlobalConfig.ListenPort != "" {
-		if err := app.initHTTPServer(); err != nil {
-			return fmt.Errorf("初始化HTTP服务器失败: %w", err)
+		listenAddr := normalizeListenAddr(config.GlobalConfig.ListenPort)
+		if !checkPortFree(listenAddr) {
+			app.portConflictHTTP = true
+			if os.Getenv("START_FROM_GUI") == "1" {
+				// GUI 模式：记录冲突，跳过启动，让窗口展示提示供用户修改端口
+				slog.Warn("HTTP 端口已被其他进程占用，HTTP 服务未启动，请在 GUI 中修改端口后重启",
+					"addr", listenAddr)
+			} else {
+				// CLI 模式：端口冲突属于致命错误，直接返回
+				return fmt.Errorf("HTTP 端口 %s 已被占用，请修改配置中的 listen_port", listenAddr)
+			}
+		} else {
+			if err := app.initHTTPServer(); err != nil {
+				return fmt.Errorf("初始化HTTP服务器失败: %w", err)
+			}
 		}
 	}
 
@@ -110,10 +131,18 @@ func (app *App) Initialize() error {
 		if runtime.GOOS == "linux" && runtime.GOARCH == "386" {
 			slog.Warn("node不支持Linux 32位系统，不启动sub-store服务")
 		} else {
-			// 使用 app.ctx 启动 sub-store，让其可被取消
-			go assets.RunSubStoreService(app.ctx)
-			// 短暂等待，保证 sub-store 启动日志按预期顺序输出
-			time.Sleep(500 * time.Millisecond)
+			subStoreAddr := normalizeListenAddr(config.GlobalConfig.SubStorePort)
+			if !checkPortFree(subStoreAddr) {
+				app.portConflictSubStore = true
+				assets.IsSubStoreRunning.Store(false)
+				slog.Warn("Sub-Store 端口已被其他进程占用，Sub-Store 服务未启动，请修改端口后重启",
+					"addr", subStoreAddr)
+			} else {
+				// 使用 app.ctx 启动 sub-store，让其可被取消
+				go assets.RunSubStoreService(app.ctx)
+				// 短暂等待，保证 sub-store 启动日志按预期顺序输出
+				time.Sleep(500 * time.Millisecond)
+			}
 		}
 	} else {
 		slog.Warn("Sub-store 服务已禁用", "port", "未设置")
@@ -210,6 +239,29 @@ func (app *App) Run() {
 	if err != nil {
 		slog.Error("关闭应用失败", "err", err)
 	}
+}
+
+// GetRouter 供 Wails GUI 复用同一路由
+func (app *App) GetRouter() *gin.Engine {
+	return app.router
+}
+
+// GetConfigPath 返回 Initialize() 确定后的配置文件绝对路径。
+// 在 Initialize() 调用前返回空字符串。
+func (app *App) GetConfigPath() string {
+	return app.configPath
+}
+
+// PortConflictHTTP 返回 HTTP 服务端口预检结果。
+// true 表示启动前该端口已被其他进程占用（HTTP 服务未能启动）。
+func (app *App) PortConflictHTTP() bool {
+	return app.portConflictHTTP
+}
+
+// PortConflictSubStore 返回 Sub-Store 端口预检结果。
+// true 表示启动前该端口已被其他进程占用（Sub-Store 未能启动）。
+func (app *App) PortConflictSubStore() bool {
+	return app.portConflictSubStore
 }
 
 // setTimer 根据配置设置定时器
