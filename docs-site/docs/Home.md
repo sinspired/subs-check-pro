@@ -2,6 +2,8 @@
 
 高性能代理订阅检测器，支持测活、测速、媒体解锁，PC/移动端友好的现代 WebUI，自动生成 Mihomo/Clash 与 sing-box 订阅，集成 sub-store，支持一键分享与无缝自动更新。
 
+同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-check-pro-gui](https://github.com/sinspired/subs-check-pro-gui)。
+
 ![preview](https://sinspired.github.io/subs-check-pro/img/Subs-Check-PRO_OG.png)
 
 ## ⚡️ 快速入口
