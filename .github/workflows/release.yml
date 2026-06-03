@@ -3,12 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "9.9.9"
+  workflow_dispatch:   # 允许手动测试
 
 permissions:
   contents: write
   packages: write
-  id-token: write # 用于支持高安全性镜像溯源签名证明
+  id-token: write
 
 jobs:
   releaser:
@@ -26,78 +27,43 @@ jobs:
         with:
           go-version: stable
 
+      # 将 Go 的 bin 目录加到系统 PATH 中，防止 go-winres 找不到命令报错
+      - name: Add GOPATH to PATH
+        run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: Setup UPX
         uses: crazy-max/ghaction-upx@v4
         with:
           install-only: true
           version: latest
 
-      # 为 GoReleaser 准备 Docker 环境
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Delete existing release
+      # 只有在推 Tag 发布时才删除旧 Release
+      - name: Delete existing release (if exists)
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           gh release view ${{ github.ref_name }} &>/dev/null && \
             gh release delete ${{ github.ref_name }} --yes || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 自动发布到 GitHub Releases 和 Docker Hub，使用 .goreleaser.yaml 中的配置
-      - name: Create GitHub release and Docker images
+      # 【彻底修复】手动触发时强制使用 --snapshot（避免无 Tag 报错）
+      # 正式推 Tag 时执行标准 release 流程
+      - name: Create GitHub release (Windows x64 only)
         uses: goreleaser/goreleaser-action@v7
         with:
           version: latest
-          args: release --clean
+          args: >-
+            release 
+            --clean 
+            --skip=validate
+            ${{ github.event_name == 'workflow_dispatch' && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  notify:
-    if: github.ref != 'refs/heads/v2'
-    runs-on: ubuntu-latest
-    needs: [releaser]
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Get release notes
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          {
-            echo 'notes<<EOF'
-            gh release view "${{ github.ref_name }}" --json body -q .body
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Send notifications
-        uses: sinspired/multi-release-notify@v1
+      # 将生成的 zip 压缩包上传到 GitHub Actions 的 Artifacts
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          summary: >-
-            跨平台现代 GUI 桌面端已同步发布，欢迎体验：
-            [subs-check-pro-gui](https://github.com/sinspired/subs-check-pro-gui)
-          release_notes: ${{ steps.release.outputs.notes }}
-
-          email_url: ${{ secrets.EMAIL_APPRISE_URL }}
-          telegram_url: ${{ secrets.TELEGRAM_APPRISE_URL }}
-          slack_url: ${{ secrets.DINGTALK_APPRISE_URL }}
-          bark_url: ${{ secrets.BARK_APPRISE_URL }}
-
-          urls: |
-            ntfy://subs-check-pro
+          name: subs-check-pro-windows-x64
+          path: dist/*.zip
+          retention-days: 7
