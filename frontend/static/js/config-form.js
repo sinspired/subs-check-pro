@@ -225,11 +225,34 @@ const SCHEMA = [
         title: '协议筛选',
         fields: [
           {
-            key: 'node-type', label: '协议筛选', type: 'chips',
-            hint: '留空=全部；推荐：VLESS / VMess / Trojan；谨慎：SS/SSR；不建议：Hysteria2 / TUIC；不稳定：HTTP / Socks5',
-            options: ['ss', 'ssr', 'vmess', 'vless', 'snell', 'trojan', 'hysteria', 'hysteria2', 'tuic', 'wireguard', 'ssh', 'mieru', 'anytls', 'sudoku', 'masque', 'trusttunnel', 'socks5', 'http'],
-          },
-        ],
+            key: 'node-type',
+            label: '协议筛选',
+            type: 'chips',
+            hint: '留空=全部；推荐：VLESS / VMess / Trojan；谨慎：SS/SSR；不建议：Hysteria2 / TUIC；不稳定：HTTP / Socks5；实验性：openvpn',
+            options: [
+              'vmess',        // VMess
+              'vless',        // VLESS
+              'trojan',       // Trojan
+              'snell',        // Snell
+              'ss',           // Shadowsocks
+              'ssr',          // ShadowsocksR (兼容)
+              'gost-relay',   // GOST Relay
+              'hysteria',     // Hysteria
+              'hysteria2',    // Hysteria2
+              'tuic',         // TUIC
+              'wireguard',    // WireGuard
+              'ssh',          // SSH
+              'mieru',        // Mieru
+              'anytls',       // AnyTLS
+              'sudoku',       // Sudoku
+              'masque',       // MASQUE
+              'trusttunnel',   // TrustTunnel
+              'socks5',       // SOCKS5
+              'http',         // HTTP
+              'openvpn',      // OpenVPN
+            ]
+          }
+        ]
       },
     ],
   },
