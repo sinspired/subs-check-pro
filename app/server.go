@@ -21,9 +21,9 @@ import (
 	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/check"
 	"github.com/sinspired/subs-check-pro/v2/config"
-	"github.com/sinspired/subs-check-pro/v2/frontend"
 	"github.com/sinspired/subs-check-pro/v2/save/method"
 	"github.com/sinspired/subs-check-pro/v2/utils"
+	"github.com/sinspired/subs-check-pro/v2/webui"
 )
 
 const (
@@ -69,10 +69,10 @@ func (app *App) initHTTPServer() error {
 	router.Use(app.silentLoggerMiddleware())
 
 	// 始终加载模板（share 页面不依赖 EnableWebUI）
-	router.SetHTMLTemplate(template.Must(template.New("").ParseFS(frontend.TemplatesFS, TemplatePattern)))
+	router.SetHTMLTemplate(template.Must(template.New("").ParseFS(webui.TemplatesFS, TemplatePattern)))
 
 	// 始终注册静态资源，share/files/analysis 页面依赖它们
-	staticSub, _ := fs.Sub(frontend.StaticFS, "static")
+	staticSub, _ := fs.Sub(webui.StaticFS, "static")
 	router.StaticFS(StaticPrefix, http.FS(staticSub))
 
 	saver, err := method.NewLocalSaver()

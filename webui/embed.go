@@ -1,5 +1,5 @@
-// Package frontend 负责嵌入前端资源（HTML 模板和静态文件）。
-package frontend
+// Package webui 负责嵌入前端资源（HTML 模板和静态文件）。
+package webui
 
 import "embed"
 
