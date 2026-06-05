@@ -418,7 +418,7 @@ func (pc *ProxyChecker) renderProgressString() string {
 	case etaSec == -1:
 		etaSuffix = " ETA: \033[90m--:--\033[0m"
 	case etaSec > 0:
-		etaSuffix = " ETA: \033[36m" + formatEta(etaSec) + "\033[0m"
+		etaSuffix = " ETA: \033[36m" + FormatEta(etaSec) + "\033[0m"
 	}
 
 	barWidth := 40
@@ -444,7 +444,8 @@ func pad2(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
 
-func formatEta(sec int64) string {
+// FormatEta 预计检测剩余时间格式化
+func FormatEta(sec int64) string {
 	if sec <= 0 {
 		return "0s"
 	}
