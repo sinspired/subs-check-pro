@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/sinspired/subs-check-pro/v2/config"
@@ -39,6 +40,9 @@ var (
 	reMediaNF  = regexp.MustCompile(`(?i)NF|Netflix`)
 	reMediaDis = regexp.MustCompile(`(?i)D\+|Disney`)
 )
+
+// LastCheckResultStr 用于给 GUI 状态栏展示
+var LastCheckResultStr atomic.Value
 
 // AnalysisStats 统计结构
 type AnalysisStats struct {
@@ -192,6 +196,25 @@ func (pc *ProxyChecker) GenerateAnalysisReport() {
 
 	// 终端输出总结
 	logSummary(globalAnalysis)
+
+	// 获取最终处理的节点总数 (直接复用上面报告里计算 checkCount 的逻辑)
+	checkCount := Progress.Load()
+	if config.GlobalConfig.ProgressMode == "stage" || ForceClose.Load() || Successlimited.Load() {
+		checkCount = AliveCount.Load()
+	}
+
+	// 组装要在 GUI 菜单栏展示的一行内容
+	// 例如："上次检测: 15:38 | 可用: 100/300 | 耗时: 1分30秒 | 消耗:  "
+	guiLine := fmt.Sprintf("%s丨%s丨%s · %d/%d",
+		time.Now().Format("15:04"), // 只显示 时:分 比较紧凑
+		prettyDuration(CheckDuration),
+		CheckTraffic,
+		globalAnalysis.Total, // 成功可用的节点数
+		int(checkCount),      // 检测的总节点数
+	)
+
+	// 存入全局变量供 GUI 读取
+	LastCheckResultStr.Store(guiLine)
 }
 
 // saveDetailedAnalysis 输出包含总结和可视化数据的报告

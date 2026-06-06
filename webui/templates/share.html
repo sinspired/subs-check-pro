@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="theme-color"
+      content="#ffffff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#121316"
+      media="(prefers-color-scheme: dark)"
+    />
+    <title>{{ .Title }}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/icon/favicon.svg" />
+    <link rel="stylesheet" href="/static/css/admin.css?v20260324" />
+    <style>
+      /* ── 页面基础布局 ── */
+      body {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+          transition: background 0.3s;
+          padding: 0 8px;
+      }
+
+      /* ── 主题切换按钮（右上角固定） ── */
+      .theme-wrapper {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          z-index: 10;
+      }
+
+      /* ── 优化的卡片 ── */
+      .card {
+          border-radius: 16px;
+          padding: 28px 32px;
+          width: 100%;
+          max-width: 460px;
+          box-shadow: var(--glass-shadow);
+          animation: slideIn 0.35s ease-out;
+      }
+
+      .card.wide {
+          max-width: 580px;
+      }
+
+      /* ── 状态徽章 ── */
+      .status-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 10px;
+          border-radius: 99px;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          margin-bottom: 18px;
+          border: 1px solid var(--border);
+      }
+
+      .status-success {
+          color: var(--success);
+      }
+
+      .status-danger {
+          color: var(--danger);
+      }
+
+      .status-warning {
+          color: var(--warning);
+      }
+
+      .status-idle {
+          color: var(--idle);
+      }
+
+      /* ── 标题 ── */
+      h1 {
+          font-size: 20px;
+          font-weight: 700;
+          margin: 0 0 8px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+
+          color: {
+                  {
+                  .HeaderColor
+              }
+          }
+
+          ;
+      }
+
+      h1 svg {
+          width: 22px;
+          height: 22px;
+          flex-shrink: 0;
+      }
+
+      .desc {
+          font-size: 13px;
+          color: var(--muted);
+          line-height: 1.6;
+          margin: 0;
+      }
+
+      /* ── 验证区域：输入框 + 按钮统一风格 ── */
+      .auth-area {
+          margin-top: 22px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+      }
+
+      .auth-input {
+          width: 100%;
+          padding: 11px 14px;
+          border: 1.5px solid var(--border);
+          border-radius: 10px;
+          background: var(--input-bg);
+          color: var(--fg);
+          font-size: 14px;
+          outline: none;
+          transition: border-color 0.2s;
+          box-sizing: border-box;
+          /* 消除浏览器默认的 password 字段外观差异 */
+          font-family: inherit;
+      }
+
+      @media (max-width: 720px) {
+          .auth-input {
+              /* 移动设备保证 16px 以避免 iOS 放大 */
+              font-size: 16px;
+          }
+      }
+
+      .auth-input:focus {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+      }
+
+      .btn-auth {
+          width: 100%;
+          padding: 11px 14px;
+          border-radius: 10px;
+          border: none;
+          background: var(--accent);
+          color: #fff;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          font-family: inherit;
+          transition: opacity 0.18s, transform 0.12s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+      }
+
+      .btn-auth:hover {
+          opacity: 0.88;
+          transform: translateY(-1px);
+      }
+
+      .btn-auth:active {
+          transform: translateY(0);
+          opacity: 0.95;
+      }
+
+      .btn-auth svg {
+          width: 15px;
+          height: 15px;
+      }
+
+      /* ── 文件列表 ── */
+      .file-list {
+          margin-top: 22px;
+          border-radius: 12px;
+          border: 1px solid var(--border);
+          overflow: hidden;
+          background: var(--glass-bg);
+      }
+
+      .file-item {
+          display: flex;
+          align-items: center;
+          padding: 10px 12px;
+          border-bottom: 1px solid var(--border);
+          transition: background 0.15s;
+          gap: 8px;
+      }
+
+      .file-item:last-child {
+          border-bottom: none;
+      }
+
+      .file-item:hover {
+          background: var(--input-bg);
+      }
+
+      .file-icon {
+          color: var(--muted);
+          display: flex;
+          flex-shrink: 0;
+      }
+
+      .file-icon svg {
+          width: 16px;
+          height: 16px;
+      }
+
+      .file-link {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          text-decoration: none;
+          color: inherit;
+          overflow: hidden;
+          gap: 8px;
+      }
+
+      .file-name {
+          flex: 1;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+      }
+
+      .file-meta {
+          font-size: 11px;
+          color: var(--muted);
+          white-space: nowrap;
+          flex-shrink: 0;
+      }
+
+      /* ── 复制按钮 ── */
+      .copy-btn {
+          flex-shrink: 0;
+          background: transparent;
+          border: 1px solid var(--border);
+          color: var(--muted);
+          cursor: pointer;
+          padding: 5px;
+          border-radius: 7px;
+          transition: color 0.15s, background 0.15s, transform 0.1s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+
+      .copy-btn:hover {
+          color: var(--accent);
+          background: var(--glass-bg);
+          transform: translateY(-1px);
+      }
+
+      .copy-btn svg {
+          width: 14px;
+          height: 14px;
+      }
+
+      /* ── 提示框 ── */
+      .hint {
+          margin-top: 20px;
+          padding: 14px 16px;
+          background: var(--input-bg);
+          border-radius: 10px;
+          border: 1px solid var(--border);
+          font-size: 12px;
+          color: var(--muted);
+          line-height: 1.65;
+      }
+
+      .hint-title {
+          color: var(--fg);
+          font-weight: 600;
+          display: block;
+          margin-bottom: 4px;
+      }
+
+      /* ── 页脚 ── */
+      .card-footer {
+          margin-top: 28px;
+          padding-top: 16px;
+          border-top: 1px solid var(--border);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+      }
+
+      .brand-info {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--muted);
+          text-decoration: none;
+      }
+
+      .brand-info img {
+          width: 16px;
+          height: 16px;
+      }
+
+      .footer-meta {
+          font-size: 10px;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+      }
+
+      code {
+          font-family: var(--font-mono, monospace);
+          background: var(--placehoder-bg, rgba(0, 0, 0, .06));
+          color: var(--danger);
+          padding: 1px 5px;
+          border-radius: 4px;
+          font-size: 11px;
+      }
+
+      @keyframes slideIn {
+          from {
+              opacity: 0;
+              transform: translateY(12px);
+          }
+
+          to {
+              opacity: 1;
+              transform: translateY(0);
+          }
+      }
+    </style>
+  </head>
+
+  <body>
+    {{/* ── 主题切换按钮 ── */}}
+    <div class="theme-wrapper">
+      <div
+        class="theme-toggle"
+        role="group"
+        aria-label="主题切换"
+        style="display: flex; align-items: center"
+      >
+        <button
+          id="themeToggle"
+          class="icon-btn"
+          aria-pressed="false"
+          aria-label="切换主题"
+          title="切换主题"
+        >
+          <svg
+            class="icon"
+            id="iconMoon"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            style="display: none"
+          >
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+          <svg
+            class="icon"
+            id="iconSun"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    {{/* ── 主卡片 ── */}}
+    <div class="card{{ if .Files }} wide{{ end }}">
+      {{/* 状态徽章 */}}
+      <div class="status-badge status-{{ .BadgeStyle }}">{{ .BadgeText }}</div>
+
+      {{/* 标题 + 描述 */}}
+      <h1>{{ .HeaderIcon }} {{ .HeaderTitle }}</h1>
+      <p class="desc">{{ .Description }}</p>
+
+      {{/* 验证输入区（仅需要输入时显示） */}} {{ if .ShowInput }}
+      <div class="auth-area">
+        <input
+          class="auth-input"
+          type="password"
+          id="shareCode"
+          placeholder="输入分享码..."
+          autocomplete="current-password"
+          onkeydown="if (event.keyCode === 13) go();"
+          autofocus
+        />
+        <button class="btn-auth" onclick="go()">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+          验证并进入
+        </button>
+      </div>
+      {{ end }} {{/* 文件列表（验证通过后显示） */}} {{ if .Files }}
+      <div class="file-list">
+        {{ range .Files }}
+        <div class="file-item">
+          <a
+            class="file-link"
+            href="/sub/{{ $.ShareCode }}/{{ .Name }}"
+            target="_blank"
+            title="{{ .Name }}"
+          >
+            <span class="file-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
+                />
+                <polyline points="13 2 13 9 20 9" />
+              </svg>
+            </span>
+            <span class="file-name">{{ .Name }}</span>
+            <span class="file-meta">{{ .Size }}&nbsp;&nbsp;{{ .ModTime }}</span>
+          </a>
+          {{/* 使用 data-* 属性传参，避免 JS 注入风险 */}}
+          <button
+            class="copy-btn"
+            title="复制订阅链接"
+            data-name="{{ .Name }}"
+            data-code="{{ $.ShareCode }}"
+            onclick="copyItem(this)"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path
+                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+              />
+            </svg>
+          </button>
+        </div>
+        {{ end }}
+      </div>
+      {{ end }} {{/* 提示说明 */}} {{ if .ExtraHint }}
+      <div class="hint">
+        <span class="hint-title">💡 提示</span>
+        {{ .ExtraHint }}
+      </div>
+      {{ end }} {{/* 页脚 */}}
+      <div class="card-footer">
+        <a class="brand-info" href="/admin">
+          <img src="/static/icon/favicon.svg" alt="logo" />
+          Subs-Check-PRO
+        </a>
+        <div class="footer-meta">
+          {{ if .FooterText }}{{ .FooterText }}{{ else }}Secure Access{{ end }}
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── 主题切换 ──────────────────────────────────────────────
+      const html = document.documentElement;
+      const toggleBtn = document.getElementById("themeToggle");
+      const iconMoon = document.getElementById("iconMoon");
+      const iconSun = document.getElementById("iconSun");
+
+      function resolveTheme(t) {
+        if (t === "auto" || !t) {
+          return window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        }
+        return t;
+      }
+      function applyTheme(theme) {
+        html.setAttribute("data-theme", theme);
+        const isDark = theme === "dark";
+        iconMoon.style.display = isDark ? "block" : "none";
+        iconSun.style.display = isDark ? "none" : "block";
+        toggleBtn.setAttribute("aria-pressed", String(isDark));
+      }
+      function saveTheme(t) {
+        fetch("/admin/theme", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ theme: t }),
+        }).catch(() => {});
+      }
+
+      // 初始化：从服务端读取
+      fetch("/admin/theme")
+        .then((r) => r.json())
+        .then((d) => applyTheme(resolveTheme(d.theme)))
+        .catch(() => applyTheme(resolveTheme("auto")));
+
+      toggleBtn.addEventListener("click", () => {
+        const next =
+          html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(next);
+        saveTheme(next);
+      });
+
+      toggleBtn.addEventListener("dblclick", () => {
+        saveTheme("auto");
+        applyTheme(resolveTheme("auto"));
+      });
+
+      // ── 访问码验证跳转 ────────────────────────────────────────
+      function go() {
+        const v = document.getElementById("shareCode")?.value.trim();
+        if (v) window.location.href = "/sub/" + encodeURIComponent(v) + "/";
+      }
+
+      // ── 复制订阅链接（通过 data-* 属性取值，安全无注入） ─────
+      function copyItem(btn) {
+        const name = btn.dataset.name;
+        const code = btn.dataset.code;
+        const url =
+          window.location.origin +
+          (code ? "/sub/" + encodeURIComponent(code) + "/" : "/more/") +
+          encodeURIComponent(name);
+
+        // 优先使用 Clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard
+            .writeText(url)
+            .then(() => {
+              showSuccess(btn);
+            })
+            .catch(() => {
+              fallbackCopy(url, btn);
+            });
+        } else {
+          // 非 HTTPS 或不支持 clipboard 时，走降级方案
+          fallbackCopy(url, btn);
+        }
+      }
+
+      function fallbackCopy(text, btn) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed"; // 避免滚动影响
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+          document.execCommand("copy");
+          showSuccess(btn);
+        } catch (err) {
+          prompt("请手动复制链接：", text);
+        }
+        document.body.removeChild(textarea);
+      }
+
+      function showSuccess(btn) {
+        const original = btn.innerHTML;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+    </svg>`;
+        btn.style.color = "var(--success)";
+        setTimeout(() => {
+          btn.innerHTML = original;
+          btn.style.color = "";
+        }, 2000);
+      }
+    </script>
+    <script type="module" src="/static/js/admin.js?v20260324"></script>
+  </body>
+</html>
