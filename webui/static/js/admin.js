@@ -28,7 +28,29 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   const MAX_LOG_LINES = 100
   const MAX_FAILURE_DURATION_MS = 10000
   const ACTION_CONFIRM_TIMEOUT_MS = 600000
-  const THEME_KEY = 'theme'
+
+  /**
+ * openInternalURL: 在 Wails GUI 环境下通过 /gui/popup 打开 Gin 服务内部页面；
+ * 浏览器环境下降级为 window.open。
+ * 仅用于相对路径（/files、/analysis 等），外部链接仍用 window.open。
+ * @param {string} path   相对路径，如 '/files'
+ * @param {string} [size] 窗口尺寸：tiny/small/medium/large/extraLarge/wide，默认 medium
+ */
+  function openInternalURL(path, size) {
+    const theme = document.documentElement.getAttribute('data-theme') || 'light'
+    const separator = path.includes('?') ? '&' : '?'
+    const pathWithTheme = path + separator + 'theme=' + theme
+    if (window.__WAILS_GUI?.baseURL) {
+      const fullURL = window.__WAILS_GUI.baseURL + pathWithTheme
+      let qs = '/gui/popup?url=' + encodeURIComponent(fullURL)
+      if (size) qs += '&size=' + encodeURIComponent(size)
+      fetch(qs).catch(() => { })
+    } else {
+      window.open(pathWithTheme, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  const THEME_KEY = 'scp_theme'
 
   // ==================== DOM 元素缓存 ====================
   const $ = s => document.querySelector(s)
@@ -1704,6 +1726,11 @@ import { initQuickPreview } from './cfg-quickpreview.js';
    * @returns {string}
    */
   function colorize(line) {
+    // 先过滤掉 WebView2 内部日志
+    if (/\[WebView2\]/.test(line)) {
+      return ''   // 返回空字符串，前端就不会显示
+    }
+
     // 1. 切分时间戳
     // const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
     const tsMatch = line.match(/^((\d{4}-)?\d{2}-\d{2} \d{2}:\d{2}:\d{2})/)
@@ -2122,12 +2149,12 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   }
 
   /**
-   * 构建 Sub-Store 访问 URL
-   * @param {Object} config 配置对象
-   * @param {string} config.subStorePath sub-store 路径
-   * @param {string|number} config.portStr sub-store 端口
-   * @returns {Object} 包含完整 URL 和 subStorePath
-   */
+     * 构建 Sub-Store 访问 URL
+     * @param {Object} config 配置对象
+     * @param {string} config.subStorePath sub-store 路径
+     * @param {string|number} config.portStr sub-store 端口
+     * @returns {Object} 包含完整 URL 和 subStorePath
+     */
   function buildSubStoreUrl(config) {
     const { subStorePath, subStorePathYaml, portStr } = config
     if (!subStorePath) throw new Error('配置中未找到 sub_store_path')
@@ -2140,26 +2167,49 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     }
 
     const cleanPort = (portStr ?? '').toString().trim().replace(/^:/, '')
-    const currentPort = window.location.port
-    const shouldAddPort = currentPort && currentPort !== ''
-    const portToAdd = shouldAddPort && cleanPort ? ':' + cleanPort : ''
 
-    let hostname = window.location.hostname
-    if (!shouldAddPort) {
-      const parts = hostname.split('.')
-      // 防止 IP 地址访问时生成错误的域名 (如: sub_store.104.56.43.43)
-      const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
-      if (parts.length > 1 && !isIp) {
-        hostname =
-          parts.length === 2
-            ? 'sub_store_for_subs_check.' + hostname
-            : 'sub_store_for_subs_check.' + parts.slice(1).join('.')
+    // 在 Wails WebView 中 window.location 为 wails:// 或 http://wails.localhost，
+    // 无法用于构造真实的后端地址。优先使用 Go 模板注入的 __WAILS_GUI.baseURL
+    // （形如 http://127.0.0.1:8199），仅在普通浏览器环境下回退到 window.location。
+    const wailsBase = window.__WAILS_GUI?.baseURL  // e.g. "http://127.0.0.1:8199"
+    let baseUrl
+    if (wailsBase) {
+      // 替换端口为 sub-store 端口（如果有）
+      if (cleanPort) {
+        // 修复前：wailsBase.replace(/(:\d+)?(\/|$)/, ':' + cleanPort + '$2').replace(/\/$/, '')
+        // 修复后：用 URL 对象直接替换端口，避免正则误匹配协议冒号
+        try {
+          const u = new URL(wailsBase)
+          u.port = cleanPort
+          baseUrl = u.origin  // "http://127.0.0.1:8299"
+        } catch {
+          baseUrl = wailsBase.replace(/\/$/, '')
+        }
+      } else {
+        baseUrl = wailsBase.replace(/\/$/, '')
       }
+    } else {
+      const currentPort = window.location.port
+      const shouldAddPort = currentPort && currentPort !== ''
+      const portToAdd = shouldAddPort && cleanPort ? ':' + cleanPort : ''
+
+      let hostname = window.location.hostname
+      if (!shouldAddPort) {
+        const parts = hostname.split('.')
+        // 防止 IP 地址访问时生成错误的域名 (如: sub_store.104.56.43.43)
+        const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+        if (parts.length > 1 && !isIp) {
+          hostname =
+            parts.length === 2
+              ? 'sub_store_for_subs_check.' + hostname
+              : 'sub_store_for_subs_check.' + parts.slice(1).join('.')
+        }
+      }
+      baseUrl = window.location.protocol + '//' + hostname + portToAdd
     }
 
     const isFirstTime = lastSubStorePath === null
     const isPathChanged = lastSubStorePath !== subStorePath
-    const baseUrl = window.location.protocol + '//' + hostname + portToAdd
 
     return {
       url: isFirstTime || isPathChanged ? `${baseUrl}?api=${path}` : baseUrl,
@@ -2174,106 +2224,54 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       return
     }
 
-    // 立即同步打开窗口，避免 iOS 拦截策略
-    const newWindow = window.open('', '_blank')
-    if (!newWindow) {
-      showToast('窗口弹出被拦截', 'warn')
-      return
-    }
-
-    // 设置初始 Loading 界面
-    newWindow.document.title = '正在连接 Sub-Store...'
-    newWindow.document.body.style.margin = '0'
-    newWindow.document.body.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f9f9f9;color:#333;">
-      <div style="margin-bottom:15px;">
-         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0ea5a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
-         <style>.spin{animation:spin 1s linear infinite}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
-      </div>
-      <h3 id="status-text" style="font-weight:600;">正在跳转...</h3>
-      <p style="color:#666;font-size:13px;margin-top:5px;">正在解析 sub-store 配置并构建连接，请稍候。</p>
-    </div>
-  `
-
-    // 超时控制 (10秒)
-    let isFinished = false
-    const timeoutTimer = setTimeout(() => {
-      if (isFinished) return
-      isFinished = true
-      if (newWindow && !newWindow.closed) {
-        newWindow.document.body.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-          <h3 style="color:#ff4d4f;">连接超时</h3>
-          <p style="color:#666;margin-bottom:20px;">获取 sub-store 配置耗时过长，请关闭重试。</p>
-          <button onclick="window.close()" style="padding:8px 20px;cursor:pointer;background:#fff;border:1px solid #ccc;border-radius:4px;">关闭窗口</button>
-        </div>
-      `
-      }
-    }, 10000)
-
     try {
-      // 异步操作再 window.open 之后,避免出发ios窗口拦截
+      // ── 1. 检查 Sub-Store 服务是否运行 ─────────────────────────────────
       const r = await sfetch(API.status)
       if (!r.ok) {
-        if (isFinished) return
-        isFinished = true
-        clearTimeout(timeoutTimer)
-        newWindow.close()
         if (els.statusEl) {
           els.statusEl.textContent = '获取状态失败'
           els.statusEl.className = 'muted status-label status-error'
         }
         return
       }
-
       const d = r.payload || {}
       if (!d.isSubStoreRunning) {
-        if (isFinished) return
-        isFinished = true
-        clearTimeout(timeoutTimer)
-        newWindow.close()
         showToast('Sub-Store 服务未运行', 'warn')
         return
       }
 
+      // ── 2. 获取配置（缓存优先）并构建 URL（含 ?api=<path>）────────────
       let configData = _cachedSubStoreConfig
       if (!configData) {
-        if (!isFinished && newWindow && !newWindow.closed) {
-          const statusEl = newWindow.document.getElementById('status-text')
-          if (statusEl) statusEl.textContent = '正在获取 sub-store 配置...'
-        }
         configData = await fetchSubStoreConfig()
-        if (isFinished) return
         _cachedSubStoreConfig = configData
       }
-
       const result = buildSubStoreUrl(configData)
       lastSubStorePath = result.subStorePath
 
-      if (isFinished) return
-      isFinished = true
-      clearTimeout(timeoutTimer)
+      // ── 3. 打开窗口 ─────────────────────────────────────────────────────
+      // Wails GUI 环境（window.__WAILS_GUI 由 Go 模板注入）：
+      //   通过 /gui/popup 让 Go 在主线程创建 Wails 管理的无地址栏弹窗，
+      //   规避 WebView2/WKWebView 对 JS window.open 跨 origin 导航的拦截，
+      //   并复用 loading.html 过渡页（带主题同步），不会卡在跳转页面。
+      if (window.__WAILS_GUI?.baseURL) {
+        showToast('Wails GUI 环境，打开窗口', 'info')
+        fetch('/gui/popup?url=' + encodeURIComponent(result.url) + '&size=medium')
+          .catch(err => showToast('打开窗口失败: ' + err.message, 'error'))
+        return
+      }
 
+      // 普通浏览器降级：先开空窗再跳转（规避弹窗拦截检测）
+      const newWindow = window.open('', '_blank')
+      if (!newWindow) {
+        showToast('窗口弹出被拦截', 'warn')
+        return
+      }
       newWindow.location.href = result.url
+
     } catch (err) {
       console.error(err)
-      if (isFinished) return
-      isFinished = true
-      clearTimeout(timeoutTimer)
-
-      if (newWindow && !newWindow.closed) {
-        newWindow.document.title = '错误'
-        newWindow.document.body.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;padding:20px;text-align:center;">
-          <h3 style="color:#ff4d4f;margin-bottom:10px;">发生错误</h3>
-          <p style="color:#333;background:#ffebeb;padding:10px;border-radius:5px;font-family:monospace;">${err.message || '未知错误'}</p>
-          <p style="color:#999;font-size:12px;margin-top:10px;">请检查网络或后端日志</p>
-          <button onclick="window.close()" style="margin-top:20px;padding:8px 20px;cursor:pointer;border:1px solid #d9d9d9;background:#fff;border-radius:4px;">关闭</button>
-        </div>
-      `
-      } else {
-        showToast(err.message || '打开失败', 'error')
-      }
+      showToast(err.message || '打开失败', 'error')
     }
   }
 
@@ -2284,6 +2282,27 @@ import { initQuickPreview } from './cfg-quickpreview.js';
    * @returns {Promise<string>} 可用的 Base URL
    */
   async function getBaseUrl(path, port) {
+    // 在 Wails WebView 中 window.location 为 wails:// 或 http://wails.localhost，
+    // 无法用于构造真实的后端地址。优先使用 Go 模板注入的 __WAILS_GUI.baseURL
+    // （形如 http://127.0.0.1:8199），仅在普通浏览器环境下回退到 window.location。
+    const wailsBase = window.__WAILS_GUI?.baseURL
+    if (wailsBase) {
+      const cleanPort = port ? String(port).trim().replace(/^:/, '') : ''
+      let base
+      if (cleanPort) {
+        try {
+          const u = new URL(wailsBase)
+          u.port = cleanPort
+          base = u.origin  // "http://127.0.0.1:8299"
+        } catch {
+          base = wailsBase.replace(/\/$/, '')
+        }
+      } else {
+        base = wailsBase.replace(/\/$/, '')
+      }
+      return `${base}${path}`
+    }
+
     const protocol = window.location.protocol
     const hostname = window.location.hostname
     const baseUrlWithoutPort = `${protocol}//${hostname}`
@@ -2572,6 +2591,32 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   // ==================== 初始化 ====================
 
   function bindControls() {
+    // ── Wails GUI 环境：全局拦截所有 <a> 点击，统一走 openInternalURL / openURL ──
+    // Wails WebView 中 window.location 为 wails://wails.localhost，
+    // 直接跟随 <a href> 会导航到错误地址。统一在此拦截后按链接类型分发：
+    //   - 内部相对路径（/analysis、/files 等）→ openInternalURL
+    //   - 外部 http/https 绝对地址 → openInternalURL（openBrandURL 弹窗）
+    //   - # 锚点 / javascript: / 无 href → 不拦截，放行
+    if (window.__WAILS_GUI?.baseURL) {
+      document.addEventListener('click', e => {
+        const a = e.target.closest('a[href]')
+        if (!a) return
+        const href = a.getAttribute('href')
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
+        e.preventDefault()
+        e.stopPropagation()
+        if (href.startsWith('http://') || href.startsWith('https://')) {
+          // 外部链接：用 openInternalURL 走 /gui/popup
+          openInternalURL(href)
+        } else {
+          // 内部相对路径：拼上 baseURL 再走 /gui/popup
+          const fullURL = window.__WAILS_GUI.baseURL.replace(/\/$/, '') + href
+          fetch('/gui/popup?url=' + encodeURIComponent(fullURL) + '&size=medium')
+            .catch(() => { })
+        }
+      }, true)  // useCapture=true，在冒泡前拦截，防止被其他 handler 先消费
+    }
+
     els.loginBtn?.addEventListener('click', onLoginBtnClick)
     els.subStoreBtn?.addEventListener('click', handleOpenSubStore)
     els.subStoreBtnMobile?.addEventListener('click', handleOpenSubStore)
@@ -2632,7 +2677,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     })
 
     // 绑定编辑器搜索按钮事件
-    searchBtn?.addEventListener('click', () => {
+    els.searchBtn?.addEventListener('click', () => {
       if (window.searchView && searchPanelOpen(window.searchView.state)) {
         closeSearchPanel(window.searchView)
       } else if (window.searchView) {
@@ -2649,26 +2694,26 @@ import { initQuickPreview } from './cfg-quickpreview.js';
 
     els.fileManagerBtn?.addEventListener('click', () => {
       if (sessionKey) safeLS('subscheck_api_key', sessionKey);
-      window.open('/files', '_blank', 'noopener,noreferrer');
+      openInternalURL('/files', 'small');
     });
 
     els.btnFiles?.addEventListener('click', () => {
       if (sessionKey) safeLS('subscheck_api_key', sessionKey);
-      window.open('/files', '_blank', 'noopener,noreferrer');
+      openInternalURL('/files', 'small');
     });
 
     els.analysisBtn?.addEventListener('click', () => {
       // 打开新标签前，将当前 sessionKey 写入 localStorage
       // 使 analysis.html 可以跨标签读取（无论是否勾选"记住密钥"）
       if (sessionKey) safeLS('subscheck_api_key', sessionKey);
-      window.open('/analysis', '_blank', 'noopener,noreferrer');
+      openInternalURL('/analysis');
     });
 
     els.btnAnalysis?.addEventListener('click', () => {
       // 打开新标签前，将当前 sessionKey 写入 localStorage
       // 使 analysis.html 可以跨标签读取（无论是否勾选"记住密钥"）
       if (sessionKey) safeLS('subscheck_api_key', sessionKey);
-      window.open('/analysis', '_blank', 'noopener,noreferrer');
+      openInternalURL('/analysis');
     });
 
     els.downloadLogsBtnSide?.addEventListener('click', async () => {
@@ -2700,7 +2745,13 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     })
 
     const logoutHandler = () => {
-      if (confirm('确定退出？')) doLogout()
+      // 在 Wails GUI 环境中，"退出登录" 返回登录窗口而非显示登录框
+      if (window.__WAILS_GUI?.baseURL) {
+        // 调用 Wails binding 切回登录小窗
+        fetch('/gui/back-to-login').catch(() => { })
+      } else {
+        if (confirm('确定退出？')) doLogout()
+      }
     }
     els.logoutBtn?.addEventListener('click', logoutHandler)
     els.logoutBtnMobile?.addEventListener('click', logoutHandler)
@@ -2749,27 +2800,39 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       }
     }
 
-    const initTheme =
-      safeLS(THEME_KEY) ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light')
-    applyTheme(initTheme)
+    // ── 主题初始化（从服务端读取） ──
+    async function fetchTheme() {
+      try {
+        const r = await fetch('/admin/theme')
+        const d = await r.json()
+        return d.theme || 'auto'
+      } catch { return 'auto' }
+    }
+    async function saveTheme(t) {
+      fetch('/admin/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: t })
+      }).catch(() => { })
+    }
+    function resolveTheme(t) {
+      if (t === 'auto' || !t) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      }
+      return t
+    }
+
+    fetchTheme().then(t => applyTheme(resolveTheme(t)))
 
     els.themeToggleBtn?.addEventListener('click', () => {
-      const next =
-        document.documentElement.getAttribute('data-theme') === 'dark'
-          ? 'light'
-          : 'dark'
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
       applyTheme(next)
-      safeLS(THEME_KEY, next)
+      saveTheme(next)
     })
 
     els.themeToggleBtn?.addEventListener('dblclick', () => {
-      safeLS('theme', null)
-      const sys = window.matchMedia?.('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
+      saveTheme('auto')
+      const sys = resolveTheme('auto')
       applyTheme(sys)
       showToast('主题已重置为系统默认', 'info')
     })
@@ -3084,12 +3147,13 @@ import { initQuickPreview } from './cfg-quickpreview.js';
   }
 
   ; (async function bootstrap() {
-    // Issue #1：优先使用 sessionStorage 中由 /gui/enter 写入的本次会话 key，
-    // 其次才使用 localStorage 中显式"记住密钥"保存的 key。
-    // 这样非随机 key 模式下不会跨会话自动登录，除非用户勾选了"记住密钥"。
+    // 优先使用 Wails GUI 注入的 apiKey（本地窗口模式，无需手动登录）；
+    // 其次读 sessionStorage（旧 /gui/enter 路由写入）；
+    // 最后读 localStorage（用户勾选"记住密钥"保存的 key）。
+    const wailsKey = window.__WAILS_GUI?.apiKey || null
     const sessionSaved = (() => { try { return sessionStorage.getItem('subscheck_session_key') } catch { return null } })()
-    const localSaved   = safeLS('subscheck_api_key')
-    const saved = sessionSaved || localSaved
+    const localSaved = safeLS('subscheck_api_key')
+    const saved = wailsKey || sessionSaved || localSaved
 
     if (saved && els.apiKeyInput) els.apiKeyInput.value = saved
 
@@ -3127,7 +3191,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     } catch (e) {
       sessionKey = null
       safeLS('subscheck_api_key', null)
-      try { sessionStorage.removeItem('subscheck_session_key') } catch {}
+      try { sessionStorage.removeItem('subscheck_session_key') } catch { }
       showLogin(true)
       setAuthUI(false)
     }
@@ -3145,5 +3209,6 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     window.showToast = showToast
     window.saveConfigWithValidation = saveConfigWithValidation
     window.loadConfigValidated = loadConfigValidated
+    window.openInternalURL = openInternalURL
   })()
 })()

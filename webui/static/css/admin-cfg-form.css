@@ -69,7 +69,10 @@
   cursor: pointer;
   white-space: nowrap;
   line-height: 1;
-  transition: background 0.13s, color 0.13s, box-shadow 0.13s;
+  transition:
+    background 0.13s,
+    color 0.13s,
+    box-shadow 0.13s;
 }
 .cfg-mode-btn svg {
   width: 13px;
@@ -83,18 +86,22 @@
 .cfg-mode-btn.active {
   background: var(--bg);
   color: var(--fg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.1),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06);
 }
 .cfg-mode-btn.active-yaml {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
   color: var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08),
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.08),
     0 0 0 0.5px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .cfg-mode-btn.split-active {
   background: color-mix(in srgb, var(--accent) 13%, var(--bg));
   color: var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08),
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.08),
     0 0 0 0.5px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .cfg-mode-btn.split-active svg {
@@ -167,6 +174,7 @@
   scrollbar-width: none;
   flex-shrink: 0;
   background: var(--gutter-bg);
+  user-select: none;
 }
 .cfg-tab-bar::-webkit-scrollbar {
   display: none;
@@ -187,7 +195,9 @@
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .cfg-tab svg {
   width: 12px;
@@ -330,9 +340,10 @@
   border-bottom: 1px solid var(--border);
   margin-bottom: 2px;
   flex-shrink: 0;
+  user-select: none;
 }
 .cfg-section::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   bottom: 7px;
@@ -359,7 +370,9 @@
   padding: 12px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
   border-radius: 8px;
-  transition: background 0.12s, margin 0.12s;
+  transition:
+    background 0.12s,
+    margin 0.12s;
   /* box-shadow: 0 0 4px color-mix(in srgb, var(--fg) 5%, transparent); */
 }
 
@@ -385,6 +398,7 @@
 .cfg-label-row .cfg-label-text {
   flex: 1;
   min-width: 0;
+  user-select: none;
 }
 
 .cfg-label-col {
@@ -405,6 +419,7 @@
   max-width: 100%;
   align-items: flex-start;
   align-self: flex-start;
+  user-select: none;
 }
 
 /* hint 在 label 列内的样式 */
@@ -415,6 +430,7 @@
   opacity: 0.82;
   white-space: normal; /* 允许换行 */
   word-break: break-word;
+  user-select: none;
 }
 
 .cfg-label-col .cfg-links {
@@ -422,6 +438,7 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 5px;
+  user-select: none;
 }
 
 .cfg-field:not(.full-width) .cfg-ctrl {
@@ -439,10 +456,12 @@
   color: var(--muted);
   line-height: 1.35;
   opacity: 0.85;
+  user-select: none;
 }
 .cfg-field:not(.full-width) .cfg-inline-hint {
   grid-column: 1/-1;
   grid-row: 3;
+  user-select: none;
 }
 
 .cfg-field.full-width {
@@ -457,6 +476,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
 }
 .cfg-field.full-width .cfg-label-hint {
   grid-row: 2;
@@ -464,6 +484,7 @@
   font-size: 11px;
   color: var(--muted);
   line-height: 1.4;
+  user-select: none;
 }
 
 /* hint 内联代码片段 */
@@ -475,7 +496,7 @@
   margin-bottom: 2px;
   margin-right: 2px;
   border-radius: 3px;
-  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  font-family: var(--font-mono, "SF Mono", "Fira Code", "Consolas", monospace);
   font-size: 9.5px;
   line-height: 1.2;
   font-weight: 500;
@@ -485,6 +506,7 @@
   user-select: all;
   cursor: text;
   vertical-align: middle;
+  user-select: text;
 }
 
 .cfg-label-hint .cfg-hint-code:hover {
@@ -499,6 +521,7 @@
   flex-wrap: wrap;
   gap: 5px;
   margin-top: 4px;
+  user-select: none;
 }
 .cfg-field.full-width .cfg-ctrl {
   grid-row: 4;
@@ -522,6 +545,7 @@
   color: var(--fg);
   align-self: center;
   text-overflow: ellipsis;
+  user-select: none;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -544,13 +568,15 @@
   border-radius: 8px;
   overflow: hidden;
   background: var(--input-bg);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .cfg-number-wrap:focus-within {
   border-color: var(--accent-light);
   box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 15%, transparent);
 }
-.cfg-number-wrap input[type='number'] {
+.cfg-number-wrap input[type="number"] {
   flex: 1;
   min-width: 0;
   border: none;
@@ -563,8 +589,8 @@
   text-align: center;
   -moz-appearance: textfield;
 }
-.cfg-number-wrap input[type='number']::-webkit-inner-spin-button,
-.cfg-number-wrap input[type='number']::-webkit-outer-spin-button {
+.cfg-number-wrap input[type="number"]::-webkit-inner-spin-button,
+.cfg-number-wrap input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
 }
 .cfg-step-btn {
@@ -581,7 +607,9 @@
   justify-content: center;
   flex-shrink: 0;
   user-select: none;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 .cfg-step-btn:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -602,7 +630,10 @@
   font-family: inherit;
   outline: none;
   min-width: 0;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s,
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s,
     color 0.15s;
 }
 .cfg-input:focus {
@@ -648,7 +679,9 @@
   white-space: nowrap;
   opacity: 0;
   transform: translateX(4px);
-  transition: opacity 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
 }
 .cfg-special-hint.visible {
   opacity: 1;
@@ -676,7 +709,10 @@
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.13s, border-color 0.13s, background 0.13s;
+  transition:
+    color 0.13s,
+    border-color 0.13s,
+    background 0.13s;
 }
 .cfg-special-chip:hover {
   color: var(--accent);
@@ -734,7 +770,7 @@
 
 /* 前置小圆点，暗示"当前状态"而非"可点击" */
 .cfg-special-badge::before {
-  content: '';
+  content: "";
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -768,13 +804,15 @@
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--input-bg);
-  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  font-family: var(--font-mono, "SF Mono", "Fira Code", "Consolas", monospace);
   font-size: 13px;
   cursor: text;
   outline: none;
   overflow-x: auto;
   scrollbar-width: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .cfg-cron-display::-webkit-scrollbar {
   display: none;
@@ -894,7 +932,7 @@
 
 /* ── 真实 input（编辑模式） ── */
 .cfg-cron-input {
-  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  font-family: var(--font-mono, "SF Mono", "Fira Code", "Consolas", monospace);
   letter-spacing: 0.04em;
 }
 
@@ -946,7 +984,9 @@
   color: var(--muted);
   cursor: pointer;
   line-height: 0;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .cfg-pw-toggle svg {
   width: 15px;
@@ -985,7 +1025,9 @@
   cursor: pointer;
   outline: none;
   gap: 6px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   text-align: left;
 }
 .cfg-sel-trigger:hover:not(.open),
@@ -1025,7 +1067,9 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   max-height: 220px;
   overflow-y: auto;
@@ -1070,7 +1114,7 @@
   font-weight: 600;
 }
 .cfg-sel-option.selected::after {
-  content: '✓';
+  content: "✓";
   float: right;
   font-size: 11px;
   margin-left: 8px;
@@ -1107,7 +1151,7 @@
   transition: background 0.2s;
 }
 .cfg-toggle-slider::before {
-  content: '';
+  content: "";
   position: absolute;
   width: 16px;
   height: 16px;
@@ -1152,7 +1196,10 @@
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .cfg-chips-reset:hover {
@@ -1174,7 +1221,10 @@
   font-weight: 500;
   cursor: pointer;
   user-select: none;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
 }
 .cfg-chip input {
   display: none;
@@ -1215,7 +1265,10 @@
   align-items: center;
   width: 100%;
   border-radius: 6px;
-  transition: background 0.12s, margin 0.12s, padding 0.12s;
+  transition:
+    background 0.12s,
+    margin 0.12s,
+    padding 0.12s;
   margin: 0 0;
   padding: 0 0;
 }
@@ -1343,7 +1396,9 @@
   background: var(--input-bg);
   color: var(--fg);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   display: block;
   resize: none;
   height: 32px;
@@ -1396,7 +1451,10 @@
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .cfg-url-wrap-toggle:hover,
@@ -1425,7 +1483,9 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: color 0.12s, background 0.12s;
+  transition:
+    color 0.12s,
+    background 0.12s;
 }
 .cfg-url-del:hover {
   color: var(--danger);
@@ -1442,7 +1502,10 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
   margin-top: 2px;
   margin-bottom: 12px;
   margin-left: 18px;
@@ -1463,7 +1526,10 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
   margin-top: -6px;
   margin-bottom: 2px;
   margin-left: 18px;
@@ -1530,7 +1596,10 @@ textarea.cfg-expandable-input:focus {
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 .cfg-link svg {
   width: 10px;
@@ -1619,7 +1688,10 @@ textarea.cfg-expandable-input:focus {
   cursor: pointer;
   user-select: none;
   animation: hintFadeIn 0.18s ease-out;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s,
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s,
     box-shadow 0.15s;
 
   margin: 4px 0 0; /* 原来 margin: 2px 10px 4px 改为贴着 row 内壁 */
@@ -1681,7 +1753,8 @@ textarea.cfg-expandable-input:focus {
   background: var(--glass-bg, #fff);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08),
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.08),
     0 12px 30px -4px rgba(0, 0, 0, 0.14);
   overflow: hidden;
   animation: pvSlideIn 0.18s cubic-bezier(0.22, 0.68, 0, 1.2) both;
@@ -1756,7 +1829,9 @@ textarea.cfg-expandable-input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .pv-close svg {
   width: 13px;
@@ -1919,7 +1994,7 @@ textarea.cfg-expandable-input:focus {
   /* iOS 防自动缩放 */
   .cfg-input,
   .cfg-pw-input,
-  .cfg-number-wrap input[type='number'],
+  .cfg-number-wrap input[type="number"],
   .cfg-sel-trigger,
   .cfg-url-item .cfg-url-input,
   .cfg-cron-display,

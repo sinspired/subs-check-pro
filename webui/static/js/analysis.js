@@ -635,24 +635,56 @@ function guessOrigin() {
 let _geoMapInstance = null;
 
 // ── theme ──
-(function () {
-    const saved = localStorage.getItem('theme');
-    const prefer = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    applyTheme(saved || prefer);
-})();
+
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    // localStorage 由切换处按需写，避免 resolved 值覆盖 'auto' 语义
     const isDark = theme === 'dark';
-    const moon = document.getElementById('iconMoon'), sun = document.getElementById('iconSun'), label = document.getElementById('themeLabel');
-    if (moon) moon.style.display = isDark ? 'block' : 'none';
-    if (sun) sun.style.display = isDark ? 'none' : 'block';
-    if (label) label.textContent = isDark ? '深色' : '浅色';
+    const moon = document.getElementById('iconMoon');
+    const sun = document.getElementById('iconSun');
+    const label = document.getElementById('themeLabel');
     const btn = document.getElementById('themeToggle');
+    if (moon) moon.style.display = isDark ? '' : 'none';
+    if (sun) sun.style.display = isDark ? 'none' : '';
+    if (label) label.textContent = isDark ? '深色' : '浅色';
     if (btn) btn.setAttribute('aria-pressed', String(isDark));
 }
+function resolveTheme(t) {
+    if (t === 'auto' || !t) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return t;
+}
+
+fetch('/admin/theme')
+    .then(r => r.json())
+    .then(d => {
+        // ✅ 已删除调试 console.log
+        applyTheme(resolveTheme(d.theme));
+    })
+    .catch(() => {
+        applyTheme(resolveTheme('auto'));
+    });
+
+
 document.getElementById('themeToggle')?.addEventListener('click', () => {
-    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('scp_theme', next); } catch (_) { }
+    fetch('/admin/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: next })
+    }).catch(() => { });
+});
+document.getElementById('themeToggle')?.addEventListener('dblclick', () => {
+    try { localStorage.removeItem('scp_theme'); } catch (_) { }
+    fetch('/admin/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: 'auto' })
+    }).catch(() => { });
+    applyTheme(resolveTheme('auto'));
 });
 
 const STORAGE_KEY = 'subscheck_api_key';

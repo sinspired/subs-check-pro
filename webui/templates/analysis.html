@@ -1,0 +1,494 @@
+<!-- app\templates\analysis.html -->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="theme-color"
+      content="#ffffff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#17181b"
+      media="(prefers-color-scheme: dark)"
+    />
+    <title>分析报告 - Subs-Check-PRO</title>
+    <link rel="icon" type="image/svg+xml" href="/static/icon/favicon.svg" />
+    <link rel="stylesheet" href="/static/css/admin.css?v20260324" />
+    <link rel="stylesheet" href="/static/css/analysis.css?v20260324" />
+    <script src="/static/js/libs/yaml.bundle.js?v20260324"></script>
+  </head>
+
+  <body>
+    <!-- login scene -->
+    <div class="login-scene" id="loginScene">
+      <div class="login-card">
+        <div class="login-card-body">
+          <div class="status-badge" id="placeholderBadge">Analysis Report</div>
+          <h1>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+              <line x1="2" y1="20" x2="22" y2="20" /></svg
+            >检测结果分析
+          </h1>
+          <p class="desc" id="placeholderMsg" style="display: none">
+            正在获取报告<span class="loading-dots"></span>
+          </p>
+          <div id="inlineLoginArea" style="display: none">
+            <p class="desc">请输入 API 密钥以查看检测分析报告。</p>
+            <div class="auth-area">
+              <input
+                class="auth-input"
+                type="password"
+                id="inlineApiKey"
+                placeholder="输入 API 密钥..."
+                autocomplete="current-password"
+                onkeydown="if (event.keyCode === 13) inlineLogin();"
+              />
+              <p class="auth-hint" id="loginHint"></p>
+              <button
+                class="btn-auth"
+                id="inlineLoginBtn"
+                onclick="inlineLogin()"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" /></svg
+                >验证并查看
+              </button>
+            </div>
+          </div>
+          <div class="retry-area" id="retryArea" style="display: none">
+            <p class="retry-msg" id="retryMsg"></p>
+            <button class="btn-auth" onclick="initPage()">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 .49-3.33" /></svg
+              >重试
+            </button>
+          </div>
+        </div>
+        <div class="login-card-footer">
+          <a class="brand-info" href="/admin">
+            <img src="/static/icon/favicon.svg" alt="logo" />
+            Subs-Check-PRO
+          </a>
+          <div class="footer-meta">Analysis Report</div>
+        </div>
+      </div>
+      <div class="login-bottom">
+        <div class="footer-icons">
+          <a href="https://github.com/sinspired/subs-check-pro" title="GitHub"
+            ><img
+              src="/static/icon/github.svg"
+              alt="GitHub"
+              class="footer-icon"
+          /></a>
+          <a
+            href="https://hub.docker.com/r/sinspired/subs-check-pro"
+            title="Docker"
+            ><img
+              src="/static/icon/docker.svg"
+              alt="Docker"
+              class="footer-icon"
+          /></a>
+          <a href="https://t.me/subs_check_pro" title="Telegram"
+            ><img
+              src="/static/icon/telegram.svg"
+              alt="Telegram"
+              class="footer-icon"
+          /></a>
+        </div>
+        <div class="footer-copy">
+          © 2025
+          <a href="https://github.com/sinspired" target="_blank" rel="noopener"
+            >sinspired</a
+          >
+          ·
+          <a
+            href="https://www.gnu.org/licenses/gpl-3.0.html"
+            target="_blank"
+            rel="noopener"
+            >GPL-3.0</a
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- report scene -->
+    <div class="report-scene" id="reportScene">
+      <div class="topbar">
+        <a class="topbar-brand" href="/admin">
+          <img src="/static/icon/favicon.svg" alt="logo" />Subs-Check-PRO
+        </a>
+        <div class="topbar-meta" id="navMeta">分析报告</div>
+        <div class="topbar-actions">
+          <button
+            class="topbar-btn"
+            id="themeToggle"
+            aria-label="切换主题"
+            title="切换主题"
+          >
+            <svg
+              id="iconMoon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              style="display: none"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+            <svg
+              id="iconSun"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <span id="themeLabel">浅色</span>
+          </button>
+          <button class="topbar-btn danger" onclick="doLogout()">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" /></svg
+            >退出
+          </button>
+        </div>
+      </div>
+      <div class="body-area">
+        <nav class="sidebar" id="sidebar">
+          <div class="sidebar-label">导航</div>
+          <button
+            class="sidebar-btn active"
+            data-tab="overview"
+            onclick="switchTab('overview')"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" /></svg
+            >概览
+          </button>
+          <button class="sidebar-btn" data-tab="geo" onclick="switchTab('geo')">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path
+                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+              /></svg
+            >地理分布 <span class="s-badge" id="sb-geo">0</span>
+          </button>
+          <button
+            class="sidebar-btn"
+            data-tab="proto"
+            onclick="switchTab('proto')"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
+            >协议分析 <span class="s-badge" id="sb-proto">0</span>
+          </button>
+          <div class="sidebar-divider"></div>
+          <button
+            class="sidebar-btn"
+            data-tab="subs"
+            onclick="switchTab('subs')"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" /></svg
+            >订阅排名 <span class="s-badge" id="sb-subs">0</span>
+          </button>
+          <button
+            class="sidebar-btn"
+            data-tab="cfgana"
+            onclick="switchTab('cfgana')"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"
+              />
+              <path
+                d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"
+              /></svg
+            >配置分析
+          </button>
+        </nav>
+        <div class="content-area">
+          <div class="tab-bar" id="tabBar" role="tablist">
+            <button
+              class="tab-btn active"
+              role="tab"
+              data-tab="overview"
+              onclick="switchTab('overview')"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" /></svg
+              ><span>概览</span>
+            </button>
+            <button
+              class="tab-btn"
+              role="tab"
+              data-tab="geo"
+              onclick="switchTab('geo')"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path
+                  d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                /></svg
+              ><span>地理</span>
+            </button>
+            <button
+              class="tab-btn"
+              role="tab"
+              data-tab="proto"
+              onclick="switchTab('proto')"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
+              ><span>协议</span>
+            </button>
+            <button
+              class="tab-btn"
+              role="tab"
+              data-tab="subs"
+              onclick="switchTab('subs')"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" /></svg
+              ><span>订阅</span>
+            </button>
+            <button
+              class="tab-btn"
+              role="tab"
+              data-tab="cfgana"
+              onclick="switchTab('cfgana')"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"
+                /></svg
+              ><span>配置</span>
+            </button>
+          </div>
+          <div class="tab-content active" id="tab-overview" role="tabpanel">
+            <div class="tab-inner">
+              <div id="heroSummary"></div>
+              <div class="summary-chips-grid" id="summaryChips"></div>
+              <div id="unlockSection"></div>
+              <div id="overviewExtra"></div>
+            </div>
+          </div>
+          <div class="tab-content" id="tab-geo" role="tabpanel">
+            <div class="tab-inner">
+              <div class="geo-view">
+                <div class="map-slot" id="mapSlot">
+                  <div class="map-slot-hint">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="2" y1="12" x2="22" y2="12" />
+                      <path
+                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                      /></svg
+                    ><span>地图视图（开发中）</span>
+                  </div>
+                </div>
+                <div id="geoBars"></div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-content" id="tab-proto" role="tabpanel">
+            <div class="tab-inner" id="protoContent"></div>
+          </div>
+          <div class="tab-content" id="tab-subs" role="tabpanel">
+            <div class="tab-inner">
+              <div id="copyToolbar"></div>
+              <div id="rankingContent"></div>
+              <div id="badContent" style="margin-top: 16px"></div>
+            </div>
+          </div>
+          <div class="tab-content" id="tab-cfgana" role="tabpanel">
+            <div class="tab-inner" id="cfganaContent"></div>
+          </div>
+        </div>
+      </div>
+      <footer class="page-footer">
+        <div class="footer-icons">
+          <a href="https://github.com/sinspired/subs-check-pro" title="GitHub"
+            ><img
+              src="/static/icon/github.svg"
+              alt="GitHub"
+              class="footer-icon"
+          /></a>
+          <a
+            href="https://hub.docker.com/r/sinspired/subs-check-pro"
+            title="Docker"
+            ><img
+              src="/static/icon/docker.svg"
+              alt="Docker"
+              class="footer-icon"
+          /></a>
+          <a href="https://t.me/subs_check_pro" title="Telegram"
+            ><img
+              src="/static/icon/telegram.svg"
+              alt="Telegram"
+              class="footer-icon"
+          /></a>
+        </div>
+        <div class="footer-copy">
+          © 2025
+          <a href="https://github.com/sinspired" target="_blank" rel="noopener"
+            >sinspired</a
+          >
+          ·
+          <a
+            href="https://www.gnu.org/licenses/gpl-3.0.html"
+            target="_blank"
+            rel="noopener"
+            >GPL-3.0</a
+          >
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="/static/js/admin.js?v20260324"></script>
+    <script src="/static/js/analysis.js?v20260324"></script>
+  </body>
+</html>

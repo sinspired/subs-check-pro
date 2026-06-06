@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,6 +55,10 @@ type App struct {
 	// 在 Initialize() 中、启动对应服务之前赋值，供 GUI 读取展示冲突提示。
 	portConflictHTTP     bool
 	portConflictSubStore bool
+
+	// currentTheme 存储用户选择的主题，"auto"/"dark"/"light"
+	currentTheme string
+	themeMu      sync.RWMutex
 }
 
 type lastCheckResult struct {

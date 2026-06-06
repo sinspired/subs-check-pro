@@ -36,7 +36,7 @@ const (
 	retryDelay    = 500 * time.Millisecond // 重试等待间隔
 
 	FallbackProxy = ""                                                                                             // 兜底代理
-	RepoURL       = "https://github.com/sinspired/subs-check-pro/v2"                                                  // 仓库地址
+	RepoURL       = "https://github.com/sinspired/subs-check-pro/v2"                                               // 仓库地址
 	IconURL       = "https://raw.githubusercontent.com/sinspired/subs-check-pro/main/app/static/icon/icon-512.png" // 通用图标 URL
 )
 
@@ -47,6 +47,12 @@ type NotifyRequest struct {
 	Title  string `json:"title"`
 	Format string `json:"format"` // text、markdown 或 html
 }
+
+// OSNotifyHook 供 GUI 注入系统通知回调。
+// SendNotifyCheckResult 构造好 title/body 后调用此 hook，
+// GUI 通过 Wails3 NotificationService 发送系统托盘通知。
+// 未注入时（CLI / Docker 模式）保持 nil，无副作用。
+var OSNotifyHook func(title, body string)
 
 // clientCache 按 proxyURL 缓存 HTTP 客户端，避免重复创建，实现连接复用
 var clientCache sync.Map
@@ -334,6 +340,11 @@ func SendNotifyCheckResult(length int, checkTraffic string) {
 		body = "✅ 可用节点：" + strconv.Itoa(length) +
 			"  \n⚠️ 网络异常或手动取消" +
 			"  \n🕒 " + GetCurrentTime()
+	}
+
+	// GUI 系统通知（Wails3 NotificationService）
+	if OSNotifyHook != nil {
+		OSNotifyHook(title, body)
 	}
 
 	broadcastNotify(NotifyNodeStatus, title, body, "")

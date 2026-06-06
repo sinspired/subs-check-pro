@@ -51,11 +51,12 @@
   --mobile-subtract: 240px;
   --gap: 8px;
 
-  --font-pingfang: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC',
-    'Microsoft YaHei';
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Courier New',
-    monospace;
-  --font-code: 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  --font-pingfang:
+    system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+    "Microsoft YaHei";
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+  --font-code: "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
 
   --bg-hover-1: rgba(255, 255, 255, 0.2);
   --bg-hover-2: rgba(255, 255, 255, 0.2);
@@ -63,7 +64,7 @@
   --invert: 0%;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   --bg: #121316;
   --fg: #e6e6e6;
   --card: #18191b;
@@ -120,7 +121,7 @@
   --chip-sub: #64748b;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   --chip-nodes: #0ea5a0;
   --chip-passrate-good: #16a34a;
   --chip-passrate-warn: #d97706;
@@ -151,7 +152,7 @@
   --unlock-ai-fallback: var(--success);
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   --unlock-tiktok: #06de9d;
   --unlock-gpt: #0da5e6;
   --unlock-disney: #3b5fe0; /* 深色背景下略提亮 */
@@ -182,7 +183,9 @@ body {
   background: transparent;
   color: var(--fg);
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease,
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
     background-color 0.12s ease;
   backdrop-filter: blur(6px);
   font-size: 14px;
@@ -214,6 +217,7 @@ header.card {
   display: flex;
   align-items: center;
   gap: 6px;
+  user-select: none;
 }
 
 .logo {
@@ -290,14 +294,16 @@ header.card {
   font-weight: 700;
   font-size: 20px;
   color: #00c5b7;
-  text-shadow: 0 0 5px rgba(14, 165, 160, 0.8), 0 0 10px rgba(14, 165, 160, 0.4);
+  text-shadow:
+    0 0 5px rgba(14, 165, 160, 0.8),
+    0 0 10px rgba(14, 165, 160, 0.4);
   transform: skewX(-10deg);
   animation: neon-glow 2s infinite alternate;
   white-space: nowrap;
 }
 
 /* 如果是深色模式，微调阴影色 */
-[data-theme='dark'] .pro-plus {
+[data-theme="dark"] .pro-plus {
   filter: drop-shadow(0 0 2px rgba(0, 255, 136, 0.3));
 }
 
@@ -316,7 +322,7 @@ header.card {
 /* Pro 会员金色样式 */
 .pro-plus-golden {
   display: inline-block;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-weight: 800;
   font-size: 1.1em;
   margin-left: 2px;
@@ -368,6 +374,7 @@ header.card {
   transition: all 0.3s ease;
   cursor: pointer;
   border: 1px solid transparent;
+  cursor: help;
 }
 
 /* 当前是预览版时的样式 */
@@ -501,6 +508,7 @@ main {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
+  user-select: none;
 }
 
 .sidebar.card {
@@ -559,7 +567,9 @@ main {
   padding: 10px 20px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   font-size: 14px;
-  transition: background-color 0.12s ease, transform 0.08s ease;
+  transition:
+    background-color 0.12s ease,
+    transform 0.08s ease;
   cursor: pointer;
   /* border-radius: 10px; */
   box-sizing: border-box;
@@ -577,7 +587,9 @@ main {
   );
   box-shadow: var(--glass-shadow);
 }
-
+.slide-menu {
+  user-select: none;
+}
 /* 分享订阅菜单 */
 #shareMenu {
   position: absolute;
@@ -619,6 +631,7 @@ main {
   border-radius: 0;
   transition: background-color 0.2s ease;
   /* 现代过渡动画 */
+  cursor: copy;
 }
 
 #shareMenu .menu-content .list-item:hover {
@@ -745,6 +758,7 @@ main {
   flex: 0 0 auto;
   overflow: hidden;
   width: 100%;
+  user-select: none;
 }
 
 .progress-row {
@@ -1085,7 +1099,9 @@ main {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
   flex-shrink: 0;
 }
 
@@ -1123,6 +1139,7 @@ main {
   /* 确保宽度被限制 */
   width: 100%;
   min-width: 0;
+  user-select: text;
 }
 
 .history-line {
@@ -1154,6 +1171,7 @@ main {
   /* 超出隐藏 */
   /* text-overflow: ellipsis;  */
   /* 显示省略号 */
+  user-select: text;
 }
 
 /* ==================== 交互式分析摘要 ==================== */
@@ -1245,7 +1263,9 @@ main {
 .summary-content-wrapper {
   max-height: calc(100dvh - 200px);
   overflow: hidden;
-  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+  transition:
+    max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s;
   opacity: 1;
 }
 
@@ -1338,7 +1358,9 @@ main {
   letter-spacing: 0.06em;
   color: var(--muted);
   opacity: 0.85;
-  transition: opacity 0.15s, color 0.15s;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
   margin: 0;
 }
 
@@ -1561,7 +1583,9 @@ main {
   font-weight: 500;
   color: var(--muted);
   text-decoration: none;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 
 .summary-analysis-btn svg {
@@ -1670,6 +1694,7 @@ main {
   flex-direction: column;
   padding-bottom: 1rem;
   padding-left: 4px;
+  user-select: none;
 }
 
 .title-line {
@@ -1686,6 +1711,7 @@ main {
   width: 100%;
   gap: 8px;
   align-items: center;
+  user-select: none;
 }
 
 .title-text {
@@ -1707,6 +1733,12 @@ main {
 
 .card-tip {
   padding-right: 1em;
+  user-select: text;
+}
+
+.logsCard .card-tip {
+  user-select: none;
+  cursor: default;
 }
 
 .muted {
@@ -1736,7 +1768,9 @@ main {
 .collapse-icon .arrow-top,
 .collapse-icon .arrow-bot,
 .collapse-icon .dash-mid {
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease,
+  transition:
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s ease,
     stroke-dashoffset 0.5s ease;
 }
 
@@ -1753,13 +1787,13 @@ main {
 }
 
 /* 折叠态：旋转 180° */
-.logs-collapse-btn[aria-expanded='false'] .arrow-top {
+.logs-collapse-btn[aria-expanded="false"] .arrow-top {
   transform: rotate(180deg);
 }
-.logs-collapse-btn[aria-expanded='false'] .arrow-bot {
+.logs-collapse-btn[aria-expanded="false"] .arrow-bot {
   transform: rotate(180deg);
 }
-.logs-collapse-btn[aria-expanded='false'] .dash-mid {
+.logs-collapse-btn[aria-expanded="false"] .dash-mid {
   opacity: 0.1;
   stroke-dashoffset: 2;
 }
@@ -1772,6 +1806,7 @@ main {
   background: transparent;
   color: var(--muted);
   line-height: 1.4;
+  cursor: default;
 }
 
 .status-idle {
@@ -1820,7 +1855,7 @@ main {
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
-  cursor: pointer;
+  cursor: text;
   -webkit-user-select: text;
   user-select: text;
 
@@ -2048,7 +2083,9 @@ main {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); */
   animation: toastIn 0.4s ease;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 
   border-radius: 6px;
   border-left: 6px solid transparent;
@@ -2152,6 +2189,7 @@ main {
   justify-content: center;
   z-index: 9999;
   background: var(--bg);
+  user-select: none;
 }
 
 .login-card {
@@ -2163,7 +2201,7 @@ main {
   border: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
-  gap: .85em;
+  gap: 0.85em;
   position: relative;
   align-items: center;
 }
@@ -2171,7 +2209,7 @@ main {
 /* 添加背景烟雾 */
 .login-card::before,
 .login-card::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 50%;
   top: 50%;
@@ -2274,6 +2312,7 @@ main {
   text-decoration: none;
   transition: all 0.3s ease;
   border: 1px solid transparent;
+  cursor: help;
 }
 
 .version-badge.is-pre {
@@ -2313,13 +2352,13 @@ main {
 
 /* 状态 1：正式版更新 - 红色 NEW */
 .new-version::after {
-  content: 'NEW';
+  content: "NEW";
   background: #e53935;
 }
 
 /* 状态 2：预览版更新 - 橙色 PRE (覆盖正式版样式) */
 .new-version.pre-release::after {
-  content: 'PRE';
+  content: "PRE";
   /* 建议使用 PRE */
   background: #ff9800;
 }
@@ -2616,7 +2655,9 @@ main {
 
   /* ── 日志内容区：折叠状态 ── */
   .logs-wrapper {
-    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease,
+    transition:
+      max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s ease,
       padding 0.25s ease;
     max-height: 2000px;
     opacity: 1;
@@ -2698,6 +2739,7 @@ main {
     padding: 16px;
     color: var(--muted);
     font-size: 12px;
+    user-select: none;
   }
   .footer-icons {
     display: flex;
@@ -2803,7 +2845,9 @@ main {
     );
     border-color: var(--glass-border);
     /* 只过渡实际变化的属性，避免 all 触发不必要的重绘 */
-    transition: background 0.3s ease, border-color 0.3s ease;
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease;
   }
 }
 
