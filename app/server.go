@@ -557,22 +557,3 @@ func parseHistNodeCount(s string) float64 {
 	return 0
 }
 
-// EnsureRouter 确保 router 已初始化，供 GUI 模式调用。
-// 若 initHTTPServer 已执行（router != nil）则直接返回。
-// 若 Initialize() 检测到端口冲突并跳过了 HTTP 服务启动，则此处同样跳过，
-// 由 GUI 展示冲突提示，让用户修改端口后重启。
-func (app *App) EnsureRouter() error {
-	if app.router != nil {
-		return nil
-	}
-	if app.portConflictHTTP {
-		slog.Warn("HTTP 端口冲突，HTTP 服务未能启动，请在 GUI 中修改端口后重启")
-		return nil // 不作为致命错误，由 GUI 向用户展示冲突信息
-	}
-	// GUI 模式：强制启用 WebUI，使用默认端口
-	config.GlobalConfig.EnableWebUI = true
-	if config.GlobalConfig.ListenPort == "" {
-		config.GlobalConfig.ListenPort = DefaultPort
-	}
-	return app.initHTTPServer()
-}

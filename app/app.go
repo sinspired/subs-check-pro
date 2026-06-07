@@ -51,11 +51,6 @@ type App struct {
 
 	router *gin.Engine
 
-	// portConflictHTTP / portConflictSubStore 记录服务启动前的端口预检结果。
-	// 在 Initialize() 中、启动对应服务之前赋值，供 GUI 读取展示冲突提示。
-	portConflictHTTP     bool
-	portConflictSubStore bool
-
 	// currentTheme 存储用户选择的主题，"auto"/"dark"/"light"
 	currentTheme string
 	themeMu      sync.RWMutex
@@ -84,8 +79,8 @@ func New(originVersion string, version string, configPath string) *App {
 	}
 }
 
-// Initialize 初始化应用程序
-func (app *App) Initialize() error {
+// InitConfigLoad 初始化配置文件加载
+func (app *App) InitConfigLoad() error {
 	// 初始化配置文件路径
 	if err := app.initConfigPath(); err != nil {
 		return fmt.Errorf("初始化配置文件路径失败: %w", err)
@@ -99,6 +94,27 @@ func (app *App) Initialize() error {
 	// 加载配置文件
 	if err := app.loadConfig(); err != nil {
 		return fmt.Errorf("加载配置文件失败: %w", err)
+	}
+	return nil
+}
+
+// Initialize 初始化应用程序
+func (app *App) Initialize() error {
+	if err := app.InitConfigLoad(); err != nil {
+		return err
+	}
+	httpPortAvailable, subStorePortAvailable := app.CheckPortConflict()
+
+	if config.GlobalConfig.ListenPort != "" && !httpPortAvailable {
+		listenAddr := normalizeListenAddr(config.GlobalConfig.ListenPort)
+		if os.Getenv("START_FROM_GUI") == "1" {
+			// GUI 模式：记录冲突，跳过启动，让窗口展示提示供用户修改端口
+			slog.Warn("HTTP 端口已被其他进程占用，HTTP 服务未启动，请修改端口后重启",
+				"addr", listenAddr)
+		} else {
+			// CLI 模式：端口冲突属于致命错误，直接返回
+			return fmt.Errorf("HTTP 端口 %s 已被占用，请修改配置中的 listen-port", listenAddr)
+		}
 	}
 
 	// 初始化配置文件监听
@@ -114,21 +130,8 @@ func (app *App) Initialize() error {
 	}()
 
 	if config.GlobalConfig.ListenPort != "" {
-		listenAddr := normalizeListenAddr(config.GlobalConfig.ListenPort)
-		if !checkPortFree(listenAddr) {
-			app.portConflictHTTP = true
-			if os.Getenv("START_FROM_GUI") == "1" {
-				// GUI 模式：记录冲突，跳过启动，让窗口展示提示供用户修改端口
-				slog.Warn("HTTP 端口已被其他进程占用，HTTP 服务未启动，请在 GUI 中修改端口后重启",
-					"addr", listenAddr)
-			} else {
-				// CLI 模式：端口冲突属于致命错误，直接返回
-				return fmt.Errorf("HTTP 端口 %s 已被占用，请修改配置中的 listen_port", listenAddr)
-			}
-		} else {
-			if err := app.initHTTPServer(); err != nil {
-				return fmt.Errorf("初始化HTTP服务器失败: %w", err)
-			}
+		if err := app.initHTTPServer(); err != nil {
+			return fmt.Errorf("初始化HTTP服务器失败: %w", err)
 		}
 	}
 
@@ -137,8 +140,7 @@ func (app *App) Initialize() error {
 			slog.Warn("Node.js 不支持 Linux 32位架构，Sub-Store 服务未启动")
 		} else {
 			subStoreAddr := normalizeListenAddr(config.GlobalConfig.SubStorePort)
-			if !checkPortFree(subStoreAddr) {
-				app.portConflictSubStore = true
+			if !subStorePortAvailable {
 				assets.IsSubStoreRunning.Store(false)
 				slog.Warn("Sub-Store 端口已被其他进程占用，Sub-Store 服务未启动，请修改端口后重启",
 					"addr", subStoreAddr)
@@ -255,18 +257,6 @@ func (app *App) GetRouter() *gin.Engine {
 // 在 Initialize() 调用前返回空字符串。
 func (app *App) GetConfigPath() string {
 	return app.configPath
-}
-
-// PortConflictHTTP 返回 HTTP 服务端口预检结果。
-// true 表示启动前该端口已被其他进程占用（HTTP 服务未能启动）。
-func (app *App) PortConflictHTTP() bool {
-	return app.portConflictHTTP
-}
-
-// PortConflictSubStore 返回 Sub-Store 端口预检结果。
-// true 表示启动前该端口已被其他进程占用（Sub-Store 未能启动）。
-func (app *App) PortConflictSubStore() bool {
-	return app.portConflictSubStore
 }
 
 // setTimer 根据配置设置定时器
