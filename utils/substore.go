@@ -559,7 +559,7 @@ func mergeFileProcess(existing []json.RawMessage, scpOps []any) ([]any, error) {
 // 资源构建
 
 func newDefaultSub(data []byte) sub {
-	icon := WarpURL("https://raw.githubusercontent.com/sinspired/subs-check-pro/main/app/static/icon/favicon.svg", IsGithubProxy)
+	icon := WarpURL("https://raw.githubusercontent.com/sinspired/subs-check-pro/main/webui/static/icon/favicon.svg", IsGithubProxy)
 	return sub{
 		Name:           SubName,
 		DisplayName:    SubName,
