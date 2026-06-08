@@ -659,7 +659,6 @@ function resolveTheme(t) {
 fetch('/admin/theme')
     .then(r => r.json())
     .then(d => {
-        // ✅ 已删除调试 console.log
         applyTheme(resolveTheme(d.theme));
     })
     .catch(() => {

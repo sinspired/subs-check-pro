@@ -89,6 +89,7 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     searchBtn: $('#searchBtn'),
     logoutBtn: $('#logoutBtn'),
     logoutBtnMobile: $('#btnlogoutMobile'),
+    logoutText: $('#logoutText'),
     openEditorBtn: $('#openEditor'),
     themeToggleBtn: $('#mainThemeToggle'),
     iconMoon: $('#iconMoon'),
@@ -2038,8 +2039,17 @@ import { initQuickPreview } from './cfg-quickpreview.js';
 
   function showLogin(show) {
     getPublicVersion()
-    if (els.loginModal) els.loginModal.classList.toggle('login-hidden', !show)
-    if (show) els.apiKeyInput?.focus()
+    const isWails = !!window.__WAILS_GUI?.baseURL
+
+    if (els.loginModal) els.loginModal.classList.toggle('login-hidden', !show || isWails)
+    if (show) {
+      if (isWails) {
+        // 调用 Wails binding 切回登录小窗
+        fetch('/gui/back-to-login').catch(() => { })
+      } else {
+        els.apiKeyInput?.focus()
+      }
+    }
   }
 
   function setAuthUI(ok) {
@@ -2176,8 +2186,6 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     if (wailsBase) {
       // 替换端口为 sub-store 端口（如果有）
       if (cleanPort) {
-        // 修复前：wailsBase.replace(/(:\d+)?(\/|$)/, ':' + cleanPort + '$2').replace(/\/$/, '')
-        // 修复后：用 URL 对象直接替换端口，避免正则误匹配协议冒号
         try {
           const u = new URL(wailsBase)
           u.port = cleanPort
@@ -2224,54 +2232,147 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       return
     }
 
+    const isWails = !!window.__WAILS_GUI?.baseURL
+
+    // ── Wails GUI 路径：无弹窗拦截问题，先完成所有异步再触发原生窗口 ──────
+    if (isWails) {
+      try {
+        const r = await sfetch(API.status)
+        if (!r.ok) {
+          if (els.statusEl) {
+            els.statusEl.textContent = '获取状态失败'
+            els.statusEl.className = 'muted status-label status-error'
+          }
+          return
+        }
+        const d = r.payload || {}
+        if (!d.isSubStoreRunning) {
+          showToast('Sub-Store 服务未运行', 'warn')
+          return
+        }
+
+        if (!_cachedSubStoreConfig) {
+          _cachedSubStoreConfig = await fetchSubStoreConfig()
+        }
+        const result = buildSubStoreUrl(_cachedSubStoreConfig)
+        lastSubStorePath = result.subStorePath
+
+        fetch('/gui/popup?url=' + encodeURIComponent(result.url) + '&size=medium')
+          .catch(err => showToast('打开窗口失败: ' + err.message, 'error'))
+      } catch (err) {
+        console.error(err)
+        showToast(err.message || '打开失败', 'error')
+      }
+      return
+    }
+
+    // ── 普通浏览器路径：同步开窗（规避 iOS/Safari 弹窗拦截），异步填充内容 ──
+    const newWindow = window.open('', '_blank')
+    if (!newWindow) {
+      showToast('窗口弹出被拦截', 'warn')
+      return
+    }
+
+    // 写入过渡 Loading 界面
+    newWindow.document.title = '正在连接 Sub-Store...'
+    newWindow.document.body.style.cssText = 'margin:0'
+    newWindow.document.body.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+                background:#f9f9f9;color:#333;">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0ea5a0"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+           style="animation:spin 1s linear infinite;margin-bottom:15px">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+      </svg>
+      <h3 id="status-text" style="font-weight:600;margin:0 0 6px">正在跳转...</h3>
+      <p style="color:#666;font-size:13px;margin:0">正在解析 sub-store 配置并构建连接，请稍候。</p>
+    </div>
+  `
+
+    // 超时保护（10 秒）
+    let done = false
+    const timer = setTimeout(() => {
+      if (done) return
+      done = true
+      if (newWindow && !newWindow.closed) {
+        newWindow.document.body.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    height:100vh;font-family:sans-serif;">
+          <h3 style="color:#ff4d4f">连接超时</h3>
+          <p style="color:#666;margin-bottom:20px">获取 sub-store 配置耗时过长，请关闭重试。</p>
+          <button onclick="window.close()"
+                  style="padding:8px 20px;cursor:pointer;background:#fff;border:1px solid #ccc;border-radius:4px">
+            关闭窗口
+          </button>
+        </div>
+      `
+      }
+    }, 10000)
+
+    const abort = (closeFn) => {
+      if (done) return false
+      done = true
+      clearTimeout(timer)
+      closeFn?.()
+      return true
+    }
+
     try {
-      // ── 1. 检查 Sub-Store 服务是否运行 ─────────────────────────────────
       const r = await sfetch(API.status)
       if (!r.ok) {
+        if (!abort(() => newWindow.close())) return
         if (els.statusEl) {
           els.statusEl.textContent = '获取状态失败'
           els.statusEl.className = 'muted status-label status-error'
         }
         return
       }
+
       const d = r.payload || {}
       if (!d.isSubStoreRunning) {
+        if (!abort(() => newWindow.close())) return
         showToast('Sub-Store 服务未运行', 'warn')
         return
       }
 
-      // ── 2. 获取配置（缓存优先）并构建 URL（含 ?api=<path>）────────────
-      let configData = _cachedSubStoreConfig
-      if (!configData) {
-        configData = await fetchSubStoreConfig()
-        _cachedSubStoreConfig = configData
+      if (!_cachedSubStoreConfig) {
+        // 更新过渡页文案
+        const statusEl = newWindow.document.getElementById('status-text')
+        if (statusEl) statusEl.textContent = '正在获取 sub-store 配置...'
+
+        _cachedSubStoreConfig = await fetchSubStoreConfig()
       }
-      const result = buildSubStoreUrl(configData)
+
+      const result = buildSubStoreUrl(_cachedSubStoreConfig)
       lastSubStorePath = result.subStorePath
 
-      // ── 3. 打开窗口 ─────────────────────────────────────────────────────
-      // Wails GUI 环境（window.__WAILS_GUI 由 Go 模板注入）：
-      //   通过 /gui/popup 让 Go 在主线程创建 Wails 管理的无地址栏弹窗，
-      //   规避 WebView2/WKWebView 对 JS window.open 跨 origin 导航的拦截，
-      //   并复用 loading.html 过渡页（带主题同步），不会卡在跳转页面。
-      if (window.__WAILS_GUI?.baseURL) {
-        showToast('Wails GUI 环境，打开窗口', 'info')
-        fetch('/gui/popup?url=' + encodeURIComponent(result.url) + '&size=medium')
-          .catch(err => showToast('打开窗口失败: ' + err.message, 'error'))
-        return
-      }
-
-      // 普通浏览器降级：先开空窗再跳转（规避弹窗拦截检测）
-      const newWindow = window.open('', '_blank')
-      if (!newWindow) {
-        showToast('窗口弹出被拦截', 'warn')
-        return
-      }
+      if (!abort()) return   // 超时已触发，放弃跳转
       newWindow.location.href = result.url
 
     } catch (err) {
       console.error(err)
-      showToast(err.message || '打开失败', 'error')
+      if (!abort()) return
+
+      if (newWindow && !newWindow.closed) {
+        newWindow.document.title = '错误'
+        newWindow.document.body.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    height:100vh;font-family:sans-serif;padding:20px;text-align:center;">
+          <h3 style="color:#ff4d4f;margin-bottom:10px">发生错误</h3>
+          <p style="color:#333;background:#ffebeb;padding:10px;border-radius:5px;font-family:monospace">
+            ${err.message || '未知错误'}
+          </p>
+          <p style="color:#999;font-size:12px;margin-top:10px">请检查网络或后端日志</p>
+          <button onclick="window.close()"
+                  style="margin-top:20px;padding:8px 20px;cursor:pointer;border:1px solid #d9d9d9;
+                         background:#fff;border-radius:4px">关闭</button>
+        </div>
+      `
+      } else {
+        showToast(err.message || '打开失败', 'error')
+      }
     }
   }
 
@@ -2753,6 +2854,15 @@ import { initQuickPreview } from './cfg-quickpreview.js';
         if (confirm('确定退出？')) doLogout()
       }
     }
+    if (window.__WAILS_GUI?.baseURL) {
+      // 调用 Wails binding 切回登录小窗
+      // 设置按钮文本
+      els.logoutText.textContent = "切换配置";
+    } else {
+      // 设置按钮文本
+      els.logoutText.textContent = "退出登录";
+    }
+
     els.logoutBtn?.addEventListener('click', logoutHandler)
     els.logoutBtnMobile?.addEventListener('click', logoutHandler)
 

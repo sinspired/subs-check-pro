@@ -206,9 +206,11 @@ header {
   justify-content: space-between;
   padding: 0 8px;
   background: var(--card);
+  --wails-draggable: drag;
 }
 
 header.card {
+  --wails-draggable: drag;
   border-radius: 0 0 12px 12px;
   border-top: none;
 }
@@ -2181,6 +2183,7 @@ main {
 
 /* 登录窗口 */
 .login-modal {
+  --wails-draggable: drag;
   position: fixed;
   inset: 0;
   display: flex;
