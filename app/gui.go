@@ -123,6 +123,12 @@ func (app *App) setTheme(c *gin.Context) {
 //
 // err := app.InitConfigLoad()
 func (app *App) CheckPortConflict() (httpPortAvailable bool, subStorePortAvailable bool) {
+	if config.GlobalConfig.ListenPort == "" {
+		if err := app.loadConfig(); err != nil {
+			return false, false
+		}
+	}
+
 	if config.GlobalConfig.ListenPort != "" {
 		listenAddr := normalizeListenAddr(config.GlobalConfig.ListenPort)
 		if checkPortFree(listenAddr) {

@@ -151,7 +151,7 @@ func (app *App) ensureAPIKey() {
 		} else {
 			config.GlobalConfig.APIKey = utils.GenerateRandomString(10)
 			geneAPIKey = config.GlobalConfig.APIKey
-			os.Setenv("GUI_KEY_IS_RANDOM", "1") // ← 新增：告知 GUI 主页显示提示
+			os.Setenv("GUI_KEY_IS_RANDOM", "1") // 告知 GUI 主页显示提示
 			slog.Warn("未设置api-key，已随机生成", "api-key", config.GlobalConfig.APIKey)
 		}
 	}
