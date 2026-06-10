@@ -253,20 +253,3 @@ func replaceLinePortNum(line, newPort string) string {
 	}
 	return line
 }
-
-// EnsureRouterAndWebUI 确保 router 已初始化，供 GUI 模式调用。
-// 若 initHTTPServer 已执行（router != nil）则直接返回。
-// 若 Initialize() 检测到端口冲突并跳过了 HTTP 服务启动，则此处同样跳过，
-// 由 GUI 展示冲突提示，让用户修改端口后重启。
-func (app *App) EnsureRouterAndWebUI() error {
-	if app.router != nil {
-		return nil
-	}
-
-	// GUI 模式：强制启用 WebUI，使用默认端口
-	config.GlobalConfig.EnableWebUI = true
-	if config.GlobalConfig.ListenPort == "" {
-		config.GlobalConfig.ListenPort = DefaultPort
-	}
-	return app.initHTTPServer()
-}

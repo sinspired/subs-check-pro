@@ -23,7 +23,7 @@ import (
 	"github.com/sinspired/subs-check-pro/v2/config"
 	"github.com/sinspired/subs-check-pro/v2/save/method"
 	"github.com/sinspired/subs-check-pro/v2/utils"
-	"github.com/sinspired/subs-check-pro/v2/webui"
+	"github.com/sinspired/subs-check-pro-webui/webui"
 )
 
 const (
