@@ -2616,11 +2616,11 @@ import { initQuickPreview } from './cfg-quickpreview.js';
         if (isPre(latestV)) {
           // 新版本是预览版
           els.versionInline.classList.add('pre-release')
-          els.versionInline.textContent = `v${latestV}`
+          els.versionInline.textContent = currentV
           els.versionInline.title = `发现新预览版，建议谨慎更新`
         } else {
           // 新版本是稳定版
-          els.versionInline.textContent = `v${latestV} `
+          els.versionInline.textContent = currentV
           els.versionInline.title = `点击前往 GitHub 更新稳定版`
         }
 
@@ -2668,11 +2668,11 @@ import { initQuickPreview } from './cfg-quickpreview.js';
           // 新版本是预览版
           els.versionBadge.classList.add('pre-release')
           els.versionBadge.title = `发现新预览版 v${latestV}，建议谨慎更新`
-          els.versionLogin.textContent = `v${latestV}`
+          els.versionLogin.textContent = currentV
         } else {
           // 新版本是正式版
           els.versionBadge.title = `有新版本 v${latestV}`
-          els.versionLogin.textContent = `v${latestV}`
+          els.versionLogin.textContent = currentV
         }
 
         // 点击跳转
@@ -2703,15 +2703,21 @@ import { initQuickPreview } from './cfg-quickpreview.js';
         const a = e.target.closest('a[href]')
         if (!a) return
         const href = a.getAttribute('href')
-        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
+        if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('blob:') || href.startsWith('data:')) return
+        if (a.dataset.wailsNoIntercept !== undefined) return
         e.preventDefault()
         e.stopPropagation()
         if (href.startsWith('http://') || href.startsWith('https://')) {
-          // 外部链接：用 openInternalURL 走 /gui/popup
-          openInternalURL(href)
+          // 外部绝对链接：直接送给 /gui/popup，不经过 openInternalURL（后者会错误地拼 baseURL）
+          const theme = document.documentElement.getAttribute('data-theme') || 'light'
+          const externalURL = href + (href.includes('?') ? '&' : '?') + 'theme=' + theme
+          fetch('/gui/popup?url=' + encodeURIComponent(externalURL) + '&size=medium')
+            .catch(() => { })
         } else {
-          // 内部相对路径：拼上 baseURL 再走 /gui/popup
-          const fullURL = window.__WAILS_GUI.baseURL.replace(/\/$/, '') + href
+          // 内部相对路径：拼上 baseURL 再走 /gui/popup（与 openInternalURL 逻辑一致）
+          const theme = document.documentElement.getAttribute('data-theme') || 'light'
+          const sep = href.includes('?') ? '&' : '?'
+          const fullURL = window.__WAILS_GUI.baseURL.replace(/\/$/, '') + href + sep + 'theme=' + theme
           fetch('/gui/popup?url=' + encodeURIComponent(fullURL) + '&size=medium')
             .catch(() => { })
         }
@@ -2838,10 +2844,12 @@ import { initQuickPreview } from './cfg-quickpreview.js';
       const a = document.createElement('a')
       a.href = url
       a.download = 'subs-check-pro-logs.txt'
+      a.dataset.wailsNoIntercept = ''  // 豁免全局 Wails 拦截器
+      a.style.display = 'none'
       document.body.appendChild(a)
       a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      // 延迟 remove，确保下载触发后再清理（部分浏览器/WebView 需要）
+      setTimeout(() => { a.remove(); URL.revokeObjectURL(url) }, 500)
       showToast('已开始下载日志', 'success')
     })
 
@@ -3088,36 +3096,41 @@ import { initQuickPreview } from './cfg-quickpreview.js';
     })
 
     function openProjectMenu(anchorEl) {
-      const pm = els.projectMenu
-      const sm = document.getElementById('shareMenu')
-      if (!pm) return
+      const isWails = !!window.__WAILS_GUI?.baseURL
+      if (!isWails) {
+        const pm = els.projectMenu
+        const sm = document.getElementById('shareMenu')
+        if (!pm) return
 
-      // 打开项目菜单时，先关闭分享菜单
-      sm?.classList.remove('active')
+        // 打开项目菜单时，先关闭分享菜单
+        sm?.classList.remove('active')
 
-      if (pm.classList.contains('active')) {
-        pm.classList.remove('active')
-        return
-      }
+        if (pm.classList.contains('active')) {
+          pm.classList.remove('active')
+          return
+        }
 
-      pm.classList.add('active')
+        pm.classList.add('active')
 
-      const rect = anchorEl.getBoundingClientRect()
-      const menuW = pm.offsetWidth || 180
-      const vw = window.innerWidth
-      const GAP = 6
+        const rect = anchorEl.getBoundingClientRect()
+        const menuW = pm.offsetWidth || 180
+        const vw = window.innerWidth
+        const GAP = 6
 
-      if (vw < 768) {
-        // 小屏：按钮下方，水平居中对齐按钮
-        let left = rect.left + rect.width / 2 - menuW / 2
-        if (left < GAP) left = GAP
-        if (left + menuW > vw - GAP) left = vw - menuW - GAP
-        pm.style.top = `${rect.bottom + GAP}px`
-        pm.style.left = `${left}px`
-      } else {
-        // 大屏：保持原有位置逻辑
-        pm.style.top = `${rect.top}px`
-        pm.style.left = `${rect.right * 0.9}px`
+        if (vw < 768) {
+          // 小屏：按钮下方，水平居中对齐按钮
+          let left = rect.left + rect.width / 2 - menuW / 2
+          if (left < GAP) left = GAP
+          if (left + menuW > vw - GAP) left = vw - menuW - GAP
+          pm.style.top = `${rect.bottom + GAP}px`
+          pm.style.left = `${left}px`
+        } else {
+          // 大屏：保持原有位置逻辑
+          pm.style.top = `${rect.top}px`
+          pm.style.left = `${rect.right * 0.9}px`
+        }
+      }else{
+        fetch('/gui/open-about').catch(() => { })
       }
     }
 

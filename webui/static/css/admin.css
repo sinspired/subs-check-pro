@@ -2340,7 +2340,7 @@ main {
 /* 发现更新时的通用角标（NEW/PRE） */
 .new-version::after {
   position: absolute;
-  top: -1.2em;
+  top: -1.3em;
   right: 0;
   color: #fff;
   font-size: 9px;
