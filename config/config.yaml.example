@@ -16,7 +16,7 @@ progress-mode: "auto"
 
 # cron表达式，如果正确配置此项，将忽略check-interval
 # 建议使用：0 4,16 * * *
-cron-expression: "0 4,16 * * *"
+cron-expression: ""
 
 # 检查间隔(分钟)
 # 建议使用 cron-expression 表达式，每天凌晨4点和16点执行一次
@@ -131,7 +131,7 @@ listen-port: ":8199"
 enable-web-ui: true
 # 填写Web控制面板的api-key，如果为空，则自动生成 !请在终端窗口查看apikey
 # 配置文件为空时，支持使用环境变量设置 API_KEY
-api-key: ""
+api-key: "123456"
 
 # 如果你要分享订阅，请设置订阅分享密码
 # 访问 http://127.0.0.1:8199/sub 验证后查看分享的订阅文件列表
