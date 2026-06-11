@@ -30,8 +30,8 @@ var CfCdnApis = []string{
 	"https://api.myip.com",
 	"https://api.ipbase.com",
 	"https://api.ipquery.io",
-	"https://ipinfo.io",           // 新增
-	"https://cloudflare.com",      // 新增
+	"https://ipinfo.io",
+	"https://cloudflare.com",
 }
 
 // traceResult 内部结果结构
@@ -54,7 +54,10 @@ func cfCommonHeaders() map[string]string {
 
 // CheckCloudflare 检测当前客户端是否可以访问 Cloudflare CDN
 func CheckCloudflare(httpClient *http.Client) (cloudflare bool, cfRelayLoc string, cfRelayIP string) {
-	const retries = 2 // 减少重试次数，加快失败回落
+	retries := config.GlobalConfig.SubUrlsReTry
+	if retries < 1 {
+		retries = 2 // 防止配置错误导致死循环
+	}
 
 	// 第一阶段：快速 204 检查
 	for i := range retries {
@@ -64,7 +67,7 @@ func CheckCloudflare(httpClient *http.Client) (cloudflare bool, cfRelayLoc strin
 			return true, "", ""
 		}
 		if err == nil && !ok {
-			break // 明确 403 等情况，直接进入 trace
+			break // 明确失败（如 403），直接进入 trace
 		}
 		if i < retries-1 {
 			time.Sleep(time.Duration(i+1) * 300 * time.Millisecond)
@@ -109,7 +112,6 @@ func FetchCFTraceFirstConcurrent(httpClient *http.Client, ctx context.Context) (
 				select {
 				case resultChan <- traceResult{loc, ip}:
 				default:
-					// 已有结果，忽略
 				}
 			}
 		}(baseURL)
@@ -147,7 +149,6 @@ func FetchCFTrace(httpClient *http.Client, ctx context.Context, baseURL string) 
 	}
 	defer resp.Body.Close()
 
-	// 限制读取大小，防止恶意返回
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024))
 	if err != nil && err != io.EOF {
 		return "", ""
@@ -163,7 +164,7 @@ func FetchCFTrace(httpClient *http.Client, ctx context.Context, baseURL string) 
 			ip = strings.TrimSpace(after)
 		}
 		if loc != "" && ip != "" {
-			break // 提前退出
+			break
 		}
 	}
 
@@ -175,7 +176,7 @@ func checkCFEndpoint(httpClient *http.Client, url string, expectedStatus int) (b
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil) // 改用 GET 更稳定
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return false, err
 	}
