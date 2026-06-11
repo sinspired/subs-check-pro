@@ -23,10 +23,19 @@ func NewStatsSaver() (*StatsSaver, error) {
 		return nil, fmt.Errorf("获取可执行文件路径失败")
 	}
 
+	
 	var outputPath string
-	if config.GlobalConfig.OutputDir != "" {
+	defaultConfigDir := filepath.Join(basePath, "config")
+
+	switch {
+	case config.GlobalConfig.OutputDir != "":
+		// 用户在配置文件中显式设置了输出目录，直接使用
 		outputPath = config.GlobalConfig.OutputDir
-	} else {
+	case config.GlobalConfig.ConfigDir != "" && config.GlobalConfig.ConfigDir != defaultConfigDir:
+		// 用户主动选择了非默认位置的配置文件，输出目录跟随配置文件所在目录。
+		// 默认位置（<exe>/config/）保持原有 <exe>/output/ 行为，不破坏现有部署。
+		outputPath = filepath.Join(config.GlobalConfig.ConfigDir, outputDirName)
+	default:
 		outputPath = filepath.Join(basePath, outputDirName)
 	}
 
