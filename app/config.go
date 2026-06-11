@@ -49,6 +49,10 @@ func (app *App) loadConfig() error {
 	}
 	*config.GlobalConfig = newConfig
 
+	// 注入运行时字段：ConfigDir 用于 NewLocalSaver 计算默认输出路径。
+	// yaml:"-" 保证其不被反序列化覆盖，此处每次加载后手动填充。
+	config.GlobalConfig.ConfigDir = filepath.Dir(app.configPath)
+
 	slog.Info("配置文件读取成功")
 	return nil
 }

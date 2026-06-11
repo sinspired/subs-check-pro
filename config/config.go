@@ -83,6 +83,9 @@ type Config struct {
 	RenameNode           bool     `yaml:"rename-node"`
 	KeepSuccessProxies   bool     `yaml:"keep-success-proxies"`
 	OutputDir            string   `yaml:"output-dir"`
+	// ConfigDir 运行时由 app.loadConfig 注入，值为当前配置文件所在目录。
+	// 不参与 YAML 序列化，仅供 save/method/local.go 计算默认输出路径使用。
+	ConfigDir            string   `yaml:"-"`
 	AppriseAPIServer     string   `yaml:"apprise-api-server"`
 	RecipientURL         []string `yaml:"recipient-url"`
 	NotifyTitle          string   `yaml:"notify-title"`
