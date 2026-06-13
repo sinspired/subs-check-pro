@@ -124,7 +124,10 @@ func (app *App) Initialize() error {
 
 	app.interval = func() int {
 		if config.GlobalConfig.CheckInterval <= 0 {
-			return 1
+			return 2880
+		}
+		if config.GlobalConfig.CheckInterval <= 60 {
+			return 60
 		}
 		return config.GlobalConfig.CheckInterval
 	}()
