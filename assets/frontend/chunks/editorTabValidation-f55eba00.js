@@ -1,0 +1,1 @@
+const t=t=>{if(!t||"object"!=typeof t)return;const{prop:o,field:r}=t;return"string"==typeof o&&o?o:"string"==typeof r&&r?r:void 0},o=(o,r)=>{if(Array.isArray(o))for(const n of o){const o=t(n);if(!o)continue;const e=r[o];if(e)return e}};export{o as g};

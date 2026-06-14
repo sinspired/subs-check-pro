@@ -1,11 +1,12 @@
 package assets
 
 import (
-	"archive/tar"
 	"bytes"
 	"context"
+	"embed"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -194,8 +195,8 @@ func startSubStore(ctx context.Context) error {
 	_ = os.Remove(paths.overYamlACL4SSRPath)
 	_ = os.Remove(paths.overYamlSinspiredRulesCDNPath)
 	_ = os.RemoveAll(paths.frontDir)
-	// 解压 sub-store 相关文件
-	if err := decodeZstd(paths); err != nil {
+	// 释放 sub-store 相关资源（node 解压 + js/yaml/前端 直接写出）
+	if err := extractAssets(paths); err != nil {
 		return err
 	}
 
@@ -393,6 +394,7 @@ func normalizeSubstorePort(s string) string {
 }
 
 // decodeZstdToFile 将嵌入的 zstd 压缩数据解压写入文件
+// 目前仅供 node 二进制使用（node 体积大，仍以 zstd 压缩嵌入）
 func decodeZstdToFile(decoder *zstd.Decoder, data []byte, targetPath string, perm os.FileMode, desc string) error {
 	file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
@@ -410,87 +412,92 @@ func decodeZstdToFile(decoder *zstd.Decoder, data []byte, targetPath string, per
 	return nil
 }
 
-// extractTarFromZstd 解压嵌入的 zstd(tar) 到目标目录（用于前端资源）
-func extractTarFromZstd(decoder *zstd.Decoder, data []byte, targetDir string) error {
-	if err := decoder.Reset(bytes.NewReader(data)); err != nil {
-		return err
-	}
-
-	tarReader := tar.NewReader(decoder)
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("读取tar头失败: %w", err)
-		}
-
-		// 忽略第一层目录名
-		parts := strings.Split(header.Name, "/")
-		if len(parts) <= 1 {
-			continue
-		}
-		relativePath := strings.Join(parts[1:], "/")
-		if relativePath == "" {
-			continue
-		}
-		target := filepath.Join(targetDir, relativePath)
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
-				return fmt.Errorf("创建目录失败: %w", err)
-			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return fmt.Errorf("创建父目录失败: %w", err)
-			}
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
-			if err != nil {
-				return fmt.Errorf("创建文件失败: %w", err)
-			}
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				outFile.Close()
-				return fmt.Errorf("写入文件失败: %w", err)
-			}
-			outFile.Close()
-		}
+// writeEmbeddedFile 将嵌入的原始（未压缩）内容直接写入目标文件。
+// 用于已改为直接嵌入的 JS / yaml 等文本资源。
+func writeEmbeddedFile(data []byte, targetPath string, perm os.FileMode, desc string) error {
+	if err := os.WriteFile(targetPath, data, perm); err != nil {
+		return fmt.Errorf("写入 %s 失败: %w", desc, err)
 	}
 	return nil
 }
 
-// decodeZstd 解压 sub-store 相关文件
-func decodeZstd(paths *subStorePaths) error {
-	// 创建 zstd 解码器
+// extractFrontendFS 将嵌入的前端资源目录（embed.FS）展开到目标目录。
+// embed.FS 中的路径始终以 "/" 分隔（与平台无关），
+// 这里先去掉根目录前缀，再用 filepath.FromSlash 转换为
+// 当前操作系统的路径分隔符。
+func extractFrontendFS(frontendFS embed.FS, targetDir string) error {
+	const rootDir = "frontend"
+
+	return fs.WalkDir(frontendFS, rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("遍历嵌入前端资源失败: %w", err)
+		}
+
+		// 去掉根目录前缀，得到相对路径
+		rel := strings.TrimPrefix(path, rootDir)
+		rel = strings.TrimPrefix(rel, "/")
+
+		// 根目录本身：确保目标目录存在
+		if rel == "" {
+			return os.MkdirAll(targetDir, 0o755)
+		}
+
+		target := filepath.Join(targetDir, filepath.FromSlash(rel))
+
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+
+		data, err := frontendFS.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("读取嵌入前端文件 %s 失败: %w", path, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("创建前端目录失败: %w", err)
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return fmt.Errorf("写入前端文件 %s 失败: %w", target, err)
+		}
+		return nil
+	})
+}
+
+// extractAssets 将嵌入资源释放到磁盘。
+//
+// 释放策略：
+//   - node 二进制：体积大、更新频率低，仍以 zstd 压缩嵌入，需解压
+//   - sub-store 后端脚本 / 覆写 yaml / 前端资源目录：均为文本资源，
+//     已改为直接嵌入原始文件，无需解压，直接写出即可
+func extractAssets(paths *subStorePaths) error {
+	// 创建 zstd 解码器，仅用于解压 node 二进制
 	zstdDecoder, err := zstd.NewReader(nil)
 	if err != nil {
 		return fmt.Errorf("创建zstd解码器失败: %w", err)
 	}
 	defer zstdDecoder.Close()
 
-	// 解压 node 二进制文件
+	// 解压 node 二进制文件（仍为 zstd 压缩）
 	if err := decodeZstdToFile(zstdDecoder, EmbeddedNode, paths.nodePath, 0o755, "node 二进制文件"); err != nil {
 		return err
 	}
 
-	// 解压 sub-store 后端脚本
-	if err := decodeZstdToFile(zstdDecoder, EmbeddedSubStoreBackend, paths.jsPath, 0o644, "sub-store 脚本"); err != nil {
+	// 写出 sub-store 后端脚本（已改为未压缩的 JS 源文件，直接写出）
+	if err := writeEmbeddedFile(EmbeddedSubStoreBackend, paths.jsPath, 0o644, "sub-store 脚本"); err != nil {
 		return err
 	}
 
-	// 解压 sub-store 前端文件夹（tar）
-	if err := extractTarFromZstd(zstdDecoder, EmbeddedSubStoreFrotend, paths.frontDir); err != nil {
+	// 展开 sub-store 前端资源目录（已改为未压缩的 embed.FS，直接写出）
+	if err := extractFrontendFS(EmbeddedSubStoreFrontend, paths.frontDir); err != nil {
+		return fmt.Errorf("展开前端资源失败: %w", err)
+	}
+
+	// 写出 ACL4SSR_Online_Full.yaml（已改为未压缩，直接写出）
+	if err := writeEmbeddedFile(EmbeddedOverrideYamlACL4SSR, paths.overYamlACL4SSRPath, 0o644, "ACL4SSR_Online_Full.yaml"); err != nil {
 		return err
 	}
 
-	// 解压 ACL4SSR_Online_Full.yaml
-	if err := decodeZstdToFile(zstdDecoder, EmbeddedOverrideYamlACL4SSR, paths.overYamlACL4SSRPath, 0o644, "ACL4SSR_Online_Full.yaml"); err != nil {
-		return err
-	}
-
-	// 解压 Sinspired_Rules_CDN.yaml
-	if err := decodeZstdToFile(zstdDecoder, EmbeddedOverrideYamlSinspiredRulesCDN, paths.overYamlSinspiredRulesCDNPath, 0o644, "Sinspired_Rules_CDN.yaml"); err != nil {
+	// 写出 Sinspired_Rules_CDN.yaml（已改为未压缩，直接写出）
+	if err := writeEmbeddedFile(EmbeddedOverrideYamlSinspiredRulesCDN, paths.overYamlSinspiredRulesCDNPath, 0o644, "Sinspired_Rules_CDN.yaml"); err != nil {
 		return err
 	}
 
