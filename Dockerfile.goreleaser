@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 最终镜像
 FROM busybox:glibc
 
-ARG TARGETARCH
+ARG TARGETPLATFORM
 
 WORKDIR /app
 

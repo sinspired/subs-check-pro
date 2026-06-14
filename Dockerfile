@@ -24,8 +24,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 最终镜像
 FROM busybox:glibc
 
-ARG TARGETARCH
-
 WORKDIR /app
 
 # 注入时区和证书
