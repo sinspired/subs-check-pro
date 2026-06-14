@@ -1,17 +1,17 @@
 package assets
 
 import (
-	_ "embed"
+	"embed"
 )
 
-//go:embed sub-store.bundle.js.zst
+//go:embed sub-store.bundle.js
 var EmbeddedSubStoreBackend []byte
 
-//go:embed sub-store.frontend.tar.zst
-var EmbeddedSubStoreFrotend []byte
+//go:embed frontend
+var EmbeddedSubStoreFrontend embed.FS
 
-//go:embed ACL4SSR_Online_Full.yaml.zst
+//go:embed ACL4SSR_Online_Full.yaml
 var EmbeddedOverrideYamlACL4SSR []byte
 
-//go:embed Sinspired_Rules_CDN.yaml.zst
+//go:embed Sinspired_Rules_CDN.yaml
 var EmbeddedOverrideYamlSinspiredRulesCDN []byte

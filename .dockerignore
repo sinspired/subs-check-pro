@@ -11,12 +11,10 @@ test
 
 *.ps1
 *.bak
-bin/*
 test_*.*
 
 dist/*
 output/*
-subs-check-pro*
 mihomo-check*
 
 openipdb.ipdb
@@ -35,4 +33,4 @@ test_*/
 *.exe
 *.syso
 .wiki/
-!bin/subs-check-pro-linux-*
+!bin/Linux_arm/*

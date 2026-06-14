@@ -23,7 +23,7 @@ require (
 	github.com/samber/lo v1.53.0
 	github.com/shirou/gopsutil/v4 v4.26.5
 	github.com/sinspired/checkip v0.4.1
-	github.com/sinspired/subs-check-pro-webui v0.0.0-20260613061617-b1a6cd89e17e
+	github.com/sinspired/subs-check-pro-webui v0.0.0-20260613131732-795ab90bc3dd
 	golang.org/x/net v0.56.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
