@@ -211,7 +211,15 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 	}
 	req.Header.Set("User-Agent", ua)
 
-	// 4. 处理本地请求特殊 Header
+	// 4.1 GitHub 域名：使用 Token 提升速率限制 (未认证 60次/h → 认证 5000次/h)
+	if isGitHubRequest(req.URL) {
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token := config.GlobalConfig.GithubToken; token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+
+	// 4.2 处理本地请求特殊 Header
 	if isLocalRequest(req.URL) {
 		req.Header.Set("X-From-Subs-Check-pro", "true")
 		req.Header.Set("X-API-Key", config.GlobalConfig.APIKey)
@@ -291,4 +299,16 @@ func replaceDatePlaceholders(s string, t time.Time) string {
 func isLocalRequest(u *url.URL) bool {
 	return utils.IsLocalURL(u.Hostname()) &&
 		(strings.Contains(u.Fragment, "Keep") || strings.Contains(u.Path, "history") || strings.Contains(u.Path, "all"))
+}
+
+// isGitHubRequest 判断是否为 GitHub 相关域名
+// 涵盖 API、raw 内容、releases 下载等场景
+func isGitHubRequest(u *url.URL) bool {
+	host := strings.ToLower(u.Hostname())
+	return host == "github.com" ||
+		host == "api.github.com" ||
+		host == "raw.githubusercontent.com" ||
+		host == "objects.githubusercontent.com" ||
+		strings.HasSuffix(host, ".github.com") ||
+		strings.HasSuffix(host, ".githubusercontent.com")
 }
