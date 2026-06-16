@@ -41,7 +41,7 @@
         "info": {
           "0804": {
             "ProductName": "subs-check-pro",
-            "FileDescription": "Subs-Check 性能版",
+            "FileDescription": "Subs-Check-Pro 内核",
             "CompanyName": "sinspired",
             "FileVersion": "${VERSION}",
             "ProductVersion": "${VERSION}",
@@ -55,7 +55,7 @@
           },
           "0404": {
             "ProductName": "subs-check-pro",
-            "FileDescription": "Subs-Check 性能版",
+            "FileDescription": "Subs-Check 内核",
             "CompanyName": "sinspired",
             "FileVersion": "${VERSION}",
             "ProductVersion": "${VERSION}",
@@ -69,11 +69,11 @@
           },
           "0409": {
             "ProductName": "subs-check-pro",
-            "FileDescription": "Subs-Check Pro",
+            "FileDescription": "Subs-Check-Pro ",
             "CompanyName": "sinspired",
             "FileVersion": "${VERSION}",
             "ProductVersion": "${VERSION}",
-            "InternalName": "subs-check-pro",
+            "InternalName": "subs-check-pro kernel",
             "OriginalFilename": "subs-check-pro.exe",
             "LegalCopyright": "https://github.com/sinspired/subs-check-pro",
             "LegalTrademarks": "sinspired",
