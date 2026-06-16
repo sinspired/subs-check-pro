@@ -58,7 +58,7 @@ func ParseSingBoxWithMetadata(data []byte) []map[string]any {
 		if strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		cleanBuf.WriteString(line + "\n")
+		cleanBuf.WriteString(line);cleanBuf.WriteString("\n")
 	}
 
 	// 2. 解析 JSON/YAML
@@ -79,7 +79,9 @@ func ParseSingBoxWithMetadata(data []byte) []map[string]any {
 // ConvertSingBoxOutbounds 将 Sing-Box 的 outbounds 转换为 Clash 代理节点
 func ConvertSingBoxOutbounds(outbounds []any) []map[string]any {
 	res := make([]map[string]any, 0, len(outbounds))
-	ignoredTypes := map[string]struct{}{"selector": {}, "urltest": {}, "direct": {}, "block": {}, "dns": {}}
+	ignoredTypes := map[string]struct{}{
+		"selector": {}, "urltest": {}, "direct": {}, "block": {}, "dns": {},
+	}
 
 	for _, ob := range outbounds {
 		m, ok := ob.(map[string]any)
@@ -97,7 +99,6 @@ func ConvertSingBoxOutbounds(outbounds []any) []map[string]any {
 			"name":   fmt.Sprint(m["tag"]),
 		}
 
-		// 协议特定字段映射
 		switch typ {
 		case "shadowsocks":
 			conv["type"] = "ss"
@@ -126,21 +127,114 @@ func ConvertSingBoxOutbounds(outbounds []any) []map[string]any {
 			conv["uuid"] = m["uuid"]
 			conv["password"] = m["password"]
 			conv["congestion-controller"] = m["congestion_controller"]
+
+		case "snell":
+			// Snell v4 支持 UDP，使用 obfs
+			conv["type"] = "snell"
+			conv["psk"] = m["password"]
+			conv["version"] = m["version"]
+			if obfsOpts, ok := m["obfs_opts"].(map[string]any); ok {
+				conv["obfs-opts"] = map[string]any{
+					"mode": obfsOpts["mode"],
+					"host": obfsOpts["host"],
+				}
+			}
+
+		case "ssh":
+			conv["type"] = "ssh"
+			conv["username"] = lo.CoalesceOrEmpty(fmt.Sprint(m["user"]), "root")
+			conv["password"] = m["password"]
+			if pk, ok := m["private_key"].(string); ok && pk != "" {
+				conv["private-key"] = pk
+				conv["private-key-passphrase"] = m["private_key_passphrase"]
+			}
+			if hostKey, ok := m["host_key"].([]any); ok {
+				keys := make([]string, 0, len(hostKey))
+				for _, k := range hostKey {
+					if s, ok := k.(string); ok {
+						keys = append(keys, s)
+					}
+				}
+				conv["host-key"] = keys
+			}
+
+		case "anytls":
+			conv["type"] = "anytls"
+			conv["password"] = m["password"]
+			conv["idle-session-check-interval"] = m["idle_session_check_interval"]
+			conv["idle-session-timeout"] = m["idle_session_timeout"]
+			conv["min-idle-session"] = m["min_idle_session"]
+
+		case "mieru":
+			conv["type"] = "mieru"
+			conv["username"] = m["username"]
+			conv["password"] = m["password"]
+			conv["transport"] = m["transport"] // "TCP" or "UDP"
+
+		case "sudoku":
+			// Sudoku: 较新协议，字段参考 Sing-Box outbound
+			conv["type"] = "sudoku"
+			conv["password"] = m["password"]
+
+		case "masque":
+			conv["type"] = "masque"
+			// MASQUE 使用 HTTP/3，通常通过 URL 配置
+			if u, ok := m["url"].(string); ok {
+				conv["url"] = u
+			}
+
+		case "wireguard", "wg":
+			conv["type"] = "wireguard"
+			conv["private-key"] = m["private_key"]
+			conv["public-key"] = m["peer_public_key"]
+			conv["pre-shared-key"] = m["pre_shared_key"]
+			conv["mtu"] = m["mtu"]
+			if peers, ok := m["peers"].([]any); ok && len(peers) > 0 {
+				if peer, ok := peers[0].(map[string]any); ok {
+					conv["public-key"] = peer["public_key"]
+					conv["pre-shared-key"] = peer["pre_shared_key"]
+					if ep, ok := peer["server"].(string); ok {
+						conv["server"] = ep
+					}
+				}
+			}
+			if addrs, ok := m["local_address"].([]any); ok {
+				ips := make([]string, 0, len(addrs))
+				for _, a := range addrs {
+					if s, ok := a.(string); ok {
+						ips = append(ips, s)
+					}
+				}
+				conv["ip"] = strings.Join(ips, ",")
+			}
+
+		// ────────────────────────────────────────────────────────────────
 		default:
 			conv["type"] = typ
 		}
 
-		// 传输层处理
+		// 传输层处理（vmess/vless/trojan/anytls/ssh 等共用）
 		if tr, ok := m["transport"].(map[string]any); ok {
 			trType := strings.ToLower(fmt.Sprint(tr["type"]))
-			if trType == "ws" {
+			switch trType {
+			case "ws":
 				conv["network"] = "ws"
 				conv["ws-opts"] = map[string]any{"path": tr["path"], "headers": tr["headers"]}
-			}
-			if trType == "grpc" {
+			case "grpc":
 				conv["network"] = "grpc"
 				conv["grpc-opts"] = map[string]any{
-					"grpc-service-name": lo.CoalesceOrEmpty(fmt.Sprint(tr["service_name"]), fmt.Sprint(tr["serviceName"])),
+					"grpc-service-name": lo.CoalesceOrEmpty(
+						fmt.Sprint(tr["service_name"]),
+						fmt.Sprint(tr["serviceName"]),
+					),
+				}
+			case "http":
+				conv["network"] = "http"
+			case "httpupgrade":
+				conv["network"] = "httpupgrade"
+				conv["httpupgrade-opts"] = map[string]any{
+					"path": tr["path"],
+					"host": tr["host"],
 				}
 			}
 		}
@@ -541,7 +635,7 @@ func ExtractAndParseProxies(data []byte) []map[string]any {
 				parseBuf()
 			}
 			inBlock = true
-			buffer.WriteString(line + "\n")
+			buffer.WriteString(line);buffer.WriteString("\n")
 			continue
 		}
 
@@ -549,9 +643,9 @@ func ExtractAndParseProxies(data []byte) []map[string]any {
 			// 保持块内容收集：空行、注释、或有缩进的行
 			switch {
 			case trim == "", strings.HasPrefix(trim, "#"):
-				buffer.WriteString(line + "\n")
+				buffer.WriteString(line);buffer.WriteString("\n")
 			case strings.HasPrefix(line, " "), strings.HasPrefix(line, "\t"):
-				buffer.WriteString(line + "\n")
+				buffer.WriteString(line);buffer.WriteString("\n")
 			default:
 				// 缩进结束，块结束
 				inBlock = false

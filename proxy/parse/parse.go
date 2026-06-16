@@ -27,15 +27,24 @@ var protocolSchemes = map[string]string{
 	"tuic": "tuic://", "tuic5": "tuic://",
 	"juicity":   "juicity://",
 	"wireguard": "wireguard://", "wg": "wg://",
-	"mieru":  "mieru://",
-	"anytls": "anytls://",
+	"mieru":       "mierus://",
+	"anytls":      "anytls://",
+	"openvpn":     "openvpn://",
+	"snell":       "snell://",
+	"ssh":         "ssh://",
+	"sudoku":      "sudoku://",
+	"masque":      "masque://",
+	"trusttunnel": "trusttunnel://",
+	// tailscale 无标准 URI 格式，仅靠 YAML 配置，不加入映射
 }
 
-// 越长的关键字越靠前，防止 "hysteria" 错误匹配到 "hysteria2"
+// 越长的关键字越靠前，防止短前缀错误匹配（如 "ss" 匹配到 "ssr"）
 var sortedProtocolKeys = []string{
-	"shadowsocks", "hysteria2", "wireguard", "juicity", "hysteria", "socks5h", "socks4", "socks5",
-	"vless", "vmess", "trojan", "https", "http2", "tuic5", "mieru", "anytls",
-	"http", "tuic", "ssr", "hy2", "ss", "wg", "hy",
+	"shadowsocks", "trusttunnel", "hysteria2", "wireguard", "juicity",
+	"hysteria", "socks5h", "socks4", "socks5", "openvpn", "sudoku",
+	"masque", "vless", "vmess", "trojan", "https", "http2", "tuic5",
+	"mieru", "anytls", "snell",
+	"http", "tuic", "ssr", "ssh", "hy2", "ss", "wg", "hy",
 }
 
 // ParseSubscriptionData 智能分发解析器
