@@ -234,12 +234,13 @@ func buildScpOps(cfg config.SubProcessConfig) []any {
 			CustomName: "节点解析",
 			ID:         newOperatorID(),
 			Args: Args{
-				"provider": "Ali",
-				"type":     "IPv6",
-				"filter":   "disabled",
-				"cache":    "enabled",
-				"url":      "",
-				"edns":     "223.6.6.6",
+				"provider":    "Ali",
+				"type":        "IPv6",
+				"filter":      "disabled",
+				"cache":       "enabled",
+				"url":         "",
+				"edns":        "223.6.6.6",
+				"concurrency": "20",
 			},
 		})
 	}
