@@ -18,7 +18,6 @@ progress-mode: "auto"
 # 每两天的凌晨 4 点执行
 cron-expression: "0 4 */2 * *"
 
-
 # 检查间隔(分钟)
 # 建议使用 cron-expression 表达式，# 每两天的凌晨 4 点执行
 # 高峰期检测意义真的不大，节点少，而且不稳定
@@ -361,27 +360,26 @@ system-proxy: ""
 github-proxy: ""
 # GitHub 代理列表：程序会自动筛选可用的 GitHub 代理
 ghproxy-group:
-  - https://gh.b52m.cn/
   - https://github.180280.xyz/
+  - https://github.732086.xyz/
   - https://hk.gh-proxy.org/
+  - https://q-github.cnxiaobai.com/
+  - https://b.yesican.top/
   - https://git.maomao.ovh/
   - https://cdn.gh-proxy.org/
-  - https://v6.gh-proxy.org/
-  - https://github.sssss.work/
-  - https://gh.dev.438250.xyz/
-  - https://git.llvho.com/
-  - https://gh.oevery.me/
-  - https://github.dpik.top/
-  - https://g.108964.xyz/
-  - https://down.avi.gs/
   - https://git.1999111.xyz/
-  - https://github.732086.xyz/
-  - https://gh-proxy.org/
-  - https://gh.8p.gs/
-  - https://git.repcz.link/
-  - https://proxydl.lcayun.cn/
-  - https://edgeone.gh-proxy.org/
-  - https://gh.xda.plus/
+  - https://git-clone.ccrui.dev/
+  - https://gh.dev.438250.xyz/
+  - https://ghproxy.gopher.ink/
+  - https://github.abyss.moe/
+  - https://gh.iinx.top/
+  - https://gh.wglee.org/
+  - https://gh.oevery.me/
+  - https://gh.136361.xyz/
+  - https://gh.haloless.com/
+  - https://github.789056.xyz/
+  - https://gh.qsd.onl/
+  - https://github.dpik.top/
 
 # -----------获取订阅-----------
 # 重试次数(获取订阅失败后重试次数)
