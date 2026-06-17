@@ -90,27 +90,26 @@ const (
 	// nodeSplitScript 将 DNS 解析得到的多 IP 展开为独立节点
 	nodeSplitScript = `// 节点裂变脚本
 function operator(proxies = []) {
-  const list = []
-  for (const p of proxies) {
+  return proxies.flatMap((p = {}) => {
     const ips = p._resolved_ips
-    if (Array.isArray(ips) && ips.length > 0) {
-      ips.forEach((server, i) => {
-        list.push({
-          ...p,
-          name: ` + "`" + `${p.name}|+${i + 1}` + "`" + `,
-          server,
-        })
-      })
-      list.push({
+    if (!Array.isArray(ips) || ips.length === 0) return [p]
+
+    const expanded = ips.map((server, i) => ({
+      ...p,
+      name: ` + "`${p.name}|+${i + 1}`" + `,
+      server,
+    }))
+
+    if (p._domain) {
+      expanded.push({
         ...p,
-        name: ` + "`" + `${p.name}|已裂变` + "`" + `,
+        name: ` + "`${p.name}|已裂变`" + `,
         server: p._domain,
       })
-    } else {
-      list.push(p)
     }
-  }
-  return list
+
+    return expanded
+  })
 }`
 
 	// subInfoURLKeyword 用于在 SCP 操作中识别订阅流量信息脚本
@@ -235,12 +234,13 @@ func buildScpOps(cfg config.SubProcessConfig) []any {
 			CustomName: "节点解析",
 			ID:         newOperatorID(),
 			Args: Args{
-				"provider": "Ali",
-				"type":     "IPv6",
-				"filter":   "disabled",
-				"cache":    "enabled",
-				"url":      "",
-				"edns":     "223.6.6.6",
+				"provider":    "Ali",
+				"type":        "IPv6",
+				"filter":      "disabled",
+				"cache":       "enabled",
+				"url":         "",
+				"edns":        "223.6.6.6",
+				"concurrency": "20",
 			},
 		})
 	}

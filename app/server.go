@@ -110,8 +110,11 @@ func (app *App) initHTTPServer() error {
 	} else {
 		// WebUI 启用
 		app.registerWebUIRoutes(router)
-		app.registerAPIRoutes(router)
 	}
+
+	// 注册 API 和 主题、版本号、分析报告等路由
+	app.registerPublicRoutes(router)
+	app.registerAPIRoutes(router)
 
 	router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, AdminPath)
@@ -255,7 +258,10 @@ func (app *App) registerWebUIRoutes(router *gin.Engine) {
 			"configPath": app.configPath,
 		})
 	})
+}
 
+// registerPublicRoutes 注册 主题/分析报告/版本号等 公共路由
+func (app *App) registerPublicRoutes(router *gin.Engine) {
 	router.GET(AdminPath+"/version", app.getOriginVersion)
 
 	// 主题 API：无需鉴权，仅本机可访问

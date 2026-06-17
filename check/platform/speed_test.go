@@ -157,7 +157,7 @@ func TestCheckSpeedConcurrently(t *testing.T) {
 	}
 
 	// Write CSV sorted by speed desc (带时间后缀，写入仓库根目录的 test_output)
-	outDir := filepath.Join("test_output")
+	outDir := "test_output"
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		t.Logf("failed to create test_output dir: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestCheckSpeedConcurrently(t *testing.T) {
 // - speed_filter_slow.csv  (Avg <  threshold)
 // - speed_filter_all.csv   (全量并带有 fast/slow 分类)
 func TestAggregateSpeedResults(t *testing.T) {
-	outDir := filepath.Join("test_output")
+	outDir := "test_output"
 	entries, err := os.ReadDir(outDir)
 	if err != nil {
 		t.Logf("read dir error: %v", err)
@@ -292,18 +292,18 @@ func TestAggregateSpeedResults(t *testing.T) {
 		if len(a.Speeds) == 0 {
 			continue
 		}
-		min, max, sum := a.Speeds[0], a.Speeds[0], 0.0
+		minVal, maxVal, sum := a.Speeds[0], a.Speeds[0], 0.0
 		for _, v := range a.Speeds {
-			if v < min {
-				min = v
+			if v < minVal {
+				minVal = v
 			}
-			if v > max {
-				max = v
+			if v > maxVal {
+				maxVal = v
 			}
 			sum += v
 		}
 		avg := sum / float64(len(a.Speeds))
-		rows = append(rows, row{URL: a.URL, Avg: avg, Min: min, Max: max, Count: len(a.Speeds), Errors: a.Errors, Note: a.Note})
+		rows = append(rows, row{URL: a.URL, Avg: avg, Min: minVal, Max: maxVal, Count: len(a.Speeds), Errors: a.Errors, Note: a.Note})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Avg > rows[j].Avg })
 
@@ -407,7 +407,7 @@ func TestAggregateSpeedResults(t *testing.T) {
 
 	// 组装 Go 源码
 	// 采用直接声明并初始化变量：var fastSpeedTestURLs = []string{...}
-	genPath := filepath.Join("speed_var.go")
+	genPath := "speed_var.go"
 	if err := os.MkdirAll(filepath.Dir(genPath), 0o755); err != nil {
 		t.Logf("mkdir for speed_var.go error: %v", err)
 		return

@@ -5,103 +5,70 @@ var SpeedTestURLs = []string{
 	// === 1. 专用速度测试服务器 (Global / Unspecified) ===
 	// thinkbroadband (英国)
 	"https://download.thinkbroadband.com/512MB.zip",     // 512MB ZIP
-	"http://ipv4.download.thinkbroadband.com/512MB.zip", // 512MB ZIP
 	// Tele2 (欧洲)
-	"http://speedtest.tele2.net/1GB.zip", // 1GB ZIP
+	"https://speedtest.tele2.net/1GB.zip", // 1GB ZIP
 	// CacheFly (全球 CDN)
 	"https://cachefly.cachefly.net/300mb.test", // 300mb Test File
 
 	// === 2. 专用速度测试服务器 (Regional - Asia) ===
 	// Datapacket/CDN77 (香港)
-	"http://hkg.download.datapacket.com/100mb.bin",   // 100MB
-	"http://hkg.download.datapacket.com/1000mb.bin",  // 1GB
-	"http://hkg.download.datapacket.com/10000mb.bin", // 10GB
+	"https://hkg.download.datapacket.com/1000mb.bin",  // 1GB
 	// Datapacket/CDN77 (新加坡)
-	"http://sgp.download.datapacket.com/100mb.bin",   // 100MB
-	"http://sgp.download.datapacket.com/1000mb.bin",  // 1GB
-	"http://sgp.download.datapacket.com/10000mb.bin", // 10GB
+	"https://sgp.download.datapacket.com/1000mb.bin",  // 1GB
 	// Datapacket/CDN77 (东京)
-	"http://tyo.download.datapacket.com/100mb.bin",   // 100MB
-	"http://tyo.download.datapacket.com/1000mb.bin",  // 1GB
-	"http://tyo.download.datapacket.com/10000mb.bin", // 10GB
+	"https://tyo.download.datapacket.com/1000mb.bin",  // 1GB
 	// OVH (新加坡)
-	"https://sgp.proof.ovh.net/files/100Mb.dat", // 100MB
 	"https://sgp.proof.ovh.net/files/1Gb.dat",   // 1GB
-	"https://sgp.proof.ovh.net/files/10Gb.dat",  // 10GB
 	// Vultr (新加坡)
-	"https://sgp-ping.vultr.com/vultr.com.100MB.bin",  // 100MB
 	"https://sgp-ping.vultr.com/vultr.com.1000MB.bin", // 1GB
 	// Vultr (东京)
-	"https://hnd-jp-ping.vultr.com/vultr.com.100MB.bin",  // 100MB
 	"https://hnd-jp-ping.vultr.com/vultr.com.1000MB.bin", // 1GB
 	// DigitalOcean (新加坡 SGP1)
-	"http://speedtest-sgp1.digitalocean.com/1000mb.test", // 1GB
+	"https://speedtest-sgp1.digitalocean.com/1000mb.test", // 1GB
 
 	// === 3. 专用速度测试服务器 (Regional - Europe) ===
 	// OVH (Generic)
-	"https://proof.ovh.net/files/100Mb.dat", // 100Mb
-	"http://proof.ovh.net/files/1Gb.dat",    // 1GB
-	"http://proof.ovh.net/files/10Gb.dat",   // 10GB
+	"https://proof.ovh.net/files/1Gb.dat",    // 1GB
 	// DigitalOcean (伦敦 LON1)
-	"http://speedtest-lon1.digitalocean.com/100mb.test", // 100mb
+	"https://speedtest-lon1.digitalocean.com/100mb.test", // 100mb
 	// Hetzner (Nuremberg, 德国)
-	"https://nbg1-speed.hetzner.com/100MB.bin", // 100MB
 	"https://nbg1-speed.hetzner.com/1GB.bin",   // 1GB
-	"https://nbg1-speed.hetzner.com/10GB.bin",  // 10GB
 	// Vultr (Frankfurt, 德国)
-	"https://fra-de-ping.vultr.com/vultr.com.100MB.bin",  // 100MB
 	"https://fra-de-ping.vultr.com/vultr.com.1000MB.bin", // 1GB
 	// Hivelocity (Frankfurt, 德国)
 	"https://speedtest.fra1.hivelocity.net/10GiB.file", // 10GB
 	// Datapacket/CDN77 (巴黎)
-	"http://par.download.datapacket.com/100mb.bin",   // 100MB
-	"http://par.download.datapacket.com/1000mb.bin",  // 1GB
-	"http://par.download.datapacket.com/10000mb.bin", // 10GB
+	"https://par.download.datapacket.com/1000mb.bin",  // 1GB
 	// OVH (Gravelines, 法国)
-	"https://gra.proof.ovh.net/files/100Mb.dat", // 100MB
 	"https://gra.proof.ovh.net/files/1Gb.dat",   // 1GB
-	"https://gra.proof.ovh.net/files/10Gb.dat",  // 10GB
 
 	// === 4. 专用速度测试服务器 (Regional - North America) ===
 	// Hetzner (Ashburn, VA, US East)
 	"https://ash-speed.hetzner.com/1GB.bin",  // 1GB
-	"https://ash-speed.hetzner.com/10GB.bin", // 10GB
 	// Linode/Akamai (Fremont, CA, US West)
-	"http://speedtest.fremont.linode.com/1000MB-fremont.bin", // 1GB
+	"https://speedtest.fremont.linode.com/1000MB-fremont.bin", // 1GB
 	// DigitalOcean (New York NYC1)
-	"http://speedtest-nyc1.digitalocean.com/1000mb.test", // 1GB
+	"https://speedtest-nyc1.digitalocean.com/1000mb.test", // 1GB
 	// Datapacket/CDN77 (Los Angeles, US West)
-	"http://lax.download.datapacket.com/100mb.bin",   // 100MB
-	"http://lax.download.datapacket.com/1000mb.bin",  // 1GB
-	"http://lax.download.datapacket.com/10000mb.bin", // 10GB
+	"https://lax.download.datapacket.com/1000mb.bin",  // 1GB
 	// OVH (Hillsboro, OR, US West)
-	"https://hil.proof.ovh.us/files/100Mb.dat", // 100MB
 	"https://hil.proof.ovh.us/files/1Gb.dat",   // 1GB
-	"https://hil.proof.ovh.us/files/10Gb.dat",  // 10GB
 	// Vultr (Los Angeles, US West)
-	"https://lax-ca-us-ping.vultr.com/vultr.com.100MB.bin",  // 100MB
 	"https://lax-ca-us-ping.vultr.com/vultr.com.1000MB.bin", // 1GB
 	// Hetzner (Hillsboro, OR, US West)
 	"https://hil-speed.hetzner.com/10GB.bin", // 10GB
 	// Datapacket/CDN77 (Ashburn, VA, US East)
-	"http://ash.download.datapacket.com/100mb.bin",   // 100MB
-	"http://ash.download.datapacket.com/1000mb.bin",  // 1GB
-	"http://ash.download.datapacket.com/10000mb.bin", // 10GB
+	"https://ash.download.datapacket.com/1000mb.bin",  // 1GB
 	// OVH (Vint Hill, VA, US East)
-	"https://vin.proof.ovh.us/files/100Mb.dat", // 100MB
 	"https://vin.proof.ovh.us/files/1Gb.dat",   // 1GB
-	"https://vin.proof.ovh.us/files/10Gb.dat",  // 10GB
 	// Vultr (New Jersey, US East)
-	"https://nj-us-ping.vultr.com/vultr.com.100MB.bin",  // 100MB
 	"https://nj-us-ping.vultr.com/vultr.com.1000MB.bin", // 1GB
 
 	// === 5. 云服务商 & 大型 CDN ===
 	// Apple (IPSW Restore File)
-	"http://updates-http.cdn-apple.com/2019WinterFCS/fullrestores/041-39257/32129B6C-292C-11E9-9E72-4511412B0A59/iPhone_4.7_12.1.4_16D57_Restore.ipsw", // 3GB
 	"https://updates.cdn-apple.com/2025FallFCS/fullrestores/089-12066/4F86CB11-E6FA-47CB-96A8-527A4CBD9273/iPhone18,3_26.1_23B85_Restore.ipsw",
 	// Cloudflare Speed (可指定字节数)
 	"https://speed.cloudflare.com/__down?bytes=1073741824", // 1GB (Cloudflare)
-	"https://speed.cloudflare.com/__down?bytes=5368709120", // 5GB (Cloudflare)
 	// AWS CLI
 	"https://awscli.amazonaws.com/AWSCLIV2.msi", // ~110MB MSI
 	// Google Chrome
