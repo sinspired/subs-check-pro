@@ -124,15 +124,15 @@ type ProxyJob struct {
 }
 
 // Close 确保 ProxyJob 的底层资源(mihomo客户端)被正确释放一次。
-func (j *ProxyJob) Close() {
-	j.doneOnce.Do(func() {
-		if j.Client != nil {
-			j.Client.Close()
-			j.Client = nil // 切断对底层资源的引用
+func (job *ProxyJob) Close() {
+	job.doneOnce.Do(func() {
+		if job.Client != nil {
+			job.Client.Close()
+			job.Client = nil // 切断对底层资源的引用
 		}
 		// 切断map引用，释放内存
-		j.Result.Proxy = nil
-		j.Result = Result{}
+		job.Result.Proxy = nil
+		job.Result = Result{}
 	})
 }
 

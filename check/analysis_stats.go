@@ -221,12 +221,12 @@ func (pc *ProxyChecker) GenerateAnalysisReport() {
 func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats, sortedURLs []string) {
 	var sb strings.Builder
 	sb.WriteString("# 检测结果分析报告\n")
-	sb.WriteString("# 生成时间: " + time.Now().Format(time.DateTime) + "\n\n")
+	sb.WriteString("# 生成时间: ");sb.WriteString(time.Now().Format(time.DateTime));sb.WriteString("\n\n")
 
 	// 1. 总结性文案 (用于快速预览)
 	sb.WriteString("summary: |\n")
 	summary := generateSummary(global)
-	sb.WriteString("  " + summary + "\n\n")
+	sb.WriteString("  ");sb.WriteString(summary);sb.WriteString("\n\n")
 
 	checkCount := Progress.Load()
 	if config.GlobalConfig.ProgressMode == "stage" || ForceClose.Load() || Successlimited.Load() {
@@ -234,15 +234,15 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	}
 
 	sb.WriteString("check_info:\n")
-	sb.WriteString("  check_time: " + prettyTime(CheckStartTime) + "\n")
-	sb.WriteString("  check_time_raw: " + CheckStartTime.Format(time.RFC3339) + "\n")
-	sb.WriteString("  check_end_time_raw: " + CheckEndTime.Format(time.RFC3339) + "\n")
-	sb.WriteString("  check_duration: " + prettyDuration(CheckDuration) + "\n")
-	sb.WriteString("  check_duration_raw: " + strconv.FormatInt(int64(CheckDuration.Seconds()), 10) + "\n")
-	sb.WriteString("  check_count: " + prettyTotal(int(checkCount)) + "\n")
-	sb.WriteString("  check_count_raw: " + strconv.Itoa(int(checkCount)) + "\n")
-	sb.WriteString("  check_traffic: " + CheckTraffic + "\n")
-	sb.WriteString("  check_traffic_raw: " + strconv.FormatUint(TotalBytes.Load(), 10) + "\n")
+	sb.WriteString("  check_time: ");sb.WriteString(prettyTime(CheckStartTime));sb.WriteString("\n")
+	sb.WriteString("  check_time_raw: ");sb.WriteString(CheckStartTime.Format(time.RFC3339));sb.WriteString("\n")
+	sb.WriteString("  check_end_time_raw: ");sb.WriteString(CheckEndTime.Format(time.RFC3339));sb.WriteString("\n")
+	sb.WriteString("  check_duration: ");sb.WriteString(prettyDuration(CheckDuration));sb.WriteString("\n")
+	sb.WriteString("  check_duration_raw: ");sb.WriteString(strconv.FormatInt(int64(CheckDuration.Seconds()), 10));sb.WriteString("\n")
+	sb.WriteString("  check_count: ");sb.WriteString(prettyTotal(int(checkCount)));sb.WriteString("\n")
+	sb.WriteString("  check_count_raw: ");sb.WriteString(strconv.Itoa(int(checkCount)));sb.WriteString("\n")
+	sb.WriteString("  check_traffic: ");sb.WriteString(CheckTraffic);sb.WriteString("\n")
+	sb.WriteString("  check_traffic_raw: ");sb.WriteString(strconv.FormatUint(TotalBytes.Load(), 10));sb.WriteString("\n")
 
 	var speedText string
 	if speedON {
@@ -250,25 +250,25 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	} else {
 		speedText = "0"
 	}
-	sb.WriteString("  check_min_speed: " + speedText + "\n")
-	sb.WriteString("  check_success_limit: " + strconv.FormatInt(int64(config.GlobalConfig.SuccessLimit), 10) + "\n")
+	sb.WriteString("  check_min_speed: ");sb.WriteString(speedText);sb.WriteString("\n")
+	sb.WriteString("  check_success_limit: ");sb.WriteString(strconv.FormatInt(int64(config.GlobalConfig.SuccessLimit), 10));sb.WriteString("\n")
 	sb.WriteString("\n")
 
 	// 2. 全局统计 (可视化友好结构)
 	sb.WriteString("global_analysis:\n")
-	sb.WriteString("  alive_count: " + strconv.Itoa(global.Total) + "\n")
-	sb.WriteString("  geography_distribution:" + formatMap(global.Countries, "    ") + "\n")
-	sb.WriteString("  protocol_distribution:" + formatMap(global.Types, "    ") + "\n")
+	sb.WriteString("  alive_count: ");sb.WriteString(strconv.Itoa(global.Total));sb.WriteString("\n")
+	sb.WriteString("  geography_distribution:");sb.WriteString(formatMap(global.Countries, "    "));sb.WriteString("\n")
+	sb.WriteString("  protocol_distribution:");sb.WriteString(formatMap(global.Types, "    "));sb.WriteString("\n")
 
 	sb.WriteString("  quality_metrics:\n")
 	ratio := float64(getSum(global.CFCon)) / float64(max(1, global.Total)) * 100
-	sb.WriteString("    cf_consistent_ratio: " + strconv.FormatFloat(ratio, 'f', 1, 64) + "%\n")
+	sb.WriteString("    cf_consistent_ratio: ");sb.WriteString(strconv.FormatFloat(ratio, 'f', 1, 64));sb.WriteString("%\n")
 
 	sb.WriteString("    cf_details:\n")
-	sb.WriteString("      consistent_¹⁺:" + formatMap(global.CFCon, "        ") + "\n")
-	sb.WriteString("      inconsistent_⁰:" + formatMap(global.CFIncon, "        ") + "\n")
-	sb.WriteString("      blocked_⁻¹:" + formatMap(global.CFBlock, "        ") + "\n")
-	sb.WriteString("    vps_details_²:" + formatMap(global.NonCF, "      ") + "\n")
+	sb.WriteString("      consistent_¹⁺:");sb.WriteString(formatMap(global.CFCon, "        "));sb.WriteString("\n")
+	sb.WriteString("      inconsistent_⁰:");sb.WriteString(formatMap(global.CFIncon, "        "));sb.WriteString("\n")
+	sb.WriteString("      blocked_⁻¹:");sb.WriteString(formatMap(global.CFBlock, "        "));sb.WriteString("\n")
+	sb.WriteString("    vps_details_²:");sb.WriteString(formatMap(global.NonCF, "      "));sb.WriteString("\n")
 
 	// 3. 订阅排行与明细
 	sb.WriteString("\nsubs_ranking:\n")
@@ -281,13 +281,13 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 		rate := float64(pStat.Success) / float64(max(1, pStat.Total))
 
 		if st != nil {
-			sb.WriteString("  - url: " + u + "\n")
-			sb.WriteString("    stats: { rate: " + strconv.FormatFloat(rate*100, 'f', 4, 64) + "%, success: " + strconv.Itoa(pStat.Success) + ", total: " + strconv.Itoa(pStat.Total) + " }\n")
-			sb.WriteString("    protocols: { " + formatMapToInline(st.Types) + " }\n")
-			sb.WriteString("    top_locations: [" + getTopKeys(st.Countries, 3) + "]\n")
+			sb.WriteString("  - url: ");sb.WriteString(u);sb.WriteString("\n")
+			sb.WriteString("    stats: { rate: ");sb.WriteString(strconv.FormatFloat(rate*100, 'f', 4, 64));sb.WriteString("%, success: ");sb.WriteString(strconv.Itoa(pStat.Success));sb.WriteString(", total: ");sb.WriteString(strconv.Itoa(pStat.Total));sb.WriteString(" }\n")
+			sb.WriteString("    protocols: { ");sb.WriteString(formatMapToInline(st.Types));sb.WriteString(" }\n")
+			sb.WriteString("    top_locations: [");sb.WriteString(getTopKeys(st.Countries, 3));sb.WriteString("]\n")
 		} else {
-			sbBad.WriteString("  - url: " + u + "\n")
-			sbBad.WriteString("    stats: { rate: " + strconv.FormatFloat(rate*100, 'f', 4, 64) + "%, success: " + strconv.Itoa(pStat.Success) + ", total: " + strconv.Itoa(pStat.Total) + " }\n")
+			sbBad.WriteString("  - url: ");sbBad.WriteString(u);sbBad.WriteString("\n")
+			sbBad.WriteString("    stats: { rate: ");sbBad.WriteString(strconv.FormatFloat(rate*100, 'f', 4, 64));sbBad.WriteString("%, success: ");sbBad.WriteString(strconv.Itoa(pStat.Success));sbBad.WriteString(", total: ");sbBad.WriteString(strconv.Itoa(pStat.Total));sbBad.WriteString(" }\n")
 		}
 	}
 
@@ -554,16 +554,16 @@ func checkSubsSuccessRate(subs map[string]*AnalysisStats, sortedURLs []string) {
 	// 2. 组装最终 YAML 内容
 	var finalSB strings.Builder
 	finalSB.WriteString("# 订阅质量统计报告\n")
-	finalSB.WriteString("# 生成时间: " + time.Now().Format(time.DateTime) + "\n\n")
+	finalSB.WriteString("# 生成时间: ");finalSB.WriteString(time.Now().Format(time.DateTime));finalSB.WriteString("\n\n")
 
 	if goodPart.Len() > 0 {
-		finalSB.WriteString("# 达标订阅列表 (>=" + strconv.FormatFloat(threshold*100, 'f', 2, 64) + "%)\nsub-urls:\n")
-		finalSB.WriteString(goodPart.String() + "\n")
+		finalSB.WriteString("# 达标订阅列表 (>=");finalSB.WriteString(strconv.FormatFloat(threshold*100, 'f', 2, 64));finalSB.WriteString("%)\nsub-urls:\n")
+		finalSB.WriteString(goodPart.String());finalSB.WriteString("\n")
 	}
 
 	if lowPart.Len() > 0 {
-		finalSB.WriteString("# 未达标订阅列表 (<" + strconv.FormatFloat(threshold*100, 'f', 2, 64) + "%)\nsub-urls-low:\n")
-		finalSB.WriteString(lowPart.String() + "\n")
+		finalSB.WriteString("# 未达标订阅列表 (<");finalSB.WriteString(strconv.FormatFloat(threshold*100, 'f', 2, 64));finalSB.WriteString("%)\nsub-urls-low:\n")
+		finalSB.WriteString(lowPart.String());finalSB.WriteString("\n")
 	}
 
 	if zeroPart.Len() > 0 {
