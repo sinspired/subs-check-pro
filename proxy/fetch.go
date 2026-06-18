@@ -95,9 +95,9 @@ func FetchSubsData(rawURL string) ([]byte, error) {
 	uaList := []string{
 		"mihomo/1.19.27",
 		"clash.meta",
-		"ClashMetaForAndroid/2.11.30",
+		"sing-box/1.13.0",
 		convert.RandUserAgent(),
-		"curl/8.16.0",
+		"ClashMetaForAndroid/2.11.30",
 	}
 
 	// GitHub 地址使用浏览器 ua 和curl
@@ -108,7 +108,7 @@ func FetchSubsData(rawURL string) ([]byte, error) {
 		}
 	}
 
-	for i := range maxRetries {
+	for i := range maxRetries + 1 {
 		ua := uaList[i%len(uaList)]
 		if i > 0 {
 			time.Sleep(time.Duration(max(1, conf.SubUrlsRetryInterval)) * time.Second)
