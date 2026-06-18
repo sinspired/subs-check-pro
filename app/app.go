@@ -31,16 +31,22 @@ import (
 
 // App 结构体用于管理应用程序状态
 type App struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	configPath    string
-	interval      int
-	watcher       *fsnotify.Watcher
+	ctx        context.Context
+	cancel     context.CancelFunc
+	configPath string
+	interval   int
+	watcher    *fsnotify.Watcher
+	// watcherCancel 用于停止轮询配置监听 goroutine（inotify 不可用时的降级方案）。
+	// 若 inotify 正常工作则此字段为 nil。
+	watcherCancel context.CancelFunc
 	checkChan     chan struct{} // 触发检测的通道
 	checking      atomic.Bool   // 检测状态标志
 	ticker        *time.Ticker
 	done          chan struct{} // 用于结束ticker goroutine的信号
-	cron          *cron.Cron    // crontab调度器
+	cron          *cron.Cron    // crontab调度器（代理检测定时任务）
+	// updateCron 版本更新定时任务调度器，独立存储以便 SetupUpdateTasks 重调时先停止旧实例，
+	// 避免每次配置变更触发重建时 goroutine 持续累积。
+	updateCron    *cron.Cron
 	version       string
 	originVersion string
 	latestVersion string
@@ -188,7 +194,7 @@ func (app *App) Initialize() error {
 	// 设置信号处理器
 	app.stopCh = utils.SetupSignalHandler(&check.ForceClose, &app.checking)
 
-	// 每周日 0 点自动更新 GeoLite2 数据库
+	// 每周五 12 点自动更新 GeoLite2 数据库
 	weeklyCron := cron.New()
 	_, err := weeklyCron.AddFunc("0 12 * * 5", func() {
 		if !app.checking.Load() {
@@ -221,6 +227,12 @@ func (app *App) Run() {
 		}
 		if app.cron != nil {
 			app.cron.Stop()
+		}
+		if app.updateCron != nil {
+			app.updateCron.Stop()
+		}
+		if app.watcherCancel != nil {
+			app.watcherCancel()
 		}
 	}()
 
@@ -466,17 +478,25 @@ func (app *App) Shutdown() error {
 
 	var lastErr error
 
+	// 停止轮询配置监听 goroutine（inotify 降级模式专用）
+	if app.watcherCancel != nil {
+		app.watcherCancel()
+	}
+
 	// 取消上下文，通知各子服务退出（sub-store 等）
 	if app.cancel != nil {
 		app.cancel()
 	}
 
-	// 停止 ticker/cron/watcher（如果存在）
+	// 停止 ticker/cron/updateCron/watcher（如果存在）
 	if app.ticker != nil {
 		app.ticker.Stop()
 	}
 	if app.cron != nil {
 		app.cron.Stop()
+	}
+	if app.updateCron != nil {
+		app.updateCron.Stop()
 	}
 	if app.watcher != nil {
 		lastErr = app.watcher.Close()
@@ -537,8 +557,16 @@ func isDocker() bool {
 	return false
 }
 
-// SetupUpdateTasks 自动判断运行环境和配置，自动检测更新并创建定时任务
+// SetupUpdateTasks 自动判断运行环境和配置，自动检测更新并创建定时任务。
+// 每次调用前先停止上一个 updateCron 实例，防止重复调用（如配置变更触发）时
+// goroutine 无限累积，最终耗尽文件描述符。
 func (app *App) SetupUpdateTasks() {
+	// 停止旧的版本更新定时任务（避免每次配置变更都新增一个永不停止的 cron goroutine）
+	if app.updateCron != nil {
+		app.updateCron.Stop()
+		app.updateCron = nil
+	}
+
 	enableSelfUpdate := config.GlobalConfig.EnableSelfUpdate
 	updateOnStartup := config.GlobalConfig.UpdateOnStartup
 	cronCheckUpdate := config.GlobalConfig.CronCheckUpdate
@@ -571,7 +599,6 @@ func (app *App) SetupUpdateTasks() {
 	}
 
 	// 设置定时更新任务
-	updateCron := cron.New()
 	schedule := cronCheckUpdate
 	if schedule == "" {
 		// 默认每周五 12 点
@@ -583,7 +610,9 @@ func (app *App) SetupUpdateTasks() {
 	} else {
 		slog.Debug("程序将定时检测新版本(不自动更新)", "schedule", schedule)
 	}
-	_, err := updateCron.AddFunc(schedule, func() {
+
+	app.updateCron = cron.New()
+	_, err := app.updateCron.AddFunc(schedule, func() {
 		if !app.checking.Load() {
 			if !StartFromGUI && enableSelfUpdate && !isDocker {
 				slog.Debug("定时检测版本更新并自动升级...")
@@ -609,7 +638,9 @@ func (app *App) SetupUpdateTasks() {
 	})
 	if err != nil {
 		slog.Error("注册 定时检测版本更新 定时任务失败", "error", err)
+		app.updateCron.Stop()
+		app.updateCron = nil
 	} else {
-		updateCron.Start()
+		app.updateCron.Start()
 	}
 }

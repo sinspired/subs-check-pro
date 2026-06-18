@@ -128,16 +128,28 @@ func (app *App) createDefaultConfig() error {
 	return ErrFirstRun
 }
 
-// initConfigWatcher 初始化配置文件监听
+// initConfigWatcher 初始化配置文件监听。
+// 优先使用 inotify（Linux 内核事件通知），若内核 inotify 实例数已达上限
+// （群晖 NAS 等设备默认值较低，通常为 8~128），则自动降级为轮询模式。
 func (app *App) initConfigWatcher() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return fmt.Errorf("创建文件监听器失败: %w", err)
+		// inotify_init1 失败，原因通常是 /proc/sys/fs/inotify/max_user_instances 耗尽。
+		// 降级为 5 秒轮询，功能等价，不影响正常运行。
+		slog.Warn("inotify 初始化失败，降级为文件轮询监听模式",
+			"error", err,
+			"轮询间隔", "5s",
+			"提示", "可通过 sysctl fs.inotify.max_user_instances=1024 提高内核限制",
+		)
+		ctx, cancel := context.WithCancel(context.Background())
+		app.watcherCancel = cancel
+		go app.pollConfigFile(ctx)
+		return nil
 	}
 
 	app.watcher = watcher
 
-	// 防抖定时器，防止vscode等软件先临时创建文件在覆盖，会产生两次write事件
+	// 防抖定时器：避免 VSCode 等编辑器先写临时文件再覆盖产生的连续两次 write 事件
 	var debounceTimer *time.Timer
 	go func() {
 		for {
@@ -159,141 +171,7 @@ func (app *App) initConfigWatcher() error {
 					// 创建新的定时器，延迟100ms执行
 					debounceTimer = time.AfterFunc(100*time.Millisecond, func() {
 						slog.Info("配置文件发生变化，正在重新加载")
-						oldCronExpr := config.GlobalConfig.CronExpression
-						oldInterval := app.interval
-
-						oldUpdateSwitcher := config.GlobalConfig.EnableSelfUpdate
-						oldCronCheckUpdateExpr := config.GlobalConfig.CronCheckUpdate
-						oldSubStorePath := config.GlobalConfig.SubStorePath
-
-						oldSubStorePort := config.GlobalConfig.SubStorePort
-
-						if err := app.loadConfig(); err != nil {
-							slog.Error("重新加载配置文件失败", "error", err)
-							return
-						}
-
-						// 去掉开头的冒号，统一格式
-						subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
-						listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
-
-						// 校验两个端口不能相同
-						if subStorePort != "" && listenPort != "" && subStorePort == listenPort {
-							slog.Error("SubStore端口 与 WebUI端口 冲突，请修改配置",
-								"ListenPort", listenPort,
-								"SubStorePort", subStorePort,
-							)
-							slog.Error("SubStore 服务因端口冲突禁用，请修改端口配置")
-							config.GlobalConfig.SubStorePort = ""
-						}
-
-						if config.GlobalConfig.APIKey == "" {
-							if apiKey := os.Getenv("API_KEY"); apiKey != "" {
-								config.GlobalConfig.APIKey = apiKey
-							} else {
-								if initAPIKey != "" {
-									config.GlobalConfig.APIKey = utils.GenerateRandomString(10)
-									slog.Warn("未设置api-key，key，已随机生成", "api-key", config.GlobalConfig.APIKey)
-								} else {
-									config.GlobalConfig.APIKey = geneAPIKey
-									slog.Debug("保留首次运行自动生成的API key", "api-key", config.GlobalConfig.APIKey)
-								}
-							}
-						}
-
-						switch {
-						case oldSubStorePort != "" && config.GlobalConfig.SubStorePort != "" && oldSubStorePort != config.GlobalConfig.SubStorePort:
-							// 端口变更 → 重启
-							slog.Debug("重启 sub-store（端口变更）")
-							if app.cancel != nil && !app.checking.Load() {
-								app.cancel()
-								time.Sleep(500 * time.Millisecond)
-								if err := assets.KillNode(); err != nil {
-									slog.Error("强制清理 node 失败", "err", err)
-								}
-								app.ctx, app.cancel = context.WithCancel(context.Background())
-							}
-							assets.RunSubStoreService(app.ctx)
-
-						case oldSubStorePort == "" && config.GlobalConfig.SubStorePort != "":
-							// 首次配置端口 → 启动
-							slog.Debug("启动 sub-store")
-							assets.RunSubStoreService(app.ctx)
-
-						case oldSubStorePort != "" && config.GlobalConfig.SubStorePort == "":
-							// 端口被清空 → 停止
-							slog.Debug("停止 sub-store（端口已清空）")
-							if app.cancel != nil && !app.checking.Load() {
-								app.cancel()
-								app.ctx, app.cancel = context.WithCancel(context.Background())
-							}
-						}
-
-						// 去掉开头斜杠以进行比对
-						oldSubStorePath = strings.TrimPrefix(oldSubStorePath, "/")
-						config.GlobalConfig.SubStorePath = strings.TrimPrefix(config.GlobalConfig.SubStorePath, "/")
-
-						// 如果sub-store路径变化，重启sub-store服务
-						if config.GlobalConfig.SubStorePath == "" {
-							if subStorePath := os.Getenv("SUB_STORE_PATH"); subStorePath != "" {
-								if subStorePath != oldSubStorePath {
-									slog.Info("从环境变量获取sub-store路径", "sub-store-path", subStorePath)
-									config.GlobalConfig.SubStorePath = subStorePath
-									// 重启sub-store服务
-									if app.cancel != nil {
-										app.cancel()
-										app.ctx, app.cancel = context.WithCancel(context.Background())
-									}
-									assets.RunSubStoreService(app.ctx)
-								}
-							} else {
-								if assets.InitSubStorePath != "" {
-									slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
-									config.GlobalConfig.SubStorePath = utils.GenerateRandomString(20)
-									slog.Info("已随机生成", "sub-store-path", config.GlobalConfig.SubStorePath)
-
-									if app.cancel != nil {
-										app.cancel()
-										app.ctx, app.cancel = context.WithCancel(context.Background())
-									}
-									assets.RunSubStoreService(app.ctx)
-								} else {
-									config.GlobalConfig.SubStorePath = oldSubStorePath
-									slog.Debug("保留首次运行自动生成的sub-store路径", "sub-store-path", config.GlobalConfig.SubStorePath)
-								}
-							}
-						} else if oldSubStorePath != config.GlobalConfig.SubStorePath {
-							slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
-							if app.cancel != nil {
-								app.cancel()
-								app.ctx, app.cancel = context.WithCancel(context.Background())
-							}
-							assets.RunSubStoreService(app.ctx)
-						}
-
-						// 检查cron表达式或检测间隔是否变化
-						if oldCronExpr != config.GlobalConfig.CronExpression ||
-							oldInterval != config.GlobalConfig.CheckInterval {
-
-							app.interval = func() int {
-								if config.GlobalConfig.CheckInterval <= 0 {
-									return 2880
-								}
-								if config.GlobalConfig.CheckInterval <= 60 {
-									return 60
-								}
-								return config.GlobalConfig.CheckInterval
-							}()
-							slog.Warn("检测设置发生变化，重新配置定时器")
-
-							// 使用setTimer方法重新设置定时器
-							app.setTimer()
-						}
-
-						if oldCronCheckUpdateExpr != config.GlobalConfig.CronCheckUpdate || oldUpdateSwitcher != config.GlobalConfig.EnableSelfUpdate {
-							slog.Warn("版本更新设置发生变化，重新设置定时更新任务")
-							app.SetupUpdateTasks()
-						}
+						app.onConfigChange()
 					})
 				}
 			case err, ok := <-watcher.Errors:
@@ -305,11 +183,185 @@ func (app *App) initConfigWatcher() error {
 		}
 	}()
 
-	// 开始监听配置文件目录
+	// 监听配置文件所在目录（兼容容器外修改）
 	if err := watcher.Add(filepath.Dir(app.configPath)); err != nil {
-		return fmt.Errorf("添加配置文件监听失败: %w", err)
+		slog.Warn("添加 inotify 监听失败，降级为文件轮询监听模式",
+			"error", err, "轮询间隔", "5s")
+		_ = watcher.Close()
+		app.watcher = nil
+		ctx, cancel := context.WithCancel(context.Background())
+		app.watcherCancel = cancel
+		go app.pollConfigFile(ctx)
+		return nil
 	}
 
 	slog.Info("配置文件监听启动")
 	return nil
+}
+
+// pollConfigFile 通过定期 stat 检测配置文件修改时间，作为 inotify 不可用时的降级方案。
+// 通过传入的 ctx 控制生命周期，Shutdown() 时调用 app.watcherCancel() 即可退出。
+func (app *App) pollConfigFile(ctx context.Context) {
+	var lastMod time.Time
+	if info, err := os.Stat(app.configPath); err == nil {
+		lastMod = info.ModTime()
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	slog.Info("配置文件轮询监听已启动", "path", app.configPath)
+	for {
+		select {
+		case <-ticker.C:
+			info, err := os.Stat(app.configPath)
+			if err != nil {
+				continue
+			}
+			if info.ModTime().After(lastMod) {
+				lastMod = info.ModTime()
+				slog.Info("配置文件发生变化（轮询检测），正在重新加载")
+				app.onConfigChange()
+			}
+		case <-ctx.Done():
+			slog.Info("配置文件轮询监听已停止")
+			return
+		}
+	}
+}
+
+// onConfigChange 配置文件变化时的统一响应逻辑，由 inotify 事件或轮询共同调用。
+func (app *App) onConfigChange() {
+	oldCronExpr := config.GlobalConfig.CronExpression
+	oldInterval := app.interval
+
+	oldUpdateSwitcher := config.GlobalConfig.EnableSelfUpdate
+	oldCronCheckUpdateExpr := config.GlobalConfig.CronCheckUpdate
+	oldSubStorePath := config.GlobalConfig.SubStorePath
+	oldSubStorePort := config.GlobalConfig.SubStorePort
+
+	if err := app.loadConfig(); err != nil {
+		slog.Error("重新加载配置文件失败", "error", err)
+		return
+	}
+
+	// 去掉开头的冒号，统一格式
+	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
+	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
+
+	// 校验两个端口不能相同
+	if subStorePort != "" && listenPort != "" && subStorePort == listenPort {
+		slog.Error("SubStore端口 与 WebUI端口 冲突，请修改配置",
+			"ListenPort", listenPort,
+			"SubStorePort", subStorePort,
+		)
+		slog.Error("SubStore 服务因端口冲突禁用，请修改端口配置")
+		config.GlobalConfig.SubStorePort = ""
+	}
+
+	if config.GlobalConfig.APIKey == "" {
+		if apiKey := os.Getenv("API_KEY"); apiKey != "" {
+			config.GlobalConfig.APIKey = apiKey
+		} else {
+			if initAPIKey != "" {
+				config.GlobalConfig.APIKey = utils.GenerateRandomString(10)
+				slog.Warn("未设置api-key，key，已随机生成", "api-key", config.GlobalConfig.APIKey)
+			} else {
+				config.GlobalConfig.APIKey = geneAPIKey
+				slog.Debug("保留首次运行自动生成的API key", "api-key", config.GlobalConfig.APIKey)
+			}
+		}
+	}
+
+	switch {
+	case oldSubStorePort != "" && config.GlobalConfig.SubStorePort != "" && oldSubStorePort != config.GlobalConfig.SubStorePort:
+		// 端口变更 → 重启
+		slog.Debug("重启 sub-store（端口变更）")
+		if app.cancel != nil && !app.checking.Load() {
+			app.cancel()
+			time.Sleep(500 * time.Millisecond)
+			if err := assets.KillNode(); err != nil {
+				slog.Error("强制清理 node 失败", "err", err)
+			}
+			app.ctx, app.cancel = context.WithCancel(context.Background())
+		}
+		assets.RunSubStoreService(app.ctx)
+
+	case oldSubStorePort == "" && config.GlobalConfig.SubStorePort != "":
+		// 首次配置端口 → 启动
+		slog.Debug("启动 sub-store")
+		assets.RunSubStoreService(app.ctx)
+
+	case oldSubStorePort != "" && config.GlobalConfig.SubStorePort == "":
+		// 端口被清空 → 停止
+		slog.Debug("停止 sub-store（端口已清空）")
+		if app.cancel != nil && !app.checking.Load() {
+			app.cancel()
+			app.ctx, app.cancel = context.WithCancel(context.Background())
+		}
+	}
+
+	// 去掉开头斜杠以进行比对
+	oldSubStorePath = strings.TrimPrefix(oldSubStorePath, "/")
+	config.GlobalConfig.SubStorePath = strings.TrimPrefix(config.GlobalConfig.SubStorePath, "/")
+
+	// 如果sub-store路径变化，重启sub-store服务
+	if config.GlobalConfig.SubStorePath == "" {
+		if subStorePath := os.Getenv("SUB_STORE_PATH"); subStorePath != "" {
+			if subStorePath != oldSubStorePath {
+				slog.Info("从环境变量获取sub-store路径", "sub-store-path", subStorePath)
+				config.GlobalConfig.SubStorePath = subStorePath
+				// 重启sub-store服务
+				if app.cancel != nil {
+					app.cancel()
+					app.ctx, app.cancel = context.WithCancel(context.Background())
+				}
+				assets.RunSubStoreService(app.ctx)
+			}
+		} else {
+			if assets.InitSubStorePath != "" {
+				slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
+				config.GlobalConfig.SubStorePath = utils.GenerateRandomString(20)
+				slog.Info("已随机生成", "sub-store-path", config.GlobalConfig.SubStorePath)
+
+				if app.cancel != nil {
+					app.cancel()
+					app.ctx, app.cancel = context.WithCancel(context.Background())
+				}
+				assets.RunSubStoreService(app.ctx)
+			} else {
+				config.GlobalConfig.SubStorePath = oldSubStorePath
+				slog.Debug("保留首次运行自动生成的sub-store路径", "sub-store-path", config.GlobalConfig.SubStorePath)
+			}
+		}
+	} else if oldSubStorePath != config.GlobalConfig.SubStorePath {
+		slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
+		if app.cancel != nil {
+			app.cancel()
+			app.ctx, app.cancel = context.WithCancel(context.Background())
+		}
+		assets.RunSubStoreService(app.ctx)
+	}
+
+	// 检查cron表达式或检测间隔是否变化
+	if oldCronExpr != config.GlobalConfig.CronExpression ||
+		oldInterval != config.GlobalConfig.CheckInterval {
+
+		app.interval = func() int {
+			if config.GlobalConfig.CheckInterval <= 0 {
+				return 2880
+			}
+			if config.GlobalConfig.CheckInterval <= 60 {
+				return 60
+			}
+			return config.GlobalConfig.CheckInterval
+		}()
+		slog.Warn("检测设置发生变化，重新配置定时器")
+		app.setTimer()
+	}
+
+	if oldCronCheckUpdateExpr != config.GlobalConfig.CronCheckUpdate || oldUpdateSwitcher != config.GlobalConfig.EnableSelfUpdate {
+		slog.Warn("版本更新设置发生变化，重新设置定时更新任务")
+		app.SetupUpdateTasks()
+	}
 }
