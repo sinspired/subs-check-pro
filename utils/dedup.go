@@ -97,7 +97,9 @@ func GenerateProxyKey(p map[string]any) string {
 	writeStringWithPrefix(&sb, p, "auth-str", "auth:")
 	writeStringWithPrefix(&sb, p, "private-key", "pk:")
 	writeStringWithPrefix(&sb, p, "flow", "flow:")             // XTLS Flow 必须区分
-	writeStringWithPrefix(&sb, p, "client-fingerprint", "fp:") // TLS 指纹影响连接行为，必须区分
+
+	// 似乎不用代理连接,仅仅是 ios,safari这些指纹
+	// writeStringWithPrefix(&sb, p, "client-fingerprint", "fp:")
 
 	// 网络与传输
 	writeStringWithPrefix(&sb, p, "network", "net:")
