@@ -11,14 +11,22 @@ release:
   # 自动检测是否为预发布版本 (如 v2.5.0-rc.1 会自动标记为 Pre-release)
   prerelease: auto
 
+  # Release 顶部说明模板
+  header: |
+    ## 🚀 subs-check-pro {{ .Tag }} ({{ .Date }})
+
+    欢迎使用最新版本！本版本带来了诸多优化与修复。
+
+    📢 **社区与交流反馈：**
+    - 👥 Telegram 交流群组：[subs-check性能版](https://t.me/subs_check_pro)
+    - 📣 Telegram 通知频道：[关注频道](https://t.me/sinspired_ai)
+
   # 底部说明模板
   footer: |
     ---
-    - 💡 **完整变更日志**: [{{ .PreviousTag }}...{{ .Tag }}]({{ .GitURL }}/compare/{{ .PreviousTag }}...{{ .Tag }})
-    - 🐳 Docker 镜像已发布 `docker pull sinspired/subs-check-pro:latest`
-    - 💬 反馈方式
-      - 👥 Telegram 群组：[subs-check性能版](https://t.me/subs_check_pro)
-      - 📣 Telegram 频道：[关注频道](https://t.me/sinspired_ai)
+    💡 **完整变更日志**: [{{ .PreviousTag }}...{{ .Tag }}]({{ .GitURL }}/compare/{{ .PreviousTag }}...{{ .Tag }})
+    感谢所有提交代码与提出反馈的开发者！
+    💬 遇到任何 Bug 或功能建议，欢迎提交 Issue 或前往 Telegram 群组反馈。
 
 # 变更日志配置
 changelog:
@@ -38,45 +46,32 @@ changelog:
   format: "{{ .SHA }}: {{ .Message }}"
   # 提交分组配置
   groups:
-    - title: "✨ 新功能"
-      # 匹配 feat: 或 feat(scope): 且不区分大小写
+    - title: "✨ 新功能 (Features)"
       regexp: "^(?i)feat(\\([\\w-]+\\))?:+.*$"
       order: 0
-    - title: "🐛 Bug 修复"
-      # 匹配 fix: 或 fix(scope): 且不区分大小写
+    - title: "🐛 Bug 修复 (Bug Fixes)"
       regexp: "^(?i)fix(\\([\\w-]+\\))?:+.*$"
       order: 1
-    - title: "🚀 性能优化"
-      # 匹配 perf: 或 perf(scope): 且不区分大小写
+    - title: "🚀 性能优化 (Performance)"
       regexp: "^(?i)perf(\\([\\w-]+\\))?:+.*$"
       order: 2
-    - title: "🔧 重构维护"
-      # 匹配 refactor/chore/build/ci 及其带作用域的形式
+    - title: "🔧 重构与工程维护 (Refactor & Maintenance)"
       regexp: "^(?i)(chore|refactor|build|ci)(\\([\\w-]+\\))?:+.*$"
       order: 3
-    - title: "📝 文档更新"
+    - title: "📝 文档更新 (Documentation)"
       regexp: "^(?i)docs(\\([\\w-]+\\))?:+.*$"
       order: 4
-    - title: "📦 其他"
+    - title: "📦 其他变更"
       order: 999
 
-# 构建配置
+# 构建配置（仅保留 Windows .exe 编译目标）
 builds:
   - id: subs-check-pro
     env:
       - CGO_ENABLED=0
       - GOEXPERIMENT=jsonv2
     targets:
-      # Desktop / Server
-      - linux_amd64
-      - linux_arm64
-      - linux_arm_7
-      - windows_amd64
-      - windows_arm64
-      - darwin_amd64
-      - darwin_arm64
-      # openwrt / 路由器
-      - linux_mipsle_softfloat
+      - windows_amd64   # 常见的 64位 Windows 电脑 (Intel/AMD)
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
       - -trimpath
@@ -85,65 +80,16 @@ builds:
 
 # 归档配置
 archives:
-  - ids:
+  - id: subs-check-pro
+    builds:
       - subs-check-pro
     formats:
-      - tar.gz
-    name_template: >-
-      {{ .ProjectName }}_
-      {{- title .Os }}_
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
-      {{- else if eq .Arch "arm64" }}aarch64
-      {{- else if eq .Arch "arm" }}armv7
-      {{- else }}{{ .Arch }}{{ end }}
-    format_overrides:
-      - goos: windows
-        formats: zip
+      - zip             # Windows 默认使用 zip 压缩包输出
+    # 彻底解决了由于缺失 {{ end }} 导致的模板报错，改写为单行更稳固的格式
+    name_template: "{{ .ProjectName }}_{{ title .Os }}_{{ if eq .Arch \"amd64\" }}x86_64{{ else }}{{ .Arch }}{{ end }}"
 
-# Docker 镜像多架构自动打包与分发
-dockers_v2:
-  - id: subs-check-pro
-    dockerfile: Dockerfile.goreleaser
-    # 同时发布到 GitHub Container Registry 和 Docker Hub
-    images:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/subs-check-pro"
-
-    # 自动发布 latest 和 版本号
-    tags:
-      - "{{ .Version }}"
-      - "{{ if not .IsNightly }}latest{{ end }}"
-
-    # docker buildx 的平台列表
-    platforms:
-      - linux/amd64
-      - linux/arm64
-      - linux/arm/v7
-
-    # OCI 镜像规范标签
-    annotations:
-      "org.opencontainers.image.title": "subs-check-pro"
-      "org.opencontainers.image.description": "高性能代理检测筛选工具，支持高并发测活、测速、媒体检测"
-      "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "{{.ProjectName}}"
-      "org.opencontainers.image.revision": "{{ .FullCommit }}"
-      "org.opencontainers.image.version": "{{ .Version }}"
-      "org.opencontainers.image.source": "{{.GitURL}}"
-
-      "org.opencontainers.image.base.name": "{{.BaseImage}}"
-      "org.opencontainers.image.base.digest": "{{.BaseImageDigest}}"
-
-    # 正式版本创建物料清单 (SBOM)，预发布版本跳过
-    sbom: "{{ not .IsNightly }}"
-
-# 压缩可执行文件
+# 压缩可执行文件（仅保留 Windows 编译体积压缩）
 upx:
-  - ids: [subs-check-pro]
-    enabled: true
-    goos: [linux]
-    goarch: [amd64, arm64, arm]
-
   - ids: [subs-check-pro]
     enabled: true
     goos: [windows]
