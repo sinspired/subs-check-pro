@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 
 	"github.com/samber/lo"
-	"github.com/sinspired/subs-check-pro/v2/utils"
 
 	"net/url"
 
@@ -58,7 +57,8 @@ func ParseSingBoxWithMetadata(data []byte) []map[string]any {
 		if strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		cleanBuf.WriteString(line);cleanBuf.WriteString("\n")
+		cleanBuf.WriteString(line)
+		cleanBuf.WriteString("\n")
 	}
 
 	// 2. 解析 JSON/YAML
@@ -324,7 +324,17 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
 	// 获取文件名推测的协议（作为上下文参考）
 	fileGuessedScheme := guessSchemeByURL(subURL)
 
-	slog.Debug("统一处理链接列表", "subURL", subURL, "猜测协议", fileGuessedScheme)
+	// if len(links) < 2 {
+	// 	// 拼接所有行并进行 Base64 解码
+	// 	joined := strings.Join(links, "")
+	// 	decodedBytes := convert.DecodeBase64([]byte(joined))
+	// 	decodedStr := string(decodedBytes)
+
+	// 	// 按行拆分成 []string
+	// 	links = strings.Split(strings.TrimSpace(decodedStr), "\n")
+	// }
+
+	slog.Debug("统一处理链接列表", "subURL", subURL, "猜测协议", fileGuessedScheme, "条数", len(links))
 	for _, link := range links {
 		link = strings.TrimSpace(link)
 		if link == "" {
@@ -421,11 +431,9 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
 				finalNodes = append(finalNodes, ToNormalizeNodes(nodes)...)
 			}
 		}
-
-		// 块处理完毕后统一去重
-		finalNodes = utils.DeduplicateNodes(finalNodes)
 	}
 
+	slog.Debug("解析数量", "finalNodes", len(finalNodes))
 	return finalNodes
 }
 
@@ -635,7 +643,8 @@ func ExtractAndParseProxies(data []byte) []map[string]any {
 				parseBuf()
 			}
 			inBlock = true
-			buffer.WriteString(line);buffer.WriteString("\n")
+			buffer.WriteString(line)
+			buffer.WriteString("\n")
 			continue
 		}
 
@@ -643,9 +652,11 @@ func ExtractAndParseProxies(data []byte) []map[string]any {
 			// 保持块内容收集：空行、注释、或有缩进的行
 			switch {
 			case trim == "", strings.HasPrefix(trim, "#"):
-				buffer.WriteString(line);buffer.WriteString("\n")
+				buffer.WriteString(line)
+				buffer.WriteString("\n")
 			case strings.HasPrefix(line, " "), strings.HasPrefix(line, "\t"):
-				buffer.WriteString(line);buffer.WriteString("\n")
+				buffer.WriteString(line)
+				buffer.WriteString("\n")
 			default:
 				// 缩进结束，块结束
 				inBlock = false
