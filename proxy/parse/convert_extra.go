@@ -101,38 +101,6 @@ func ConvertsV2RayExtra(buf []byte) ([]map[string]any, error) {
 			}
 
 			proxies = append(proxies, mieru)
-		case "anytls":
-			// anytls://password@server:port?fp=chrome&alpn=h2,http/1.1&allowInsecure=1#name
-			urlAnyTLS, err := url.Parse(line)
-			if err != nil {
-				continue
-			}
-
-			query := urlAnyTLS.Query()
-			name := urlAnyTLS.Fragment
-			if name == "" {
-				name = urlAnyTLS.Host
-			}
-			name = uniqueName(names, name)
-
-			node := map[string]any{
-				"name":     name,
-				"type":     "anytls",
-				"server":   urlAnyTLS.Hostname(),
-				"port":     urlAnyTLS.Port(),
-				"password": urlAnyTLS.User.Username(),
-			}
-			if alpn := query.Get("alpn"); alpn != "" {
-				node["alpn"] = strings.Split(alpn, ",")
-			}
-			if fp := query.Get("fp"); fp != "" {
-				node["client-fingerprint"] = fp
-			}
-			if query.Get("allowInsecure") == "1" || query.Get("insecure") == "1" {
-				node["skip-cert-verify"] = true
-			}
-
-			proxies = append(proxies, node)
 		}
 	}
 

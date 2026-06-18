@@ -93,13 +93,22 @@ func FetchSubsData(rawURL string) ([]byte, error) {
 
 	// UA 列表池
 	uaList := []string{
-		convert.RandUserAgent(),
-		"mihomo/1.18.3",
+		"mihomo/1.19.27",
 		"clash.meta",
-		"curl/8.16.0",
+		"sing-box/1.13.0",
+		convert.RandUserAgent(),
+		"ClashMetaForAndroid/2.11.30",
 	}
 
-	for i := range maxRetries {
+	// GitHub 地址使用浏览器 ua 和curl
+	if strings.Contains(rawURL, "githubusercontent.com") {
+		uaList = []string{
+			convert.RandUserAgent(),
+			"curl/8.16.0",
+		}
+	}
+
+	for i := range maxRetries + 1 {
 		ua := uaList[i%len(uaList)]
 		if i > 0 {
 			time.Sleep(time.Duration(max(1, conf.SubUrlsRetryInterval)) * time.Second)

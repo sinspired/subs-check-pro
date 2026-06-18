@@ -9,7 +9,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/metacubex/mihomo/common/convert"
-	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
 // 协议映射表：Key 为常见的缩写或别名，Value 为标准协议头
@@ -112,7 +111,7 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 	add := func(nodes []map[string]any, format string) {
 		before := len(merged)
 		for _, n := range nodes {
-			k := utils.GenerateProxyKey(n)
+			k := fmt.Sprintf("%v", n)
 			if _, dup := seen[k]; dup {
 				continue
 			}
@@ -120,7 +119,7 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 			merged = append(merged, n)
 		}
 		if added := len(merged) - before; added > 0 {
-			slog.Debug("行级解析命中", "订阅", subURL, "格式", format, "新增", added)
+			slog.Debug("行级解析命中", "订阅", subURL, "格式", format, "新增", added, "总数", len(merged))
 		}
 	}
 
@@ -129,6 +128,7 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 	if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
 		// patchXhttpOpts(nodes, data) // 补丁：修复 xhttp 缺失字段
 		add(ToNormalizeNodes(nodes), "Base64/V2Ray")
+		slog.Debug("使用了convert.ConvertsV2Ray ", "长度", len(nodes), "总数", len(merged))
 	}
 
 	// ② 逐行解析（含 ConvertsV2RayExtra，处理非标准链接）

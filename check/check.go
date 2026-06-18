@@ -1274,6 +1274,12 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 		Transport: baseTransport,
 	}
 
+	// xhttp/splithttp 禁用外层 H2：防止双层 H2 冲突导致 DATA after END_STREAM
+	if network, ok := mapping["network"].(string); ok &&
+		(network == "xhttp" || network == "splithttp") {
+		baseTransport.ForceAttemptHTTP2 = false
+	}
+
 	return pc
 }
 

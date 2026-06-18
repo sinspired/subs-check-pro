@@ -58,7 +58,7 @@ func GenerateProxyKey(p map[string]any) string {
 		sni = host
 	}
 
-	//  如果 SNI/Host 等于 Server IP，视为无效
+	// 如果 SNI/Host 等于 Server IP，视为无效
 	// 解决: sni=1.2.3.4 与 sni=空 无法合并的问题
 	if sni == serverAddr {
 		sni = ""
@@ -96,7 +96,10 @@ func GenerateProxyKey(p map[string]any) string {
 	}
 	writeStringWithPrefix(&sb, p, "auth-str", "auth:")
 	writeStringWithPrefix(&sb, p, "private-key", "pk:")
-	writeStringWithPrefix(&sb, p, "flow", "flow:") // XTLS Flow 必须区分
+	writeStringWithPrefix(&sb, p, "flow", "flow:")             // XTLS Flow 必须区分
+
+	// 似乎不用代理连接,仅仅是 ios,safari这些指纹
+	// writeStringWithPrefix(&sb, p, "client-fingerprint", "fp:")
 
 	// 网络与传输
 	writeStringWithPrefix(&sb, p, "network", "net:")
