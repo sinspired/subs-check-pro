@@ -90,7 +90,7 @@ jobs:
         uses: sinspired/multi-release-notify@v1
         with:
           summary: >-
-            高性能代理测活|测速|媒体解锁检测内核，可体验 [GUI](https://github.com/sinspired/subs-check-pro-gui)；感谢 @danhuangchangqun @leon0576 反馈
+            高性能代理测活|测速|媒体解锁检测内核，可体验 [GUI](https://github.com/sinspired/subs-check-pro-gui)
           release_notes: ${{ steps.release.outputs.notes }}
 
           email_url: ${{ secrets.EMAIL_APPRISE_URL }}
