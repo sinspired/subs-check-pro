@@ -329,12 +329,12 @@ func GetCurrentTime() string {
 }
 
 // SendNotifyCheckResult 发送节点检查结果通知
-func SendNotifyCheckResult(length int, checkTraffic string) {
+func SendNotifyCheckResult(length int, checkTrafficTotal string) {
 	title := config.GlobalConfig.NotifyTitle
 	var body string
-	if checkTraffic != "" {
+	if checkTrafficTotal != "" {
 		body = "✅ 可用节点：" + strconv.Itoa(length) +
-			"  \n📊 消耗流量：" + checkTraffic +
+			"  \n📊 消耗流量：" + checkTrafficTotal +
 			"  \n🕒 " + GetCurrentTime()
 	} else {
 		body = "✅ 可用节点：" + strconv.Itoa(length) +
