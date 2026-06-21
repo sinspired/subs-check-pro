@@ -208,7 +208,7 @@ func (pc *ProxyChecker) GenerateAnalysisReport() {
 	guiLine := fmt.Sprintf("%s丨%s丨%s · %d/%d",
 		time.Now().Format("15:04"), // 只显示 时:分 比较紧凑
 		prettyDuration(CheckDuration),
-		CheckTraffic,
+		CheckTrafficTotal,
 		globalAnalysis.Total, // 成功可用的节点数
 		int(checkCount),      // 检测的总节点数
 	)
@@ -241,8 +241,10 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	sb.WriteString("  check_duration_raw: ");sb.WriteString(strconv.FormatInt(int64(CheckDuration.Seconds()), 10));sb.WriteString("\n")
 	sb.WriteString("  check_count: ");sb.WriteString(prettyTotal(int(checkCount)));sb.WriteString("\n")
 	sb.WriteString("  check_count_raw: ");sb.WriteString(strconv.Itoa(int(checkCount)));sb.WriteString("\n")
-	sb.WriteString("  check_traffic: ");sb.WriteString(CheckTraffic);sb.WriteString("\n")
-	sb.WriteString("  check_traffic_raw: ");sb.WriteString(strconv.FormatUint(TotalBytes.Load(), 10));sb.WriteString("\n")
+	sb.WriteString("  check_traffic_total: ");sb.WriteString(CheckTrafficTotal);sb.WriteString("\n")
+	sb.WriteString("  check_traffic_total_raw: ");sb.WriteString(strconv.FormatUint(TotalBytes.Load(), 10));sb.WriteString("\n")
+	sb.WriteString("  check_traffic_upload_raw: ");sb.WriteString(strconv.FormatUint(UP.Load(), 10));sb.WriteString("\n")
+	sb.WriteString("  check_traffic_download_raw: ");sb.WriteString(strconv.FormatUint(DOWN.Load(), 10));sb.WriteString("\n")
 
 	var speedText string
 	if speedON {
@@ -327,7 +329,7 @@ func generateSummary(s *AnalysisStats) string {
 	}
 
 	return "用时 " + prettyDuration(CheckDuration) +
-		",消耗流量 " + CheckTraffic +
+		",消耗流量 " + CheckTrafficTotal +
 		", 检测到 " + prettyTotal(s.Total) + " 个可用节点" + speedText + "。" +
 		"覆盖 " + strconv.Itoa(len(s.Countries)) + " 个国家/地区 [Top: " + topCountry + "]; " +
 		lineFeature + " [CF 中转 " + strconv.FormatFloat(cfRatio, 'f', 1, 64) +

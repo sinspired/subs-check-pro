@@ -16,8 +16,10 @@ import (
 
 // reportFallback 从分析报告中提取的兜底数据
 type reportFallback struct {
-	trafficRaw   uint64    // check_info.check_traffic_raw（字节）
-	checkEndTime time.Time // check_info.check_end_time_raw
+	trafficTotalRaw    uint64    // check_info.check_traffic_total_raw（字节）
+	trafficUploadRaw   uint64    // check_info.check_traffic_upload_raw（字节）
+	trafficDownloadRaw uint64    // check_info.check_traffic_download_raw（字节）
+	checkEndTime       time.Time // check_info.check_end_time_raw
 }
 
 const (
@@ -69,9 +71,13 @@ func buildSubscriptionInfo() string {
 		fb = loadReportFallback()
 	}
 
-	// 流量：有实时值用实时值，否则用报告中的历史总流量（全部计入 download）
-	if upload == 0 && download == 0 && fb.trafficRaw > 0 {
-		download = fb.trafficRaw
+	// 流量：有实时值用实时值，否则用报告中的历史流量
+	if upload == 0 && fb.trafficUploadRaw > 0 {
+		upload = fb.trafficUploadRaw
+	}
+
+	if download == 0 && fb.trafficDownloadRaw > 0 {
+		download = fb.trafficDownloadRaw
 	}
 
 	// last_update：有检测结束时间用检测结束时间，否则从报告中取，再否则用当前时间占位
@@ -318,7 +324,9 @@ func loadReportFallback() reportFallback {
 	// 只解析用到的字段，避免引入完整结构体
 	var doc struct {
 		CheckInfo struct {
-			TrafficRaw      uint64 `yaml:"check_traffic_raw"`
+			CheckTrafficTotalRaw      uint64 `yaml:"check_traffic_total_raw"`
+			CheckTrafficUploadRaw      uint64 `yaml:"check_traffic_upload_raw"`
+			CheckTrafficDownloadRaw      uint64 `yaml:"check_traffic_download_raw"`
 			CheckEndTimeRaw string `yaml:"check_end_time_raw"`
 		} `yaml:"check_info"`
 	}
@@ -327,8 +335,11 @@ func loadReportFallback() reportFallback {
 	}
 
 	fb := reportFallback{
-		trafficRaw: doc.CheckInfo.TrafficRaw,
+		trafficTotalRaw: doc.CheckInfo.CheckTrafficTotalRaw,
+		trafficUploadRaw: doc.CheckInfo.CheckTrafficUploadRaw,
+		trafficDownloadRaw: doc.CheckInfo.CheckTrafficDownloadRaw,
 	}
+	
 	if raw := doc.CheckInfo.CheckEndTimeRaw; raw != "" {
 		// check_end_time_raw 为 RFC3339 格式：2026-03-17T02:18:17+08:00
 		if t, err := time.Parse(time.RFC3339, raw); err == nil {

@@ -46,10 +46,10 @@ var (
 
 	Bucket *ratelimit.Bucket
 
-	CheckStartTime time.Time
-	CheckEndTime   time.Time
-	CheckDuration  time.Duration
-	CheckTraffic   string
+	CheckStartTime    time.Time
+	CheckEndTime      time.Time
+	CheckDuration     time.Duration
+	CheckTrafficTotal string
 )
 
 // 存储测速和流媒体检测开关状态
@@ -465,8 +465,8 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	ETASeconds.Store(0)
 
 	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
-	CheckTraffic = utils.FormatTraffic(TotalBytes.Load())
-	slog.Info(fmt.Sprintf("检测消耗流量: %s", CheckTraffic))
+	CheckTrafficTotal = utils.FormatTraffic(TotalBytes.Load())
+	slog.Info(fmt.Sprintf("检测消耗流量: %s", CheckTrafficTotal))
 	slog.Debug("流量", "UP", UP.Load(), "DOWN", DOWN.Load())
 
 	// 计算检测用时
