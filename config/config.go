@@ -37,86 +37,95 @@ type SubProcessConfig struct {
 }
 
 type Config struct {
-	PrintProgress        bool     `yaml:"print-progress"`
-	ProgressMode         string   `yaml:"progress-mode"`
-	Concurrent           int      `yaml:"concurrent"`
-	AliveConcurrent      int      `yaml:"alive-concurrent"`
-	SpeedConcurrent      int      `yaml:"speed-concurrent"`
-	MediaConcurrent      int      `yaml:"media-concurrent"`
-	EnableIPv6           bool     `yaml:"ipv6"`
-	CheckInterval        int      `yaml:"check-interval"`
-	CronExpression       string   `yaml:"cron-expression"`
-	Timeout              int      `yaml:"timeout"`
-	SpeedTestURL         string   `yaml:"speed-test-url"`
-	DownloadTimeout      int      `yaml:"download-timeout"`
-	DownloadMB           int      `yaml:"download-mb"`
-	TotalSpeedLimit      int      `yaml:"total-speed-limit"`
-	Threshold            float32  `yaml:"threshold"`
-	GCThreshold          int64    `yaml:"gc-threshold"`
-	MinSpeed             int      `yaml:"min-speed"`
-	MediaCheckTimeout    int      `yaml:"media-check-timeout"`
-	FilterRegex          string   `yaml:"filter-regex"`
-	SaveMethod           string   `yaml:"save-method"`
-	WebDAVURL            string   `yaml:"webdav-url"`
-	WebDAVUsername       string   `yaml:"webdav-username"`
-	WebDAVPassword       string   `yaml:"webdav-password"`
-	GithubToken          string   `yaml:"github-token"`
-	GithubGistID         string   `yaml:"github-gist-id"`
-	GithubAPIMirror      string   `yaml:"github-api-mirror"`
-	WorkerURL            string   `yaml:"worker-url"`
-	WorkerToken          string   `yaml:"worker-token"`
-	S3Endpoint           string   `yaml:"s3-endpoint"`
-	S3AccessID           string   `yaml:"s3-access-id"`
-	S3SecretKey          string   `yaml:"s3-secret-key"`
-	S3Bucket             string   `yaml:"s3-bucket"`
-	S3UseSSL             bool     `yaml:"s3-use-ssl"`
-	S3BucketLookup       string   `yaml:"s3-bucket-lookup"`
-	SubUrlsReTry         int      `yaml:"sub-urls-retry"`
-	SubUrlsRetryInterval int      `yaml:"sub-urls-retry-interval"`
-	SubUrlsTimeout       int      `yaml:"sub-urls-timeout"`
-	SubUrlsRemote        []string `yaml:"sub-urls-remote"`
-	SubUrls              []string `yaml:"sub-urls"`
-	SuccessRate          float64  `yaml:"success-rate"`
-	MihomoAPIURL         string   `yaml:"mihomo-api-url"`
-	MihomoAPISecret      string   `yaml:"mihomo-api-secret"`
-	ListenPort           string   `yaml:"listen-port"`
-	RenameNode           bool     `yaml:"rename-node"`
-	KeepSuccessProxies   bool     `yaml:"keep-success-proxies"`
-	OutputDir            string   `yaml:"output-dir"`
+	PrintProgress        bool    `yaml:"print-progress"`
+	ProgressMode         string  `yaml:"progress-mode"`
+	Concurrent           int     `yaml:"concurrent"`
+	AliveConcurrent      int     `yaml:"alive-concurrent"`
+	SpeedConcurrent      int     `yaml:"speed-concurrent"`
+	MediaConcurrent      int     `yaml:"media-concurrent"`
+	EnableIPv6           bool    `yaml:"ipv6"`
+	CheckInterval        int     `yaml:"check-interval"`
+	CronExpression       string  `yaml:"cron-expression"`
+	Timeout              int     `yaml:"timeout"`
+	SpeedTestURL         string  `yaml:"speed-test-url"`
+	DownloadTimeout      int     `yaml:"download-timeout"`
+	DownloadMB           int     `yaml:"download-mb"`
+	TotalSpeedLimit      int     `yaml:"total-speed-limit"`
+	Threshold            float32 `yaml:"threshold"`
+	GCThreshold          int64   `yaml:"gc-threshold"`
+	MinSpeed             int     `yaml:"min-speed"`
+	MediaCheckTimeout    int     `yaml:"media-check-timeout"`
+	FilterRegex          string  `yaml:"filter-regex"`
+	SaveMethod           string  `yaml:"save-method"`
+	WebDAVURL            string  `yaml:"webdav-url"`
+	WebDAVUsername       string  `yaml:"webdav-username"`
+	WebDAVPassword       string  `yaml:"webdav-password"`
+	GithubToken          string  `yaml:"github-token"`
+	GithubGistID         string  `yaml:"github-gist-id"`
+	GithubAPIMirror      string  `yaml:"github-api-mirror"`
+	WorkerURL            string  `yaml:"worker-url"`
+	WorkerToken          string  `yaml:"worker-token"`
+	S3Endpoint           string  `yaml:"s3-endpoint"`
+	S3AccessID           string  `yaml:"s3-access-id"`
+	S3SecretKey          string  `yaml:"s3-secret-key"`
+	S3Bucket             string  `yaml:"s3-bucket"`
+	S3UseSSL             bool    `yaml:"s3-use-ssl"`
+	S3BucketLookup       string  `yaml:"s3-bucket-lookup"`
+	SubUrlsReTry         int     `yaml:"sub-urls-retry"`
+	SubUrlsRetryInterval int     `yaml:"sub-urls-retry-interval"`
+	SubUrlsTimeout       int     `yaml:"sub-urls-timeout"`
+	// SubsParseBatch 解析阶段批次大小（原始候选节点数）。
+	// processSubscription 内，每攒够这么多个节点就整批发往全局去重队列一次。
+	// 太小：channel 调度次数变多；太大：与并发数相乘后，瞬时内存占用变大（≈ 并发数 × 该值 × 2）。
+	SubsParseBatch int `yaml:"subs-parse-batch"`
+	// SubsDedupeBatch 去重阶段批次大小（原始节点数，去重前计数）。
+	// 消费者每处理这么多个原始节点，就把当前临时去重表合并进全局节点池并重置，
+	// 避免临时去重表随着不重复节点数量一路涨到最终总量才释放。
+	// 默认 100000，建议范围 20000–500000。0 = 禁用分段（全部处理完才统一合并去重）。
+	SubsDedupeBatch    int      `yaml:"subs-dedupe-batch"`
+	SubUrlsRemote      []string `yaml:"sub-urls-remote"`
+	SubUrls            []string `yaml:"sub-urls"`
+	SuccessRate        float64  `yaml:"success-rate"`
+	MihomoAPIURL       string   `yaml:"mihomo-api-url"`
+	MihomoAPISecret    string   `yaml:"mihomo-api-secret"`
+	ListenPort         string   `yaml:"listen-port"`
+	RenameNode         bool     `yaml:"rename-node"`
+	KeepSuccessProxies bool     `yaml:"keep-success-proxies"`
+	OutputDir          string   `yaml:"output-dir"`
 	// ConfigDir 运行时由 app.loadConfig 注入，值为当前配置文件所在目录。
 	// 不参与 YAML 序列化，仅供 save/method/local.go 计算默认输出路径使用。
-	ConfigDir            string   `yaml:"-"`
-	AppriseAPIServer     string   `yaml:"apprise-api-server"`
-	RecipientURL         []string `yaml:"recipient-url"`
-	NotifyTitle          string   `yaml:"notify-title"`
-	SubStorePort         string   `yaml:"sub-store-port"`
-	SubStorePath         string   `yaml:"sub-store-path"`
-	SubStoreSyncCron     string   `yaml:"sub-store-sync-cron"`
-	SubStorePushService  string   `yaml:"sub-store-push-service"`
-	SubStoreProduceCron  string   `yaml:"sub-store-produce-cron"`
-	MihomoOverwriteURL   string   `yaml:"mihomo-overwrite-url"`
-	ISPCheck             bool     `yaml:"isp-check"`
-	MediaCheck           bool     `yaml:"media-check"`
-	Platforms            []string `yaml:"platforms"`
-	MaxMindDBPath        string   `yaml:"maxmind-db-path"`
-	DropBadCfNodes       bool     `yaml:"drop-bad-cf-nodes"`
-	EnhancedTag          bool     `yaml:"enhanced-tag"`
-	SuccessLimit         int32    `yaml:"success-limit"`
-	NodePrefix           string   `yaml:"node-prefix"`
-	NodeType             []string `yaml:"node-type"`
-	NodeLoc              []string `yaml:"node-loc"`
-	EnableWebUI          bool     `yaml:"enable-web-ui"`
-	APIKey               string   `yaml:"api-key"`
-	SharePassword        string   `yaml:"share-password"`
-	CallbackScript       string   `yaml:"callback-script"`
-	SystemProxy          string   `yaml:"system-proxy"`
-	GithubProxy          string   `yaml:"github-proxy"`
-	GithubProxyGroup     []string `yaml:"ghproxy-group"`
-	EnableSelfUpdate     bool     `yaml:"update"`
-	UpdateOnStartup      bool     `yaml:"update-on-startup"`
-	CronCheckUpdate      string   `yaml:"cron-check-update"`
-	Prerelease           bool     `yaml:"prerelease"`
-	UpdateTimeout        int      `yaml:"update-timeout"`
+	ConfigDir           string   `yaml:"-"`
+	AppriseAPIServer    string   `yaml:"apprise-api-server"`
+	RecipientURL        []string `yaml:"recipient-url"`
+	NotifyTitle         string   `yaml:"notify-title"`
+	SubStorePort        string   `yaml:"sub-store-port"`
+	SubStorePath        string   `yaml:"sub-store-path"`
+	SubStoreSyncCron    string   `yaml:"sub-store-sync-cron"`
+	SubStorePushService string   `yaml:"sub-store-push-service"`
+	SubStoreProduceCron string   `yaml:"sub-store-produce-cron"`
+	MihomoOverwriteURL  string   `yaml:"mihomo-overwrite-url"`
+	ISPCheck            bool     `yaml:"isp-check"`
+	MediaCheck          bool     `yaml:"media-check"`
+	Platforms           []string `yaml:"platforms"`
+	MaxMindDBPath       string   `yaml:"maxmind-db-path"`
+	DropBadCfNodes      bool     `yaml:"drop-bad-cf-nodes"`
+	EnhancedTag         bool     `yaml:"enhanced-tag"`
+	SuccessLimit        int32    `yaml:"success-limit"`
+	NodePrefix          string   `yaml:"node-prefix"`
+	NodeType            []string `yaml:"node-type"`
+	NodeLoc             []string `yaml:"node-loc"`
+	EnableWebUI         bool     `yaml:"enable-web-ui"`
+	APIKey              string   `yaml:"api-key"`
+	SharePassword       string   `yaml:"share-password"`
+	CallbackScript      string   `yaml:"callback-script"`
+	SystemProxy         string   `yaml:"system-proxy"`
+	GithubProxy         string   `yaml:"github-proxy"`
+	GithubProxyGroup    []string `yaml:"ghproxy-group"`
+	EnableSelfUpdate    bool     `yaml:"update"`
+	UpdateOnStartup     bool     `yaml:"update-on-startup"`
+	CronCheckUpdate     string   `yaml:"cron-check-update"`
+	Prerelease          bool     `yaml:"prerelease"`
+	UpdateTimeout       int      `yaml:"update-timeout"`
 
 	// SingboxLatest / SingboxOld iOS 仍停留在 1.11，兼容两个版本
 	SingboxLatest SingBoxConfig `yaml:"singbox-latest"`
@@ -142,6 +151,9 @@ var OriginDefaultConfig = &Config{
 
 	Threshold:   0.75,
 	GCThreshold: 20000,
+
+	// 10 万原始节点触发一次；百万量级约 10 次 GC，CPU 开销可忽略
+	SubsDedupeBatch: 100000,
 
 	SubProcess: SubProcessConfig{
 		ResolveDomain:   false,
