@@ -298,10 +298,9 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 
 	// 打印去重统计日志
 	slog.Info("节点解析",
-		"候选", totalRawHits.Load(),
-		"有效", rawCount,
-		"去重", len(finalProxies),
-		"丢弃", rawCount-len(finalProxies),
+		"合计", rawCount,
+		"结果", len(finalProxies),
+		"去重", rawCount-len(finalProxies),
 	)
 	saveStats(SubStats)
 
@@ -493,8 +492,9 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 	filterTypes := config.GlobalConfig.NodeType
 
 	var (
-		rawHits    int // 层 1：解析阶段产出的候选节点数（可能含同订阅内跨解析器重复，见 parse/stream.go）
-		validCount int // 层 2：通过类型/端口校验、实际发往全局去重队列的节点数（去重前）
+		rawHits      int // 层 1：解析阶段产出的候选节点数（可能含同订阅内跨解析器重复，见 parse/stream.go）
+		validCount   int // 层 2：通过类型/端口校验、实际发往全局去重队列的节点数（去重前）
+		typeFiltered int
 	)
 
 	batch := make([]map[string]any, 0, batchSize)
@@ -506,12 +506,15 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 		batch = make([]map[string]any, 0, batchSize)
 	}
 
+	seenInSub := make(map[string]struct{}, batchSize)
+
 	// handle 既用作 ParseSubscriptionDataStream 的 yield 回调，也用于处理兜底正则提取出的节点
 	handle := func(node map[string]any) bool {
 		rawHits++
 
 		if len(filterTypes) > 0 {
 			if t, ok := node["type"].(string); ok && !lo.Contains(filterTypes, t) {
+				typeFiltered++
 				return true
 			}
 		}
@@ -526,6 +529,13 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 			return true
 		}
 
+		// 单个订阅内进行去重
+		key := utils.GenerateProxyKey(node)
+		if _, dup := seenInSub[key]; dup {
+			return true
+		}
+		seenInSub[key] = struct{}{}
+
 		node["sub_url"] = urlStr
 		node["sub_tag"] = tag
 		node["sub_was_succeed"] = wasSucced
@@ -539,16 +549,27 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 		return true
 	}
 
-	streamErr := parse.ParseSubscriptionDataStream(data, urlStr, handle)
+	parseStats, streamErr := parse.ParseSubscriptionDataStream(data, urlStr, handle)
 
-	// Fallback：所有解析器均未识别该格式时，用正则兜底（命中量通常很小，无需分批）
 	if streamErr != nil {
 		for _, node := range parse.FallbackExtractV2Ray(data, urlStr) {
 			handle(node)
 		}
 	}
 	data = nil
-	flush() // 发送最后一批不足 batchSize 的剩余节点
+	flush()
+
+	// 构造解析器明细字符串，只在有多个解析器命中时才显示
+	args := []any{"URL", urlStr, "去重后", validCount}
+	if typeFiltered > 0 {
+		args = append(args, "类型过滤", typeFiltered)
+	}
+	if len(parseStats) > 1 {
+		for parser, count := range parseStats {
+			args = append(args, parser, count)
+		}
+	}
+	slog.Debug("订阅解析", args...)
 
 	totalRawHits.Add(int64(rawHits))
 	slog.Debug("订阅解析完成", "URL", urlStr, "候选节点", rawHits, "有效节点", validCount)
@@ -634,7 +655,7 @@ func cleanMetadata(p map[string]any) {
 func ClearCache() {
 	uniqueSubsCount = 0
 	totalRawHits.Store(0)
-	SubStats = make(map[string]SubStat) 
+	SubStats = make(map[string]SubStat)
 
 	// 关闭所有复用 client 的连接池，释放 TLS session cache 和 idle conn
 	clientMapCache.Range(func(key, value any) bool {
