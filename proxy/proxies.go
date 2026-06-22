@@ -634,6 +634,7 @@ func cleanMetadata(p map[string]any) {
 func ClearCache() {
 	uniqueSubsCount = 0
 	totalRawHits.Store(0)
+	SubStats = make(map[string]SubStat) 
 
 	// 关闭所有复用 client 的连接池，释放 TLS session cache 和 idle conn
 	clientMapCache.Range(func(key, value any) bool {
