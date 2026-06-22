@@ -556,7 +556,7 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 			handle(node)
 		}
 	}
-	data = nil
+	data = nil //nolint:ineffassign
 	flush()
 
 	// 构造解析器明细字符串，只在有多个解析器命中时才显示
