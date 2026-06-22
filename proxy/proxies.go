@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/goccy/go-yaml"
 	"github.com/samber/lo"
@@ -39,6 +40,9 @@ var (
 	ErrIgnore           = errors.New("error-ignore") // ErrIgnore 标记无需记录日志的非致命错误
 	uniqueSubsCount int = 0                          // 去重后的订阅数量
 	SubStats            = make(map[string]SubStat)   // SubStats 存储订阅总数和成功数
+
+	// totalRawHits 统计「层 1」：解析阶段产出的全部候选节点数。
+	totalRawHits atomic.Int64
 )
 
 // logSubscriptionStats 打印订阅数量统计
@@ -122,9 +126,6 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	subUrls, localNum, remoteNum, historyNum := resolveSubUrls()
 	logSubscriptionStats(len(subUrls), localNum, remoteNum, historyNum)
 
-	// 增大缓冲，减少消费者阻塞
-	proxyChan := make(chan map[string]any, 100000)
-
 	// 定义优先级常量
 	const (
 		KeepLevelNone    = 0 // 普通节点：无特殊保留策略
@@ -132,98 +133,132 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		KeepLevelSuccess = 2 // 成功节点：上次检测存活，价值最高，必须保留
 	)
 
+	// 分段去重批次大小（原始节点数，去重前计数）
+	// 消费者每处理该数量的原始节点，就把当前临时去重表合并进全局节点池并重置，
+	// 避免临时去重表随着不重复节点数量一路涨到最终总量才释放。
+	// 0 = 禁用分段，全量后统一去重。
+	dedupeBatch := max(config.GlobalConfig.SubsDedupeBatch, 0)
+
+	// 存储去重后的节点。
+	// Key 为节点指纹，Value 为节点数据。
+	// 当指纹冲突时，保留优先级较高的版本 (Success > History > Normal)。
+	globalUniqueNodes := make(map[string]map[string]any, 100000)
+
+	// 记录已存储节点的优先级，用于比较
+	globalKeepLevels := make(map[string]int, 100000)
+
 	var (
-		wg sync.WaitGroup
-
-		// 统计计数（原始数量）
-		rawCount = 0
-
-		// 存储去重后的节点。
-		// Key 为节点指纹，Value 为节点数据。
-		// 当指纹冲突时，保留优先级较高的版本 (Success > History > Normal)。
-		uniqueNodes = make(map[string]map[string]any, 200000)
-
-		// 记录已存储节点的优先级，用于比较
-		nodeKeepLevels = make(map[string]int, 200000)
+		rawCount       int // 统计计数（原始数量）
+		finalSuccCount int // 最终上次成功数量
+		finalHistCount int // 最终历史成功数量
 	)
 
-	// GC 阈值，每10万个节点进行一次GC，避免内存无限上涨
-	const gcInterval = 100000
-	pendingGCNum := 0
+	// 32 位系统：强制保守并发，避免虚拟内存耗尽
+	is32Bit := ^uint(0)>>32 == 0
+	minConcurrency := 50
+	if is32Bit {
+		minConcurrency = min(10, config.GlobalConfig.Concurrent)
+		slog.Warn("32 位程序强制保守拉取订阅", "并发", minConcurrency)
+		slog.Warn("建议使用 x64 位程序释放最佳性能！")
+		debug.SetGCPercent(20)
+	}
+	concurrency := min(config.GlobalConfig.Concurrent, minConcurrency)
+
+	// channel 缓冲：以"批次"为单位，而不是节点数。
+	chanBuf := max(concurrency, 8)
+	proxyChan := make(chan []map[string]any, chanBuf)
+
+	// 批次 map 初始容量与阈值对齐，减少扩容 rehash
+	batchInitCap := 20000
+	if dedupeBatch > 0 {
+		batchInitCap = min(dedupeBatch, 100000)
+	}
 
 	// 处理获取节点，消费 proxyChan
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 
-		for proxy := range proxyChan {
-			rawCount++
-			pendingGCNum++
+		batchNodes := make(map[string]map[string]any, batchInitCap)
+		batchLevels := make(map[string]int, batchInitCap)
+		batchRaw := 0
 
-			// 流式 GC 控制
-			if pendingGCNum >= gcInterval {
-				// 在 GC 导致停顿前记录日志
-				slog.Debug("触发流式内存清理", "当前已处理总数", rawCount)
-				// 归还内存
-				// 否则百万级节点池内存将持续增加
-				debug.FreeOSMemory()
-				pendingGCNum = 0
+		// flushBatch 合并当前批次到全局池并重置批次状态。
+		// 重建 map 而非 clear()：让旧 map 底层 bucket 被 GC 彻底回收。
+		flushBatch := func(reason string) {
+			if batchRaw == 0 {
+				return
 			}
-
-			// 1. 统计订阅源
-			if su, ok := proxy["sub_url"].(string); ok && su != "" {
-				stats := SubStats[su]
-				stats.Total++
-				SubStats[su] = stats
-			}
-
-			// 2. 计算当前节点的优先级
-			currentKeepLevel := KeepLevelNone
-			if proxy["sub_was_succeed"] == true {
-				currentKeepLevel = KeepLevelSuccess
-			} else if proxy["sub_from_history"] == true {
-				currentKeepLevel = KeepLevelHistory
-			}
-
-			// 3. 生成指纹
-			key := utils.GenerateProxyKey(proxy)
-
-			// 4. 优先级竞争逻辑 (替代 DeduplicateAndMerge)
-			if existLevel, exists := nodeKeepLevels[key]; exists {
-				// 如果已存在，且新节点优先级更高，则覆盖（升级）
-				if currentKeepLevel > existLevel {
-					uniqueNodes[key] = proxy
-					nodeKeepLevels[key] = currentKeepLevel
+			merged := 0
+			for key, node := range batchNodes {
+				level := batchLevels[key]
+				if existLevel, exists := globalKeepLevels[key]; !exists || level > existLevel {
+					globalUniqueNodes[key] = node
+					globalKeepLevels[key] = level
+					merged++
 				}
-				// 如果优先级相同或更低，直接丢弃（GC 会自动回收该 proxy）
-			} else {
-				// 如果不存在，直接存入
-				uniqueNodes[key] = proxy
-				nodeKeepLevels[key] = currentKeepLevel
 			}
+			if dedupeBatch > 0 {
+				slog.Debug("分段去重",
+					"触发", reason,
+					"本批原始", batchRaw,
+					"本批去重", len(batchNodes),
+					"合并新增", merged,
+					"全局节点", len(globalUniqueNodes),
+				)
+			}
+			batchNodes = make(map[string]map[string]any, batchInitCap)
+			batchLevels = make(map[string]int, batchInitCap)
+			batchRaw = 0
+			debug.FreeOSMemory()
 		}
+
+		for batch := range proxyChan {
+			for i, proxy := range batch {
+				batch[i] = nil // 该节点处理完毕后立即断开批次切片对它的引用
+
+				rawCount++
+				batchRaw++
+
+				// 1. 统计订阅源
+				if su, ok := proxy["sub_url"].(string); ok && su != "" {
+					st := SubStats[su]
+					st.Total++
+					SubStats[su] = st
+				}
+
+				// 2. 计算当前节点的优先级
+				level := KeepLevelNone
+				if proxy["sub_was_succeed"] == true {
+					level = KeepLevelSuccess
+				} else if proxy["sub_from_history"] == true {
+					level = KeepLevelHistory
+				}
+
+				// 3. 生成指纹
+				key := utils.GenerateProxyKey(proxy)
+
+				// 4. 优先级竞争逻辑
+				if existLevel, exists := batchLevels[key]; !exists || level > existLevel {
+					// 如果已存在，且新节点优先级更高，则覆盖（升级）
+					batchNodes[key] = proxy
+					batchLevels[key] = level
+				}
+
+				// 如果优先级相同或更低，直接丢弃（GC 会自动回收该 proxy）
+				if dedupeBatch > 0 && batchRaw >= dedupeBatch {
+					flushBatch("阈值")
+				}
+			}
+			// batch 本身遍历完成后不再被任何变量持有，函数返回后即可被 GC 回收
+		}
+
+		flushBatch("结束")
 	}()
 
-	// 最低拉取并发数
-	minCurrency := 50
-
-	// 检测是否为 32 位系统
-	// ^uint(0)>>32 在 32位系统上等于 0，在 64位系统上等于 1
-	is32Bit := ^uint(0)>>32 == 0
-
-	// 不管物理内存（RAM）有多大，32位程序能寻址的虚拟内存通常被限制在 2GB 到 3GB 之间。
-	if is32Bit {
-		minCurrency = min(10, config.GlobalConfig.Concurrent)
-		slog.Warn("32 位程序强制保守拉取订阅", "并发", minCurrency)
-		slog.Warn("建议使用 x64 位程序释放最佳性能！")
-
-		// 激进的 GC 策略：内存增长 20% 就触发 GC（默认是 100%）
-		debug.SetGCPercent(20)
-	}
-
 	// 获取订阅节点，生成proxyChan
-	concurrency := min(config.GlobalConfig.Concurrent, minCurrency)
 	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
 	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
 	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
 
@@ -243,12 +278,9 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	<-done
 
 	// 将 Map 转为 Slice，并统计最终的分类数量
-	finalProxies := make([]map[string]any, 0, len(uniqueNodes))
-	finalSuccCount := 0
-	finalHistCount := 0
-
-	for key, node := range uniqueNodes {
-		keepLevel := nodeKeepLevels[key]
+	finalProxies := make([]map[string]any, 0, len(globalUniqueNodes))
+	for key, node := range globalUniqueNodes {
+		keepLevel := globalKeepLevels[key]
 
 		// 统计逻辑：根据最终留下的那个节点的优先级计数
 		switch keepLevel {
@@ -266,15 +298,16 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 
 	// 打印去重统计日志
 	slog.Info("节点解析",
-		"原始", rawCount,
+		"候选", totalRawHits.Load(),
+		"有效", rawCount,
 		"去重", len(finalProxies),
 		"丢弃", rawCount-len(finalProxies),
 	)
 	saveStats(SubStats)
 
 	// 释放 Map 内存（虽然函数返回后也会释放）
-	uniqueNodes = nil
-	nodeKeepLevels = nil
+	globalUniqueNodes = nil
+	globalKeepLevels = nil
 
 	// 归还内存
 	debug.FreeOSMemory()
@@ -428,74 +461,97 @@ func fetchRemoteSubUrls(listURL string) ([]string, error) {
 	return res, nil
 }
 
-// processSubscription 单个订阅的处理流程
-func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out chan<- map[string]any) {
-	// 1. 下载
+// defaultParseBatchSize 默认每批次节点数。
+//
+// 这个值不能脱离并发数单独调大。一个订阅 goroutine 同一时刻最多持有
+// 「1 个正在本地攒的批次 + 1 个已发往 proxyChan 但还没被消费的批次」，
+// 所以全局瞬时占用的量级大约是：
+//
+//	并发订阅数 × batchSize × 2
+//
+// 例如并发数 50、batchSize=50000 时，最坏情况瞬时占用可达约 500 万节点
+const defaultParseBatchSize = 5000
+
+// processSubscription 单个订阅的处理流程。
+//
+// 使用 parse.ParseSubscriptionDataStream 逐节点回调，内部不再持有该订阅的
+// 完整节点切片；产出的节点在本地攒到 batchSize 后才整批发往 proxyChan，
+// 在"内存峰值"与"channel 调度开销"之间取折中（见 defaultParseBatchSize 注释）。
+func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out chan<- []map[string]any) {
 	data, err := FetchSubsData(urlStr)
 	if err != nil {
 		if !errors.Is(err, ErrIgnore) {
-			// 根据错误类型打印错误消息
 			logFatal(err, urlStr)
 		}
 		return
 	}
 
-	// 2. 解析
-	nodes, err := parse.ParseSubscriptionData(data, urlStr)
-	if err != nil {
-		// 回退策略：尝试正则暴力提取
-		nodes = parse.FallbackExtractV2Ray(data, urlStr)
-		data = nil //nolint:ineffassign
-		if len(nodes) == 0 {
-			if !hasDatePlaceholder(urlStr) {
-				slog.Warn("解析失败或为空列表", "URL", urlStr, "error", err)
-			}
-			return
-		}
+	batchSize := config.GlobalConfig.SubsParseBatch
+	if batchSize <= 0 {
+		batchSize = defaultParseBatchSize
 	}
-
-	slog.Debug("processSubscription", "nodes", nodes)
-
-	data = nil //nolint:ineffassign
-
-	// 3. 过滤与发送
-	count := 0
 	filterTypes := config.GlobalConfig.NodeType
 
-	for _, node := range nodes {
-		slog.Debug("解析代理节点成功", "node", node)
-		// 类型过滤
+	var (
+		rawHits    int // 层 1：解析阶段产出的候选节点数（可能含同订阅内跨解析器重复，见 parse/stream.go）
+		validCount int // 层 2：通过类型/端口校验、实际发往全局去重队列的节点数（去重前）
+	)
+
+	batch := make([]map[string]any, 0, batchSize)
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		out <- batch
+		batch = make([]map[string]any, 0, batchSize)
+	}
+
+	// handle 既用作 ParseSubscriptionDataStream 的 yield 回调，也用于处理兜底正则提取出的节点
+	handle := func(node map[string]any) bool {
+		rawHits++
+
 		if len(filterTypes) > 0 {
 			if t, ok := node["type"].(string); ok && !lo.Contains(filterTypes, t) {
-				continue
+				return true
 			}
 		}
-
-		slog.Debug("processSubscription", "node", node)
 
 		// 统一清洗节点字段，注入默认值
 		parse.NormalizeNode(node)
 
-		// 最终验证
 		serverStr := strings.TrimSpace(fmt.Sprintf("%v", node["server"]))
 		port := parse.ToIntPort(node["port"])
 		if serverStr == "" || serverStr == "<nil>" || port <= 0 || port > 65535 || node["type"] == nil {
 			slog.Debug("过滤掉无效的畸形节点", "订阅", urlStr, "数据", node)
-			continue
+			return true
 		}
-
-		slog.Debug("processSubscription", "NormalizeNode", node)
 
 		node["sub_url"] = urlStr
 		node["sub_tag"] = tag
 		node["sub_was_succeed"] = wasSucced
 		node["sub_from_history"] = wasHistory
 
-		out <- node
-		count++
+		batch = append(batch, node)
+		validCount++
+		if len(batch) >= batchSize {
+			flush()
+		}
+		return true
 	}
 
-	slog.Debug("订阅解析完成", "URL", urlStr, "有效节点", count)
+	streamErr := parse.ParseSubscriptionDataStream(data, urlStr, handle)
+
+	// Fallback：所有解析器均未识别该格式时，用正则兜底（命中量通常很小，无需分批）
+	if streamErr != nil {
+		for _, node := range parse.FallbackExtractV2Ray(data, urlStr) {
+			handle(node)
+		}
+	}
+	data = nil
+	flush() // 发送最后一批不足 batchSize 的剩余节点
+
+	totalRawHits.Add(int64(rawHits))
+	slog.Debug("订阅解析完成", "URL", urlStr, "候选节点", rawHits, "有效节点", validCount)
 }
 
 // identifyLocalSubType 识别本地订阅源类型
@@ -577,6 +633,7 @@ func cleanMetadata(p map[string]any) {
 // ClearCache 检测结束后释放包级全局状态
 func ClearCache() {
 	uniqueSubsCount = 0
+	totalRawHits.Store(0)
 
 	// 关闭所有复用 client 的连接池，释放 TLS session cache 和 idle conn
 	clientMapCache.Range(func(key, value any) bool {
