@@ -35,7 +35,7 @@ func ConvertsV2RayExtra(buf []byte) ([]map[string]any, error) {
 		}
 
 		scheme = strings.ToLower(scheme)
-		switch scheme {
+		switch scheme { //nolint
 		// TODO: 支持更多非标格式，支持标准mieru分享格式
 		case "mieru":
 			dcBuf, err := TryDecodeBase64WithError(body)
@@ -112,62 +112,62 @@ func ConvertsV2RayExtra(buf []byte) ([]map[string]any, error) {
 }
 
 // patchXhttpOpts 修复 ConvertsV2Ray 对 xhttp 节点缺失 opts 的 bug
-func patchXhttpOpts(nodes []map[string]any, rawData []byte) {
-	// 构建 server|port|uuid → 原始 URL 的查找表
-	// 只处理 xhttp vless，避免无谓开销
-	urlIndex := make(map[string]url.Values)
-	for line := range bytes.SplitSeq(rawData, []byte("\n")) {
-		s := strings.TrimSpace(string(line))
-		if !strings.HasPrefix(s, "vless://") {
-			continue
-		}
-		u, err := url.Parse(s)
-		if err != nil || u.Query().Get("type") != "xhttp" {
-			continue
-		}
-		key := strings.ToLower(u.Hostname()) + "|" + u.Port() + "|" + u.User.Username()
-		urlIndex[key] = u.Query()
-	}
+// func patchXhttpOpts(nodes []map[string]any, rawData []byte) {
+// 	// 构建 server|port|uuid → 原始 URL 的查找表
+// 	// 只处理 xhttp vless，避免无谓开销
+// 	urlIndex := make(map[string]url.Values)
+// 	for line := range bytes.SplitSeq(rawData, []byte("\n")) {
+// 		s := strings.TrimSpace(string(line))
+// 		if !strings.HasPrefix(s, "vless://") {
+// 			continue
+// 		}
+// 		u, err := url.Parse(s)
+// 		if err != nil || u.Query().Get("type") != "xhttp" {
+// 			continue
+// 		}
+// 		key := strings.ToLower(u.Hostname()) + "|" + u.Port() + "|" + u.User.Username()
+// 		urlIndex[key] = u.Query()
+// 	}
 
-	if len(urlIndex) == 0 {
-		return
-	}
+// 	if len(urlIndex) == 0 {
+// 		return
+// 	}
 
-	for _, node := range nodes {
-		// 只修复 network=xhttp 且缺失 xhttp-opts 的节点
-		if net, _ := node["network"].(string); net != "xhttp" {
-			continue
-		}
-		if _, hasOpts := node["xhttp-opts"]; hasOpts {
-			continue
-		}
+// 	for _, node := range nodes {
+// 		// 只修复 network=xhttp 且缺失 xhttp-opts 的节点
+// 		if net, _ := node["network"].(string); net != "xhttp" {
+// 			continue
+// 		}
+// 		if _, hasOpts := node["xhttp-opts"]; hasOpts {
+// 			continue
+// 		}
 
-		server := strings.ToLower(fmt.Sprint(node["server"]))
-		port := fmt.Sprint(node["port"])
-		uuid := fmt.Sprint(node["uuid"])
-		key := server + "|" + port + "|" + uuid
+// 		server := strings.ToLower(fmt.Sprint(node["server"]))
+// 		port := fmt.Sprint(node["port"])
+// 		uuid := fmt.Sprint(node["uuid"])
+// 		key := server + "|" + port + "|" + uuid
 
-		q, ok := urlIndex[key]
-		if !ok {
-			continue
-		}
+// 		q, ok := urlIndex[key]
+// 		if !ok {
+// 			continue
+// 		}
 
-		opts := make(map[string]any, 3)
-		if p := q.Get("path"); p != "" {
-			opts["path"] = p
-		}
-		if h := q.Get("host"); h != "" {
-			opts["host"] = h
-		}
-		if m := q.Get("mode"); m != "" {
-			opts["mode"] = m
-		}
-		if len(opts) > 0 {
-			node["xhttp-opts"] = opts
-			slog.Debug("xhttp-opts 补丁已应用", "server", server, "port", port)
-		}
-	}
-}
+// 		opts := make(map[string]any, 3)
+// 		if p := q.Get("path"); p != "" {
+// 			opts["path"] = p
+// 		}
+// 		if h := q.Get("host"); h != "" {
+// 			opts["host"] = h
+// 		}
+// 		if m := q.Get("mode"); m != "" {
+// 			opts["mode"] = m
+// 		}
+// 		if len(opts) > 0 {
+// 			node["xhttp-opts"] = opts
+// 			slog.Debug("xhttp-opts 补丁已应用", "server", server, "port", port)
+// 		}
+// 	}
+// }
 
 func uniqueName(names map[string]int, name string) string {
 	if index, ok := names[name]; ok {
