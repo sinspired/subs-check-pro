@@ -331,6 +331,8 @@ github.com/sinspired/subs-check-pro-webui v0.0.0-20260619041857-8bb048b0cd39 h1:
 github.com/sinspired/subs-check-pro-webui v0.0.0-20260619041857-8bb048b0cd39/go.mod h1:rg8DBZnTSh5/5tHCwQJrMVX6tKqqI5m8BrTT+gCB92M=
 github.com/sinspired/subs-check-pro-webui v0.0.0-20260621031550-00d53a57a829 h1:QwezF4Vpa6VJmlxAAG+v22HBnlVdBJhSevQ7IYQbCZk=
 github.com/sinspired/subs-check-pro-webui v0.0.0-20260621031550-00d53a57a829/go.mod h1:rg8DBZnTSh5/5tHCwQJrMVX6tKqqI5m8BrTT+gCB92M=
+github.com/sinspired/subs-check-pro-webui v0.0.0-20260622061844-00282ada7dc5 h1:1IjRp+wM+imHU/6xt80NZ2vzVdurQuqnKnuMZn6JS58=
+github.com/sinspired/subs-check-pro-webui v0.0.0-20260622061844-00282ada7dc5/go.mod h1:rg8DBZnTSh5/5tHCwQJrMVX6tKqqI5m8BrTT+gCB92M=
 github.com/sirupsen/logrus v1.9.4 h1:TsZE7l11zFCLZnZ+teH4Umoq5BhEIfIzfRDZ1Uzql2w=
 github.com/sirupsen/logrus v1.9.4/go.mod h1:ftWc9WdOfJ0a92nsE2jF5u5ZwH8Bv2zdeOC42RjbV2g=
 github.com/sohaha/zlsgo v1.7.20 h1:1kE2/kFmi95Qz5bfZxe6td+40PJnuE8MzpKfQdGvtiw=
