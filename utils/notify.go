@@ -23,6 +23,13 @@ import (
 // NotifyKind 表示通知类型
 type NotifyKind int
 
+// NotifyTestResult 单条渠道的测试结果
+type NotifyTestResult struct {
+	Name  string `json:"name"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
 const (
 	NotifyNodeStatus  NotifyKind = iota // 节点状态
 	NotifyGeoDBUpdate                   // GeoDB 更新
@@ -35,8 +42,8 @@ const (
 	maxRetries    = 3                      // 最大重试次数（包含首次）
 	retryDelay    = 500 * time.Millisecond // 重试等待间隔
 
-	FallbackProxy = ""                                                                                             // 兜底代理
-	RepoURL       = "https://github.com/sinspired/subs-check-pro/v2"                                               // 仓库地址
+	FallbackProxy = ""                                                                                                     // 兜底代理
+	RepoURL       = "https://github.com/sinspired/subs-check-pro/v2"                                                       // 仓库地址
 	IconURL       = "https://raw.githubusercontent.com/sinspired/subs-check-pro-webui/main/webui/static/icon/icon-512.png" // 通用图标 URL
 )
 
@@ -392,4 +399,59 @@ func SendNotifyDetectLatestRelease(current, latest string, isDocker, isGUI bool,
 	}
 
 	broadcastNotify(NotifyNewRelease, title, body, downloadURL)
+}
+
+// SendNotifyTestTo 向指定渠道列表发送测试通知
+func SendNotifyTestTo(recipients []string) []NotifyTestResult {
+	title := "🔔 Subs Check PRO 通知测试"
+	body := "✅ 通知渠道连接正常  \n🔗 可查看 [Apprise_Vercel](https://github.com/sinspired/apprise_vercel) 部署自己的通知服务  \n🕒 " + GetCurrentTime()
+	proxies := buildProxyList()
+
+	type item struct {
+		idx    int
+		result NotifyTestResult
+	}
+	ch := make(chan item, len(recipients))
+	var wg sync.WaitGroup
+
+	for i, u := range recipients {
+		wg.Add(1)
+		go func(idx int, raw string) {
+			defer wg.Done()
+			name, _, _ := strings.Cut(raw, "://")
+			req := NotifyRequest{
+				URLs:   decorateURL(raw, NotifyNodeStatus, ""),
+				Body:   body,
+				Title:  title,
+				Format: "markdown",
+			}
+			var lastErr error
+			for attempt := range maxRetries {
+				p := proxies[attempt%len(proxies)]
+				if err := Notify(req, p); err == nil {
+					ch <- item{idx, NotifyTestResult{Name: name, OK: true}}
+					return
+				} else {
+					lastErr = err
+				}
+				if attempt < maxRetries-1 {
+					time.Sleep(retryDelay)
+				}
+			}
+			ch <- item{idx, NotifyTestResult{
+				Name:  name,
+				OK:    false,
+				Error: lastErr.Error(),
+			}}
+		}(i, u)
+	}
+
+	wg.Wait()
+	close(ch)
+
+	results := make([]NotifyTestResult, len(recipients))
+	for it := range ch {
+		results[it.idx] = it.result
+	}
+	return results
 }

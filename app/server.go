@@ -296,6 +296,7 @@ func (app *App) registerAPIRoutes(router *gin.Engine) {
 		api.GET("/logs", app.getLogs)
 		api.GET("/analysis-report", app.getAnalysisReport)
 		api.POST("/proxy/check", app.proxyCheckHandler)
+		api.POST("/notify/test", app.notifyTestHandler)
 	}
 }
 
@@ -580,3 +581,28 @@ func (app *App) proxyCheckHandler(c *gin.Context) {
     c.JSON(http.StatusOK, result)
 }
 
+// notifyTestHandler 测试通知发送
+// POST /api/notify/test
+func (app *App) notifyTestHandler(c *gin.Context) {
+    var req struct {
+        Recipients []string `json:"recipients"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil || len(req.Recipients) == 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "未传入通知渠道"})
+        return
+    }
+    if config.GlobalConfig.AppriseAPIServer == "" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "未配置 Apprise API 地址"})
+        return
+    }
+
+    results := utils.SendNotifyTestTo(req.Recipients)
+    allOK := true
+    for _, r := range results {
+        if !r.OK {
+            allOK = false
+            break
+        }
+    }
+    c.JSON(http.StatusOK, gin.H{"ok": allOK, "results": results})
+}
