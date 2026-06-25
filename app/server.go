@@ -295,6 +295,7 @@ func (app *App) registerAPIRoutes(router *gin.Engine) {
 		api.GET("/singbox-versions", app.getSingboxVersions)
 		api.GET("/logs", app.getLogs)
 		api.GET("/analysis-report", app.getAnalysisReport)
+		api.POST("/proxy/check", app.proxyCheckHandler)
 	}
 }
 
@@ -561,5 +562,21 @@ func parseHistNodeCount(s string) float64 {
 		return n
 	}
 	return 0
+}
+
+// proxyCheckHandler 检测指定代理是否可用
+// POST /api/proxy/check
+// body: {"proxy": "http://127.0.0.1:10808"}  （空 / "direct" = 直连）
+func (app *App) proxyCheckHandler(c *gin.Context) {
+    var req struct {
+        Proxy string `json:"proxy"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "请求体解析失败: " + err.Error()})
+        return
+    }
+
+    result := utils.CheckProxy(strings.TrimSpace(req.Proxy))
+    c.JSON(http.StatusOK, result)
 }
 

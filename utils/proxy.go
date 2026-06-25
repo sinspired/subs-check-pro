@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -19,10 +20,34 @@ import (
 	"github.com/sinspired/subs-check-pro/v2/config"
 )
 
+// CheckProxyResult 代理检测结果
+type CheckProxyResult struct {
+	OK        bool   `json:"ok"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
+	ProxyUsed string `json:"proxy_used,omitempty"` // 实际检测的代理地址（空值时返回给前端展示）
+	Error     string `json:"error,omitempty"`
+}
+
 var (
 	IsSysProxyAvailable bool
 	IsGhProxyAvailable  bool
 )
+
+// commonProxies 常见系统代理端口
+var commonProxies = []string{
+	"http://127.0.0.1:7890",
+	"http://127.0.0.1:7891",
+	"http://127.0.0.1:1080",
+	"http://127.0.0.1:8080",
+	"http://127.0.0.1:10808",
+	"http://127.0.0.1:10809",
+	"http://127.0.0.1:3067",
+	"http://127.0.0.1:2080",
+	"http://127.0.0.1:1194",
+	"http://127.0.0.1:1082",
+	"http://127.0.0.1:12334",
+	"http://127.0.0.1:12335",
+}
 
 // IsLocalURL 判断给定的 URL 是否指向本地/局域网地址
 func IsLocalURL(urlStr string) bool {
@@ -63,21 +88,6 @@ func IsLocalURL(urlStr string) bool {
 
 // GetSysProxy 检测系统代理是否可用，并设置环境变量
 func GetSysProxy() bool {
-	commonProxies := []string{
-		"http://127.0.0.1:7890",
-		"http://127.0.0.1:7891",
-		"http://127.0.0.1:1080",
-		"http://127.0.0.1:8080",
-		"http://127.0.0.1:10808",
-		"http://127.0.0.1:10809",
-		"http://127.0.0.1:3067",
-		"http://127.0.0.1:2080",
-		"http://127.0.0.1:1194",
-		"http://127.0.0.1:1082",
-		"http://127.0.0.1:12334",
-		"http://127.0.0.1:12335",
-	}
-
 	// 清理所有可能的代理环境变量
 	UnsetAllProxyEnvVars()
 
@@ -386,4 +396,51 @@ func findAvailableSysProxy(configProxy string, candidates []string) string {
 		return proxy
 	}
 	return ""
+}
+
+// CheckProxy 支持前端手动检测系统代理可用性，获取可用系统代理
+func CheckProxy(proxyAddr string) CheckProxyResult {
+	const timeout = 10 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// 空值 → 先看启动时是否已探测到，没有则现场探测一次
+	if proxyAddr == "" {
+		detected := config.GlobalConfig.SystemProxy
+
+		// 已探测到且非 direct，直接用
+		if detected != "" && !isDirectProxyConfig(detected) {
+			proxyAddr = detected
+		} else {
+			// 现场探测常见端口
+			found := findAvailableSysProxy("", commonProxies)
+			if found == "" {
+				return CheckProxyResult{
+					Error: "未检测到可用的系统代理，请确认代理程序正在运行",
+				}
+			}
+			proxyAddr = found
+		}
+	}
+
+	// direct → 前端已隐藏按钮，后端防御处理
+	if isDirectProxyConfig(proxyAddr) {
+		return CheckProxyResult{Error: "直连模式，无需代理检测"}
+	}
+
+	if _, err := url.Parse(proxyAddr); err != nil {
+		return CheckProxyResult{Error: "代理地址格式无效: " + err.Error()}
+	}
+
+	start := time.Now()
+	ok := isSysProxyAvailable(ctx, proxyAddr)
+	latency := time.Since(start).Milliseconds()
+
+	if ok {
+		return CheckProxyResult{OK: true, LatencyMS: latency, ProxyUsed: proxyAddr}
+	}
+	return CheckProxyResult{
+		ProxyUsed: proxyAddr,
+		Error:     fmt.Sprintf("代理不可用（%s）", proxyAddr),
+	}
 }
