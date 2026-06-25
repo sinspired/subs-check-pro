@@ -84,7 +84,7 @@ High-performance proxy subscription checker.
 
 `http://localhost:8199/admin`
 
-![login](./doc/images/login-white.png)
+![login](./doc/images/login.png)
 ![WebUI](./doc/images/WebUI.png)
 
 ### 🖥️ Wails v3 现代化桌面客户端 (subs-check-pro-gui)
