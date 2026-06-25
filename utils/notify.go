@@ -403,8 +403,8 @@ func SendNotifyDetectLatestRelease(current, latest string, isDocker, isGUI bool,
 
 // SendNotifyTestTo 向指定渠道列表发送测试通知
 func SendNotifyTestTo(recipients []string) []NotifyTestResult {
-	title := "🔔 Subs Check PRO 通知测试"
-	body := "✅ 通知渠道连接正常  \n🔗 可查看 [Apprise_Vercel](https://github.com/sinspired/apprise_vercel) 部署自己的通知服务  \n🕒 " + GetCurrentTime()
+	title := "🎉 Subs Check PRO 通知测试"
+	body := "✅ 通知渠道配置正确！恭喜！\n🔗 可查看 [Apprise_Vercel](https://github.com/sinspired/apprise_vercel) 部署自己的通知服务  \n🕒 " + GetCurrentTime()
 	proxies := buildProxyList()
 
 	type item struct {
