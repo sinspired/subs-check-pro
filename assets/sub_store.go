@@ -15,3 +15,6 @@ var EmbeddedOverrideYamlACL4SSR []byte
 
 //go:embed Sinspired_Rules_CDN.yaml
 var EmbeddedOverrideYamlSinspiredRulesCDN []byte
+
+//go:embed Sinspired_Rules_Lite_CDN.yaml
+var EmbeddedOverrideYamlSinspiredRulesLiteCDN []byte

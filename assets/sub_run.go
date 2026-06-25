@@ -30,13 +30,14 @@ var InitSubStorePath = ""
 var IsSubStoreRunning atomic.Bool
 
 type subStorePaths struct {
-	substoreDir                   string
-	nodePath                      string
-	jsPath                        string
-	frontDir                      string
-	overYamlACL4SSRPath           string
-	overYamlSinspiredRulesCDNPath string
-	logPath                       string
+	substoreDir                       string
+	nodePath                          string
+	jsPath                            string
+	frontDir                          string
+	overYamlACL4SSRPath               string
+	overYamlSinspiredRulesCDNPath     string
+	overYamlSinspiredRulesLiteCDNPath string
+	logPath                           string
 }
 
 // getSubStorePaths 获取 sub-store 相关路径
@@ -58,13 +59,14 @@ func getSubStorePaths() (*subStorePaths, error) {
 	substoreDir := filepath.Join(saver.OutputPath, "sub-store")
 
 	return &subStorePaths{
-		substoreDir:                   substoreDir,
-		nodePath:                      filepath.Join(substoreDir, nodeName),
-		jsPath:                        filepath.Join(substoreDir, "sub-store.bundle.js"),
-		frontDir:                      filepath.Join(substoreDir, "frontend"),
-		overYamlACL4SSRPath:           filepath.Join(saver.OutputPath, "ACL4SSR_Online_Full.yaml"),
-		overYamlSinspiredRulesCDNPath: filepath.Join(saver.OutputPath, "Sinspired_Rules_CDN.yaml"),
-		logPath:                       filepath.Join(substoreDir, "sub-store.log"),
+		substoreDir:                       substoreDir,
+		nodePath:                          filepath.Join(substoreDir, nodeName),
+		jsPath:                            filepath.Join(substoreDir, "sub-store.bundle.js"),
+		frontDir:                          filepath.Join(substoreDir, "frontend"),
+		overYamlACL4SSRPath:               filepath.Join(saver.OutputPath, "ACL4SSR_Online_Full.yaml"),
+		overYamlSinspiredRulesCDNPath:     filepath.Join(saver.OutputPath, "Sinspired_Rules_CDN.yaml"),
+		overYamlSinspiredRulesLiteCDNPath: filepath.Join(saver.OutputPath, "Sinspired_Rules_Lite_CDN.yaml"),
+		logPath:                           filepath.Join(substoreDir, "sub-store.log"),
 	}, nil
 }
 
@@ -481,23 +483,28 @@ func extractAssets(paths *subStorePaths) error {
 		return err
 	}
 
-	// 写出 sub-store 后端脚本（已改为未压缩的 JS 源文件，直接写出）
+	// 写出 sub-store 后端脚本
 	if err := writeEmbeddedFile(EmbeddedSubStoreBackend, paths.jsPath, 0o644, "sub-store 脚本"); err != nil {
 		return err
 	}
 
-	// 展开 sub-store 前端资源目录（已改为未压缩的 embed.FS，直接写出）
+	// 展开 sub-store 前端资源目录
 	if err := extractFrontendFS(EmbeddedSubStoreFrontend, paths.frontDir); err != nil {
 		return fmt.Errorf("展开前端资源失败: %w", err)
 	}
 
-	// 写出 ACL4SSR_Online_Full.yaml（已改为未压缩，直接写出）
+	// 写出 ACL4SSR_Online_Full.yaml
 	if err := writeEmbeddedFile(EmbeddedOverrideYamlACL4SSR, paths.overYamlACL4SSRPath, 0o644, "ACL4SSR_Online_Full.yaml"); err != nil {
 		return err
 	}
 
-	// 写出 Sinspired_Rules_CDN.yaml（已改为未压缩，直接写出）
+	// 写出 Sinspired_Rules_CDN.yaml
 	if err := writeEmbeddedFile(EmbeddedOverrideYamlSinspiredRulesCDN, paths.overYamlSinspiredRulesCDNPath, 0o644, "Sinspired_Rules_CDN.yaml"); err != nil {
+		return err
+	}
+
+	// 写出 Sinspired_Rules_Lite_CDN.yaml
+	if err := writeEmbeddedFile(EmbeddedOverrideYamlSinspiredRulesLiteCDN, paths.overYamlSinspiredRulesLiteCDNPath, 0o644, "Sinspired_Rules_Lite_CDN.yaml"); err != nil {
 		return err
 	}
 

@@ -18,12 +18,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-yaml"
+	"github.com/sinspired/subs-check-pro-webui/webui"
 	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/check"
 	"github.com/sinspired/subs-check-pro/v2/config"
 	"github.com/sinspired/subs-check-pro/v2/save/method"
 	"github.com/sinspired/subs-check-pro/v2/utils"
-	"github.com/sinspired/subs-check-pro-webui/webui"
 )
 
 const (
@@ -52,6 +52,7 @@ var publicStaticFileList = []struct {
 }{
 	{"/ACL4SSR_Online_Full.yaml", "ACL4SSR_Online_Full.yaml"},
 	{"/Sinspired_Rules_CDN.yaml", "Sinspired_Rules_CDN.yaml"},
+	{"/Sinspired_Rules_Lite_CDN.yaml", "Sinspired_Rules_Lite_CDN.yaml"},
 	{"/bdg.yaml", "bdg.yaml"},
 }
 
@@ -569,40 +570,40 @@ func parseHistNodeCount(s string) float64 {
 // POST /api/proxy/check
 // body: {"proxy": "http://127.0.0.1:10808"}  （空 / "direct" = 直连）
 func (app *App) proxyCheckHandler(c *gin.Context) {
-    var req struct {
-        Proxy string `json:"proxy"`
-    }
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "请求体解析失败: " + err.Error()})
-        return
-    }
+	var req struct {
+		Proxy string `json:"proxy"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体解析失败: " + err.Error()})
+		return
+	}
 
-    result := utils.CheckProxy(strings.TrimSpace(req.Proxy))
-    c.JSON(http.StatusOK, result)
+	result := utils.CheckProxy(strings.TrimSpace(req.Proxy))
+	c.JSON(http.StatusOK, result)
 }
 
 // notifyTestHandler 测试通知发送
 // POST /api/notify/test
 func (app *App) notifyTestHandler(c *gin.Context) {
-    var req struct {
-        Recipients []string `json:"recipients"`
-    }
-    if err := c.ShouldBindJSON(&req); err != nil || len(req.Recipients) == 0 {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "未传入通知渠道"})
-        return
-    }
-    if config.GlobalConfig.AppriseAPIServer == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "未配置 Apprise API 地址"})
-        return
-    }
+	var req struct {
+		Recipients []string `json:"recipients"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Recipients) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未传入通知渠道"})
+		return
+	}
+	if config.GlobalConfig.AppriseAPIServer == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未配置 Apprise API 地址"})
+		return
+	}
 
-    results := utils.SendNotifyTestTo(req.Recipients)
-    allOK := true
-    for _, r := range results {
-        if !r.OK {
-            allOK = false
-            break
-        }
-    }
-    c.JSON(http.StatusOK, gin.H{"ok": allOK, "results": results})
+	results := utils.SendNotifyTestTo(req.Recipients)
+	allOK := true
+	for _, r := range results {
+		if !r.OK {
+			allOK = false
+			break
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": allOK, "results": results})
 }
