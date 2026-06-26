@@ -106,13 +106,13 @@ update: true
 update-on-startup: true
 # 定时检查更新
 # "0 9,21 * * *" 每天9点,21点检查更新
-cron-check-update: "0 9-23/2,0 * * *"
+cron-check-update: "0 9-23/1,0,2-7/3 * * *"
 # 使用预发布版本
 prerelease: false
 # 下载新版本超时时间(分钟)(默认2分钟)
 # 如系统代理和github代理不稳定,可适当调大即可
 # 请输入整数
-update-timeout: 5
+update-timeout: 10
 
 # -----------WebUI-----------
 # 监听端口，用于直接返回节点信息，方便订阅转换
@@ -320,7 +320,7 @@ webdav-password: "admin"
 
 # gist id
 github-gist-id: ""
-# github token
+# github token，不仅用来上传 gist，还用于提升订阅拉取速率和限制
 github-token: ""
 # github api mirror
 github-api-mirror: ""
