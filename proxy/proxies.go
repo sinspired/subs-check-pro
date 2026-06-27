@@ -556,23 +556,43 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 			handle(node)
 		}
 	}
-	data = nil //nolint:ineffassign
+	data = nil
 	flush()
 
-	// 构造解析器明细字符串，只在有多个解析器命中时才显示
-	args := []any{"URL", urlStr, "去重后", validCount}
+	// 解析器内部去重的节点从未经过 handle，rawHits 未计入它们。
+	// 加回来，使 rawHits 始终代表"未经任何去重的真实原始候选数"。
+	parserDeduped := parseStats["LineDedup"] + parseStats["BatchDedup"]
+	rawHits += parserDeduped
+
+	// 构造解析器明细日志
+	args := []any{
+		"URL", urlStr,
+		"候选", rawHits, // 真实原始候选（含各级解析器去重前）
+	}
+	if parserDeduped > 0 {
+		args = append(args, "解析器去重", parserDeduped)
+	}
 	if typeFiltered > 0 {
 		args = append(args, "类型过滤", typeFiltered)
 	}
+	args = append(args, "入队", validCount)
 	if len(parseStats) > 1 {
 		for parser, count := range parseStats {
+			if parser == "LineDedup" || parser == "BatchDedup" {
+				continue // 这两个是计数器，非解析器名
+			}
 			args = append(args, parser, count)
 		}
 	}
 	slog.Debug("订阅解析", args...)
 
-	totalRawHits.Add(int64(rawHits))
-	slog.Debug("订阅解析完成", "URL", urlStr, "候选节点", rawHits, "有效节点", validCount)
+	totalRawHits.Add(int64(rawHits)) // rawHits 已含解析器去重，反映真实原始候选数
+	slog.Debug("订阅解析完成",
+		"URL", urlStr,
+		"候选节点", rawHits,
+		"解析器去重", parserDeduped,
+		"有效节点", validCount,
+	)
 }
 
 // identifyLocalSubType 识别本地订阅源类型

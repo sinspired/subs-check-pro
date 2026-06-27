@@ -10,9 +10,9 @@ import (
 
 	"bufio"
 	"bytes"
-	"encoding/json"
 
 	"github.com/samber/lo"
+	"github.com/sinspired/subs-check-pro/v2/utils"
 
 	"net/url"
 
@@ -311,15 +311,19 @@ func ConvertProtocolMap(con map[string]any) []map[string]any {
 	}
 
 	// 这里 subURL 传空即可，因为协议已经在 key 中确定并拼接好了
-	return ParseProxyLinksAndConvert(allLinks, "")
+	nodes, _ := ParseProxyLinksAndConvert(allLinks, "") // ← 忽略 batchDeduped
+	return nodes
 }
 
 // ParseProxyLinksAndConvert 统一处理链接列表
 // 能够同时处理 WireGuard, SSR (手动解析) 和 V2Ray/Clash 支持的标准协议 (调用 Mihomo)
 // subURL 用于在猜测协议时提供上下文 (例如文件名包含 socks5)
-func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
+// 
+// 返回值：(去重后的节点列表, 批次级别去重掉的节点数量)
+func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any, int) {
 	var finalNodes []map[string]any
 	var batchLinks []string
+	var batchDeduped int
 
 	// 获取文件名推测的协议（作为上下文参考）
 	fileGuessedScheme := guessSchemeByURL(subURL)
@@ -417,10 +421,10 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
 			// 标准转换 ConvertsV2Ray 处理标准协议链接
 			if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
 				slog.Debug("标准转换成功", "数量", len(nodes))
-				for i, node := range nodes {
-					nodeJSON, _ := json.Marshal(node)
-					slog.Debug("标准节点", "index", i, "node", string(nodeJSON))
-				}
+				// for i, node := range nodes {
+				// 	nodeJSON, _ := json.Marshal(node)
+				// 	slog.Debug("标准节点", "index", i, "node", string(nodeJSON))
+				// }
 				// patchXhttpOpts(nodes, data) // 补丁：修复 xhttp 缺失字段
 				finalNodes = append(finalNodes, ToNormalizeNodes(nodes)...)
 			}
@@ -430,11 +434,15 @@ func ParseProxyLinksAndConvert(links []string, subURL string) []map[string]any {
 				// patchXhttpOpts(nodes, data)
 				finalNodes = append(finalNodes, ToNormalizeNodes(nodes)...)
 			}
+			// 每块处理完毕后去重，避免跨 chunk 累积重复节点撑高内存峰值
+			before := len(finalNodes)
+			finalNodes = utils.DeduplicateNodes(finalNodes)
+			batchDeduped += before - len(finalNodes)
 		}
 	}
 
-	slog.Debug("解析数量", "finalNodes", len(finalNodes))
-	return finalNodes
+	slog.Debug("解析数量", "finalNodes", len(finalNodes), "批次去重", batchDeduped)
+	return finalNodes, batchDeduped
 }
 
 // ParseWireGuardURI 解析 wireguard:// 链接

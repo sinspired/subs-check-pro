@@ -7,6 +7,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/metacubex/mihomo/common/convert"
+	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
 // ParseSubscriptionDataStream 流式解析订阅数据，避免在单次调用内构造完整的
@@ -15,10 +16,13 @@ import (
 // yield 返回 false 时立即停止后续解析（函数返回 nil，不是 error）。
 // 若所有解析器都未识别该格式，返回非 nil error，调用方应 fallback 到
 // FallbackExtractV2Ray（兜底命中量通常很小，不需要流式处理）。
-func ParseSubscriptionDataStream(data []byte, subURL string, yield func(map[string]any) bool) (map[string]int, error) {
-	stats := make(map[string]int, 4)
+func ParseSubscriptionDataStream(
+	data []byte,
+	subURL string,
+	yield func(map[string]any) bool,
+) (map[string]int, error) {
+	stats := make(map[string]int, 6)
 
-	// drain 改为带 key 参数，命中时计入 stats
 	drain := func(nodes []map[string]any, key string) bool {
 		for i, n := range nodes {
 			nodes[i] = nil
@@ -80,7 +84,9 @@ func ParseSubscriptionDataStream(data []byte, subURL string, yield func(map[stri
 						strList = append(strList, s)
 					}
 				}
-				drain(ParseProxyLinksAndConvert(strList, subURL), "StringList")
+				nodes, d := ParseProxyLinksAndConvert(strList, subURL)
+				stats["BatchDedup"] += d // ← 批次去重数汇入 stats
+				drain(nodes, "StringList")
 				return stats, nil
 			}
 			if _, ok := val[0].(map[string]any); ok {
@@ -91,31 +97,61 @@ func ParseSubscriptionDataStream(data []byte, subURL string, yield func(map[stri
 		}
 	}
 
-	// ── 3. 行级格式
+	// ── 3. 行级格式：多解析器可能命中同一节点，必须跨解析器去重
+	//    去重 key 与全局去重保持一致，使用 GenerateProxyKey
+	lineSeen := make(map[string]struct{}, 4096)
+	lineDeduped := 0
+
+	// drainLine 在 yield 前做跨解析器去重，被去掉的节点计入 lineDeduped
+	drainLine := func(nodes []map[string]any, key string) bool {
+		for i, n := range nodes {
+			nodes[i] = nil
+			if n == nil {
+				continue
+			}
+			k := utils.GenerateProxyKey(n)
+			if _, dup := lineSeen[k]; dup {
+				lineDeduped++
+				continue
+			}
+			lineSeen[k] = struct{}{}
+			if !yield(n) {
+				return false
+			}
+			stats[key]++
+		}
+		return true
+	}
+
 	anyHit := false
 
 	if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
 		anyHit = true
 		slog.Debug("使用了convert.ConvertsV2Ray", "长度", len(nodes))
-		if !drain(ToNormalizeNodes(nodes), "V2Ray-Base64") {
+		if !drainLine(ToNormalizeNodes(nodes), "V2Ray-Base64") {
+			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
-	if nodes := parseRawLines(data, subURL); len(nodes) > 0 {
+	if nodes, d := parseRawLines(data, subURL); len(nodes) > 0 {
 		anyHit = true
-		if !drain(nodes, "RawLines") {
+		stats["BatchDedup"] += d // ← parseRawLines 内部批次去重数
+		if !drainLine(nodes, "RawLines") {
+			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
 	if nodes := ExtractAndParseProxies(data); len(nodes) > 0 {
 		anyHit = true
-		if !drain(nodes, "ProxiesBlock") {
+		if !drainLine(nodes, "ProxiesBlock") {
+			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
 	if nodes := ParseYamlFlowList(data); len(nodes) > 0 {
 		anyHit = true
-		if !drain(nodes, "YamlFlow") {
+		if !drainLine(nodes, "YamlFlow") {
+			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
@@ -123,23 +159,29 @@ func ParseSubscriptionDataStream(data []byte, subURL string, yield func(map[stri
 		(bytes.Contains(data, []byte("[VMess]")) || bytes.Contains(data, []byte(", 20"))) {
 		if nodes := ParseSurfboardProxies(data); len(nodes) > 0 {
 			anyHit = true
-			if !drain(nodes, "Surfboard") {
+			if !drainLine(nodes, "Surfboard") {
+				stats["LineDedup"] = lineDeduped
 				return stats, nil
 			}
 		}
 	}
 	if nodes := ParseV2RayJSONLines(data); len(nodes) > 0 {
 		anyHit = true
-		if !drain(nodes, "V2RayJSON") {
+		if !drainLine(nodes, "V2RayJSON") {
+			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
 	if nodes := ParseBracketKVProxies(data); len(nodes) > 0 {
 		anyHit = true
-		if !drain(nodes, "BracketKV") {
+		if !drainLine(nodes, "BracketKV") {
+			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
+
+	// 把解析器内部去重数记入 stats，供调用方还原原始候选数
+	stats["LineDedup"] = lineDeduped
 
 	if anyHit {
 		return stats, nil
