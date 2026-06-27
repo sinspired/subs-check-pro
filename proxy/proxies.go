@@ -114,14 +114,30 @@ func logFatal(err error, urlStr string) {
 	}
 }
 
+func initMemory() {
+	// 内存防护：避免长时间大并发拉取把内存占满，触发 OOM Kill / 系统卡顿。
+	//
+	// GCPercent：日常情况下的内存/CPU 取舍旋钮，不是防 OOM 的主力。
+	gcPercent := 70
+	if config.GlobalConfig.GCPercent != 0 {
+		gcPercent = config.GlobalConfig.GCPercent
+	}
+	prevGC := debug.SetGCPercent(gcPercent)
+	defer debug.SetGCPercent(prevGC)
+
+	// MemoryLimitMB（GOMEMLIMIT）：防 OOM 的硬指标。优先级见 utils.ResolveMemoryLimit：
+	// 用户配置 > Docker 下的 GOMEMLIMIT/cgroup > 普通主机物理内存探测。
+	if limit := utils.ResolveMemoryLimit(config.GlobalConfig.MemoryLimitMB, 0.75); limit > 0 {
+		prevMemLimit := debug.SetMemoryLimit(limit)
+		defer debug.SetMemoryLimit(prevMemLimit)
+		slog.Info("运行内存上限", "memory", strings.ReplaceAll(utils.FormatTraffic(uint64(limit)), " ", "_"))
+	}
+}
+
 // GetProxies 主入口：获取、解析、去重及统计代理节点
 func GetProxies() ([]map[string]any, int, int, int, error) {
 	// 每次进入先清空上次的连接池
 	ClearCache()
-
-	// 拉取阶段加大 GC 频率，减少堆积压
-	prevGC := debug.SetGCPercent(70)
-	defer debug.SetGCPercent(prevGC)
 
 	// 初始化代理环境变量
 	initEnvironment()
@@ -137,13 +153,12 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		KeepLevelSuccess = 2 // 成功节点：上次检测存活，价值最高，必须保留
 	)
 
-	// 内存释放阈值：消费者每处理该数量的原始节点，触发一次 FreeOSMemory。
-	// 批次越小，释放越频繁，峰值越低，GC 开销越大。
-	// 默认 100000；建议范围 20000–500000。0 或负数 = 使用默认值。
-	gcInterval := 100000
-	if config.GlobalConfig.SubsDedupeBatch > 0 {
-		gcInterval = config.GlobalConfig.SubsDedupeBatch
-	}
+	// 周期性主动回收（可选，默认关闭）。
+	// 设置了 MemoryLimitMB 后通常不再需要手动触发 FreeOSMemory；这个开关
+	// 留给两类场景：① 无法/不想设置内存上限的环境；② 监控工具只看进程
+	// RSS（不看 Go runtime 内部统计），需要更主动地把空闲内存还给 OS。
+	// 0 = 关闭。
+	gcInterval := max(config.GlobalConfig.SubsDedupeBatch, 0)
 
 	// 32 位系统：强制保守并发，避免虚拟内存耗尽
 	is32Bit := ^uint(0)>>32 == 0
@@ -192,10 +207,13 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 				rawCount++
 				gcPending++
 
-				if gcPending >= gcInterval {
-					slog.Debug("触发流式内存清理", "已处理", rawCount)
-					debug.FreeOSMemory()
-					gcPending = 0
+				if gcInterval > 0 {
+					gcPending++
+					if gcPending >= gcInterval {
+						slog.Debug("触发流式内存清理", "已处理", rawCount)
+						debug.FreeOSMemory()
+						gcPending = 0
+					}
 				}
 
 				// 统计订阅源
@@ -276,6 +294,9 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 
 // resolveSubUrls 合并本地与远程订阅清单并去重
 func resolveSubUrls() ([]string, int, int, int) {
+	// 初始化内存限制
+	initMemory()
+
 	var localNum, remoteNum, historyNum int
 	localNum = len(config.GlobalConfig.SubUrls)
 
