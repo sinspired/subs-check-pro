@@ -74,16 +74,31 @@ type Config struct {
 	SubUrlsReTry         int     `yaml:"sub-urls-retry"`
 	SubUrlsRetryInterval int     `yaml:"sub-urls-retry-interval"`
 	SubUrlsTimeout       int     `yaml:"sub-urls-timeout"`
+
 	// SubsParseBatch 每批次发往去重队列的节点数
 	// 生产者攒够该数量后整批发送，消费者逐批接收处理。
 	// 在两次 FreeOSMemory 之间，流水线最多同时驻留 (并发数 + chanBuf) × batchSize 个节点。
 	// 太小→channel 调度频繁；太大→流水线底座内存随之线性增大。
 	// 默认 3000
 	SubsParseBatch int `yaml:"subs-parse-batch"`
+
 	// SubsDedupeBatch 消费者每处理多少节点触发一次 debug.FreeOSMemory()，控制内存归还 OS 的频率。
 	// 越小→归还越频繁，峰值越低，GC 停顿越多；越大→峰值越高，停顿越少。
 	// 默认 100000，建议范围 20000–500000。0 或负数视为默认值。
-	SubsDedupeBatch    int      `yaml:"subs-dedupe-batch"`
+	SubsDedupeBatch int `yaml:"subs-dedupe-batch"`
+
+	// MemoryLimitMB 设置 Go 运行时软内存上限（GOMEMLIMIT，单位 MB）。
+	// 0 = 不显式配置，按以下优先级自动决定：
+	//   Docker 容器：GOMEMLIMIT 环境变量 > cgroup 内存限制(打七五折)
+	//   普通主机：系统物理内存打七五折
+	MemoryLimitMB int `yaml:"memory-limit-mb"`
+
+	// GCPercent 对应 Go 的 GOGC：堆允许长到存活对象的多少倍才触发下一次 GC，
+	// 不是"空闲内存百分比"。值越小 GC 越频繁、内存峰值越低、CPU 开销略增。
+	// 默认 70（Go 默认是 100）。<=0 时使用 Go 默认值 100。
+	// 注意：真正防止 OOM 的是 MemoryLimitMB；这个只是日常情况下的内存/CPU 取舍旋钮。
+	GCPercent          int      `yaml:"gc-percent"`
+
 	SubUrlsRemote      []string `yaml:"sub-urls-remote"`
 	SubUrls            []string `yaml:"sub-urls"`
 	SuccessRate        float64  `yaml:"success-rate"`
