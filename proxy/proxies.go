@@ -119,6 +119,10 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	// 每次进入先清空上次的连接池
 	ClearCache()
 
+	// 拉取阶段加大 GC 频率，减少堆积压
+	prevGC := debug.SetGCPercent(70)
+	defer debug.SetGCPercent(prevGC)
+	
 	// 初始化代理环境变量
 	initEnvironment()
 
@@ -153,10 +157,10 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	concurrency := min(config.GlobalConfig.Concurrent, maxConcurrency)
 
 	// chanBuf × batchSize ≈ 100K
-	// batchSize=5000 → chanBuf=20；batchSize=2000 → chanBuf=50
+	// batchSize=3000 → chanBuf=20；batchSize=2000 → chanBuf=50
 	batchSize := config.GlobalConfig.SubsParseBatch
 	if batchSize <= 0 {
-		batchSize = defaultParseBatchSize // 1000
+		batchSize = defaultParseBatchSize // 3000
 	}
 
 	// channel: 50 × 1000 = 50K; 阻塞 goroutine 本地: 最多 50 × 1000 = 50K; 总计 ≤ 100K
@@ -419,7 +423,7 @@ func fetchRemoteSubUrls(listURL string) ([]string, error) {
 // defaultParseBatchSize 默认每批次节点数。
 //
 // 这个值不能脱离并发数单独调大。一个订阅 goroutine 同一时刻最多持有
-// 
+//
 /// (chanBuf + concurrency) × batchSize ≈ 100K
 // batchSize=1000, chanBuf=50, concurrency=50 → (50+50) × 1000 = 100K ✓
 const defaultParseBatchSize = 1000

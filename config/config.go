@@ -74,15 +74,15 @@ type Config struct {
 	SubUrlsReTry         int     `yaml:"sub-urls-retry"`
 	SubUrlsRetryInterval int     `yaml:"sub-urls-retry-interval"`
 	SubUrlsTimeout       int     `yaml:"sub-urls-timeout"`
-	// SubsParseBatch 解析阶段批次大小（原始候选节点数）。
-	// processSubscription 内，每攒够这么多个节点就整批发往全局去重队列一次。
-	// 太小：channel 调度次数变多；太大：与并发数相乘后，瞬时内存占用变大（≈ 并发数 × 该值 × 2）。
+	// SubsParseBatch 每批次发往去重队列的节点数
+	// 生产者攒够该数量后整批发送，消费者逐批接收处理。
+	// 在两次 FreeOSMemory 之间，流水线最多同时驻留 (并发数 + chanBuf) × batchSize 个节点。
+	// 太小→channel 调度频繁；太大→流水线底座内存随之线性增大。
+	// 默认 3000
 	SubsParseBatch int `yaml:"subs-parse-batch"`
-	// SubsDedupeBatch 控制消费者侧流式 GC 的触发间隔（原始节点数，去重前计数）。
-	// 消费者每处理这么多个原始节点，调用一次 debug.FreeOSMemory() 归还内存。
-	// 值越小：释放越频繁，内存峰值越低，GC 停顿开销越大。
-	// 值越大：峰值更高，GC 次数更少。
-	// 默认 100000，建议范围 20000–500000。0 或负数 = 使用默认值 100000。
+	// SubsDedupeBatch 消费者每处理多少节点触发一次 debug.FreeOSMemory()，控制内存归还 OS 的频率。
+	// 越小→归还越频繁，峰值越低，GC 停顿越多；越大→峰值越高，停顿越少。
+	// 默认 100000，建议范围 20000–500000。0 或负数视为默认值。
 	SubsDedupeBatch    int      `yaml:"subs-dedupe-batch"`
 	SubUrlsRemote      []string `yaml:"sub-urls-remote"`
 	SubUrls            []string `yaml:"sub-urls"`
@@ -153,8 +153,8 @@ var OriginDefaultConfig = &Config{
 	Threshold:   0.75,
 	GCThreshold: 20000,
 
-	// 每个线程获取1000个节点时进入一次去重队列
-	SubsParseBatch: 1000,
+	// 每个线程获取3000个节点时进入一次去重队列
+	SubsParseBatch: 3000,
 
 	// 10 万原始节点触发一次；百万量级约 10 次 GC，CPU 开销可忽略
 	SubsDedupeBatch: 100000,
