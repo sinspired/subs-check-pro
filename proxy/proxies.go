@@ -183,8 +183,10 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		batchLevels := make(map[string]int, batchInitCap)
 		batchRaw := 0
 
-		// flushBatch 合并当前批次到全局池并重置批次状态。
-		// 重建 map 而非 clear()：让旧 map 底层 bucket 被 GC 彻底回收。
+		// 记录上次 flush 时 totalRawHits 的快照，
+		// 用解析量（而非入队量）判断是否到达批次阈值。
+		var lastFlushRawHits int64
+
 		flushBatch := func(reason string) {
 			if batchRaw == 0 {
 				return
@@ -201,7 +203,7 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 			if dedupeBatch > 0 {
 				slog.Debug("分段去重",
 					"触发", reason,
-					"本批原始", batchRaw,
+					"本批入队", batchRaw,
 					"本批去重", len(batchNodes),
 					"合并新增", merged,
 					"全局节点", len(globalUniqueNodes),
@@ -210,6 +212,7 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 			batchNodes = make(map[string]map[string]any, batchInitCap)
 			batchLevels = make(map[string]int, batchInitCap)
 			batchRaw = 0
+			lastFlushRawHits = totalRawHits.Load() // 记录本次 flush 时的解析量快照
 			debug.FreeOSMemory()
 		}
 
@@ -220,14 +223,14 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 				rawCount++
 				batchRaw++
 
-				// 1. 统计订阅源
+				// 统计订阅源
 				if su, ok := proxy["sub_url"].(string); ok && su != "" {
 					st := SubStats[su]
 					st.Total++
 					SubStats[su] = st
 				}
 
-				// 2. 计算当前节点的优先级
+				// 计算优先级
 				level := KeepLevelNone
 				if proxy["sub_was_succeed"] == true {
 					level = KeepLevelSuccess
@@ -235,22 +238,19 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 					level = KeepLevelHistory
 				}
 
-				// 3. 生成指纹
 				key := utils.GenerateProxyKey(proxy)
-
-				// 4. 优先级竞争逻辑
 				if existLevel, exists := batchLevels[key]; !exists || level > existLevel {
-					// 如果已存在，且新节点优先级更高，则覆盖（升级）
 					batchNodes[key] = proxy
 					batchLevels[key] = level
 				}
 
-				// 如果优先级相同或更低，直接丢弃（GC 会自动回收该 proxy）
-				if dedupeBatch > 0 && batchRaw >= dedupeBatch {
+				// 以解析量（totalRawHits）为阈值，而非入队量（batchRaw）。
+				// totalRawHits 由生产者侧在每条订阅处理完毕时原子累加，
+				// 反映了真实的候选节点数量，与 dedupeBatch 的语义对齐。
+				if dedupeBatch > 0 && totalRawHits.Load()-lastFlushRawHits >= int64(dedupeBatch) {
 					flushBatch("阈值")
 				}
 			}
-			// batch 本身遍历完成后不再被任何变量持有，函数返回后即可被 GC 回收
 		}
 
 		flushBatch("结束")
