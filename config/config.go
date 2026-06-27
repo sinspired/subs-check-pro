@@ -78,10 +78,11 @@ type Config struct {
 	// processSubscription 内，每攒够这么多个节点就整批发往全局去重队列一次。
 	// 太小：channel 调度次数变多；太大：与并发数相乘后，瞬时内存占用变大（≈ 并发数 × 该值 × 2）。
 	SubsParseBatch int `yaml:"subs-parse-batch"`
-	// SubsDedupeBatch 去重阶段批次大小（原始节点数，去重前计数）。
-	// 消费者每处理这么多个原始节点，就把当前临时去重表合并进全局节点池并重置，
-	// 避免临时去重表随着不重复节点数量一路涨到最终总量才释放。
-	// 默认 100000，建议范围 20000–500000。0 = 禁用分段（全部处理完才统一合并去重）。
+	// SubsDedupeBatch 控制消费者侧流式 GC 的触发间隔（原始节点数，去重前计数）。
+	// 消费者每处理这么多个原始节点，调用一次 debug.FreeOSMemory() 归还内存。
+	// 值越小：释放越频繁，内存峰值越低，GC 停顿开销越大。
+	// 值越大：峰值更高，GC 次数更少。
+	// 默认 100000，建议范围 20000–500000。0 或负数 = 使用默认值 100000。
 	SubsDedupeBatch    int      `yaml:"subs-dedupe-batch"`
 	SubUrlsRemote      []string `yaml:"sub-urls-remote"`
 	SubUrls            []string `yaml:"sub-urls"`
@@ -152,8 +153,8 @@ var OriginDefaultConfig = &Config{
 	Threshold:   0.75,
 	GCThreshold: 20000,
 
-	// 每个线程获取5000个节点时进入一次去重队列
-	SubsParseBatch: 5000,
+	// 每个线程获取1000个节点时进入一次去重队列
+	SubsParseBatch: 1000,
 
 	// 10 万原始节点触发一次；百万量级约 10 次 GC，CPU 开销可忽略
 	SubsDedupeBatch: 100000,

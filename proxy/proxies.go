@@ -133,95 +133,66 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		KeepLevelSuccess = 2 // 成功节点：上次检测存活，价值最高，必须保留
 	)
 
-	// 分段去重批次大小（原始节点数，去重前计数）
-	// 消费者每处理该数量的原始节点，就把当前临时去重表合并进全局节点池并重置，
-	// 避免临时去重表随着不重复节点数量一路涨到最终总量才释放。
-	// 0 = 禁用分段，全量后统一去重。
-	dedupeBatch := max(config.GlobalConfig.SubsDedupeBatch, 0)
-
-	// 存储去重后的节点。
-	// Key 为节点指纹，Value 为节点数据。
-	// 当指纹冲突时，保留优先级较高的版本 (Success > History > Normal)。
-	globalUniqueNodes := make(map[string]map[string]any, 100000)
-
-	// 记录已存储节点的优先级，用于比较
-	globalKeepLevels := make(map[string]int, 100000)
-
-	var (
-		rawCount       int // 统计计数（原始数量）
-		finalSuccCount int // 最终上次成功数量
-		finalHistCount int // 最终历史成功数量
-	)
+	// 内存释放阈值：消费者每处理该数量的原始节点，触发一次 FreeOSMemory。
+	// 批次越小，释放越频繁，峰值越低，GC 开销越大。
+	// 默认 100000；建议范围 20000–500000。0 或负数 = 使用默认值。
+	gcInterval := 100000
+	if config.GlobalConfig.SubsDedupeBatch > 0 {
+		gcInterval = config.GlobalConfig.SubsDedupeBatch
+	}
 
 	// 32 位系统：强制保守并发，避免虚拟内存耗尽
 	is32Bit := ^uint(0)>>32 == 0
-	minConcurrency := 50
+	maxConcurrency := 50
 	if is32Bit {
-		minConcurrency = min(10, config.GlobalConfig.Concurrent)
-		slog.Warn("32 位程序强制保守拉取订阅", "并发", minConcurrency)
+		maxConcurrency = min(10, config.GlobalConfig.Concurrent)
+		slog.Warn("32 位程序强制保守拉取订阅", "并发", maxConcurrency)
 		slog.Warn("建议使用 x64 位程序释放最佳性能！")
 		debug.SetGCPercent(20)
 	}
-	concurrency := min(config.GlobalConfig.Concurrent, minConcurrency)
+	concurrency := min(config.GlobalConfig.Concurrent, maxConcurrency)
 
-	// channel 缓冲：以"批次"为单位，而不是节点数。
-	chanBuf := max(concurrency, 8)
-	proxyChan := make(chan []map[string]any, chanBuf)
-
-	// 批次 map 初始容量与阈值对齐，减少扩容 rehash
-	batchInitCap := 20000
-	if dedupeBatch > 0 {
-		batchInitCap = min(dedupeBatch, 100000)
+	// chanBuf × batchSize ≈ 100K
+	// batchSize=5000 → chanBuf=20；batchSize=2000 → chanBuf=50
+	batchSize := config.GlobalConfig.SubsParseBatch
+	if batchSize <= 0 {
+		batchSize = defaultParseBatchSize // 1000
 	}
 
-	// 处理获取节点，消费 proxyChan
+	// channel: 50 × 1000 = 50K; 阻塞 goroutine 本地: 最多 50 × 1000 = 50K; 总计 ≤ 100K
+	chanBuf := concurrency
+	proxyChan := make(chan []map[string]any, chanBuf)
+
+	// 预分配200K减少rehash；实际unique数通常远小于raw数
+	uniqueNodes := make(map[string]map[string]any, 100000)
+	keepLevels := make(map[string]int, 200000)
+
+	var (
+		rawCount       int
+		gcPending      int // 消费者侧计数器，与 gcInterval 比较
+		finalSuccCount int
+		finalHistCount int
+	)
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 
-		batchNodes := make(map[string]map[string]any, batchInitCap)
-		batchLevels := make(map[string]int, batchInitCap)
-		batchRaw := 0
-
-		// 记录上次 flush 时 totalRawHits 的快照，
-		// 用解析量（而非入队量）判断是否到达批次阈值。
-		var lastFlushRawHits int64
-
-		flushBatch := func(reason string) {
-			if batchRaw == 0 {
-				return
-			}
-			merged := 0
-			for key, node := range batchNodes {
-				level := batchLevels[key]
-				if existLevel, exists := globalKeepLevels[key]; !exists || level > existLevel {
-					globalUniqueNodes[key] = node
-					globalKeepLevels[key] = level
-					merged++
-				}
-			}
-			if dedupeBatch > 0 {
-				slog.Debug("分段去重",
-					"触发", reason,
-					"本批入队", batchRaw,
-					"本批去重", len(batchNodes),
-					"合并新增", merged,
-					"全局节点", len(globalUniqueNodes),
-				)
-			}
-			batchNodes = make(map[string]map[string]any, batchInitCap)
-			batchLevels = make(map[string]int, batchInitCap)
-			batchRaw = 0
-			lastFlushRawHits = totalRawHits.Load() // 记录本次 flush 时的解析量快照
-			debug.FreeOSMemory()
-		}
-
 		for batch := range proxyChan {
 			for i, proxy := range batch {
-				batch[i] = nil // 该节点处理完毕后立即断开批次切片对它的引用
+				batch[i] = nil // 立即断开切片对节点的引用，辅助 GC 回收
+				if proxy == nil {
+					continue
+				}
 
 				rawCount++
-				batchRaw++
+				gcPending++
+
+				if gcPending >= gcInterval {
+					slog.Debug("触发流式内存清理", "已处理", rawCount)
+					debug.FreeOSMemory()
+					gcPending = 0
+				}
 
 				// 统计订阅源
 				if su, ok := proxy["sub_url"].(string); ok && su != "" {
@@ -239,24 +210,15 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 				}
 
 				key := utils.GenerateProxyKey(proxy)
-				if existLevel, exists := batchLevels[key]; !exists || level > existLevel {
-					batchNodes[key] = proxy
-					batchLevels[key] = level
-				}
-
-				// 以解析量（totalRawHits）为阈值，而非入队量（batchRaw）。
-				// totalRawHits 由生产者侧在每条订阅处理完毕时原子累加，
-				// 反映了真实的候选节点数量，与 dedupeBatch 的语义对齐。
-				if dedupeBatch > 0 && totalRawHits.Load()-lastFlushRawHits >= int64(dedupeBatch) {
-					flushBatch("阈值")
+				if existLevel, exists := keepLevels[key]; !exists || level > existLevel {
+					uniqueNodes[key] = proxy
+					keepLevels[key] = level
 				}
 			}
 		}
-
-		flushBatch("结束")
 	}()
 
-	// 获取订阅节点，生成proxyChan
+	// 生产者：并发拉取订阅
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
@@ -269,7 +231,7 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		go func(u, t string, succ, hist bool) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			processSubscription(u, t, succ, hist, proxyChan)
+			processSubscription(u, t, succ, hist, proxyChan, batchSize)
 		}(subURL, tag, isSucced, isHistory)
 	}
 
@@ -278,21 +240,16 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	<-done
 
 	// 将 Map 转为 Slice，并统计最终的分类数量
-	finalProxies := make([]map[string]any, 0, len(globalUniqueNodes))
-	for key, node := range globalUniqueNodes {
-		keepLevel := globalKeepLevels[key]
-
-		// 统计逻辑：根据最终留下的那个节点的优先级计数
-		switch keepLevel {
+	finalProxies := make([]map[string]any, 0, len(uniqueNodes))
+	for key, node := range uniqueNodes {
+		switch keepLevels[key] {
 		case KeepLevelSuccess:
 			finalSuccCount++
 		case KeepLevelHistory:
 			finalHistCount++
 		}
-
 		// 清理元数据
 		cleanMetadata(node)
-
 		finalProxies = append(finalProxies, node)
 	}
 
@@ -305,9 +262,8 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	saveStats(SubStats)
 
 	// 释放 Map 内存（虽然函数返回后也会释放）
-	globalUniqueNodes = nil
-	globalKeepLevels = nil
-
+	uniqueNodes = nil
+	keepLevels = nil
 	// 归还内存
 	debug.FreeOSMemory()
 
@@ -463,20 +419,22 @@ func fetchRemoteSubUrls(listURL string) ([]string, error) {
 // defaultParseBatchSize 默认每批次节点数。
 //
 // 这个值不能脱离并发数单独调大。一个订阅 goroutine 同一时刻最多持有
-// 「1 个正在本地攒的批次 + 1 个已发往 proxyChan 但还没被消费的批次」，
-// 所以全局瞬时占用的量级大约是：
-//
-//	并发订阅数 × batchSize × 2
-//
-// 例如并发数 50、batchSize=50000 时，最坏情况瞬时占用可达约 500 万节点
-const defaultParseBatchSize = 5000
+// 
+/// (chanBuf + concurrency) × batchSize ≈ 100K
+// batchSize=1000, chanBuf=50, concurrency=50 → (50+50) × 1000 = 100K ✓
+const defaultParseBatchSize = 1000
 
 // processSubscription 单个订阅的处理流程。
 //
 // 使用 parse.ParseSubscriptionDataStream 逐节点回调，内部不再持有该订阅的
 // 完整节点切片；产出的节点在本地攒到 batchSize 后才整批发往 proxyChan，
 // 在"内存峰值"与"channel 调度开销"之间取折中（见 defaultParseBatchSize 注释）。
-func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out chan<- []map[string]any) {
+func processSubscription(
+	urlStr, tag string,
+	wasSucced, wasHistory bool,
+	out chan<- []map[string]any,
+	batchSize int, // 由 GetProxies 传入，统一管理
+) {
 	data, err := FetchSubsData(urlStr)
 	if err != nil {
 		if !errors.Is(err, ErrIgnore) {
@@ -485,10 +443,6 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 		return
 	}
 
-	batchSize := config.GlobalConfig.SubsParseBatch
-	if batchSize <= 0 {
-		batchSize = defaultParseBatchSize
-	}
 	filterTypes := config.GlobalConfig.NodeType
 
 	var (
@@ -503,15 +457,21 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 			return
 		}
 		out <- batch
+		// 发送后立即分配新切片，与已发批次完全解耦
+		// 旧批次的生命周期由消费者控制（消费完毕后 batch[i]=nil 断开引用）
 		batch = make([]map[string]any, 0, batchSize)
 	}
 
-	seenInSub := make(map[string]struct{}, batchSize)
+	// seenInSub：订阅内去重，避免同一订阅的大量重复节点占用 channel 和消费者时间。
+	// 初始容量设小（256），对小订阅不浪费；大订阅自然增长，但总量仍受 unique 节点数限制。
+	// 注意：这只是「同一订阅内」的去重；跨订阅去重由消费者侧全局 map 负责。
+	seenInSub := make(map[string]struct{}, 256)
 
 	// handle 既用作 ParseSubscriptionDataStream 的 yield 回调，也用于处理兜底正则提取出的节点
 	handle := func(node map[string]any) bool {
 		rawHits++
 
+		// 类型过滤
 		if len(filterTypes) > 0 {
 			if t, ok := node["type"].(string); ok && !lo.Contains(filterTypes, t) {
 				typeFiltered++
@@ -522,6 +482,7 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 		// 统一清洗节点字段，注入默认值
 		parse.NormalizeNode(node)
 
+		// 有效性校验
 		serverStr := strings.TrimSpace(fmt.Sprintf("%v", node["server"]))
 		port := parse.ToIntPort(node["port"])
 		if serverStr == "" || serverStr == "<nil>" || port <= 0 || port > 65535 || node["type"] == nil {
@@ -529,7 +490,7 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 			return true
 		}
 
-		// 单个订阅内进行去重
+		// 订阅内去重（减少对全局 map 和 channel 的压力）
 		key := utils.GenerateProxyKey(node)
 		if _, dup := seenInSub[key]; dup {
 			return true
@@ -550,48 +511,27 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 	}
 
 	parseStats, streamErr := parse.ParseSubscriptionDataStream(data, urlStr, handle)
-
 	if streamErr != nil {
+		// 兜底：正则提取，通常节点量极少，无需流式
 		for _, node := range parse.FallbackExtractV2Ray(data, urlStr) {
 			handle(node)
 		}
 	}
 	data = nil
-	flush()
+	flush() // 发送剩余节点
 
-	// 解析器内部去重的节点从未经过 handle，rawHits 未计入它们。
-	// 加回来，使 rawHits 始终代表"未经任何去重的真实原始候选数"。
+	// 将解析器内部已去重的数量补回 rawHits，使其代表真实候选数
 	parserDeduped := parseStats["LineDedup"] + parseStats["BatchDedup"]
 	rawHits += parserDeduped
 
-	// 构造解析器明细日志
-	args := []any{
-		"URL", urlStr,
-		"候选", rawHits, // 真实原始候选（含各级解析器去重前）
-	}
-	if parserDeduped > 0 {
-		args = append(args, "解析器去重", parserDeduped)
-	}
-	if typeFiltered > 0 {
-		args = append(args, "类型过滤", typeFiltered)
-	}
-	args = append(args, "入队", validCount)
-	if len(parseStats) > 1 {
-		for parser, count := range parseStats {
-			if parser == "LineDedup" || parser == "BatchDedup" {
-				continue // 这两个是计数器，非解析器名
-			}
-			args = append(args, parser, count)
-		}
-	}
-	slog.Debug("订阅解析", args...)
+	// totalRawHits 仅用于日志，不再用于 GC 触发
+	totalRawHits.Add(int64(rawHits))
 
-	totalRawHits.Add(int64(rawHits)) // rawHits 已含解析器去重，反映真实原始候选数
 	slog.Debug("订阅解析完成",
 		"URL", urlStr,
-		"候选节点", rawHits,
-		"解析器去重", parserDeduped,
-		"有效节点", validCount,
+		"候选", rawHits,
+		"类型过滤", typeFiltered,
+		"入队", validCount,
 	)
 }
 

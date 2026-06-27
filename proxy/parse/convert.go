@@ -689,7 +689,7 @@ func ParseYamlFlowList(data []byte) []map[string]any {
 
 	// 这里的 buffer 用于 scanner，防止单行过长导致 panic
 	// 默认 64k 对于 flow yaml 通常足够，如果遇到超长行可能会需要调整，但一般代理配置不会单行超 64k
-	scanner.Buffer(make([]byte, 2048*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), 2048*1024)
 
 	for scanner.Scan() {
 		lineBytes := bytes.TrimSpace(scanner.Bytes())
@@ -762,7 +762,7 @@ func ParseV2RayJSONLines(data []byte) []map[string]any {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 
 	// 增加缓冲区以处理长行 JSON
-	scanner.Buffer(make([]byte, 1024*1024), 2*1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
