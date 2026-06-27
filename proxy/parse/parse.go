@@ -9,6 +9,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/metacubex/mihomo/common/convert"
+	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
 // 协议映射表：Key 为常见的缩写或别名，Value 为标准协议头
@@ -86,7 +87,8 @@ func ParseSubscriptionData(data []byte, subURL string) ([]map[string]any, error)
 						strList = append(strList, s)
 					}
 				}
-				return ParseProxyLinksAndConvert(strList, subURL), nil
+				nodes, _ := ParseProxyLinksAndConvert(strList, subURL) // 非流式路径，忽略批次去重数
+				return nodes, nil
 			}
 			if _, ok := val[0].(map[string]any); ok {
 				slog.Debug("解析成功", "订阅", subURL, "格式", "General JSON List")
@@ -111,7 +113,7 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 	add := func(nodes []map[string]any, format string) {
 		before := len(merged)
 		for _, n := range nodes {
-			k := fmt.Sprintf("%v", n)
+			k := utils.GenerateProxyKey(n)
 			if _, dup := seen[k]; dup {
 				continue
 			}
@@ -133,7 +135,9 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 
 	// ② 逐行解析（含 ConvertsV2RayExtra，处理非标准链接）
 	//    与 ① 互补：① 不认识的行，② 的 ConvertsV2RayExtra 可能认识
-	add(parseRawLines(data, subURL), "Raw Lines")
+	if nodes, _ := parseRawLines(data, subURL); len(nodes) > 0 {
+		add(nodes, "Raw Lines")
+	}
 
 	// ③ 局部合法的多段 proxies 块
 	add(ExtractAndParseProxies(data), "Multipart Proxies")
@@ -162,7 +166,7 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 }
 
 // parseRawLines 读取纯文本行并交给统一解析器
-func parseRawLines(data []byte, subURL string) []map[string]any {
+func parseRawLines(data []byte, subURL string) ([]map[string]any, int) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	var lines []string
 	for scanner.Scan() {
@@ -172,9 +176,8 @@ func parseRawLines(data []byte, subURL string) []map[string]any {
 		}
 	}
 	if len(lines) == 0 {
-		return nil
+		return nil, 0
 	}
-
 	return ParseProxyLinksAndConvert(lines, subURL)
 }
 
@@ -187,8 +190,8 @@ func FallbackExtractV2Ray(data []byte, subURL string) []map[string]any {
 		return nil
 	}
 	slog.Debug("正则提取链接", "数量", len(links), "URL", subURL)
-
-	return ParseProxyLinksAndConvert(links, subURL)
+	nodes, _ := ParseProxyLinksAndConvert(links, subURL) // ← 兜底路径，忽略去重数
+	return nodes
 }
 
 // ExtractClashProviderURLs 从 Clash/Mihomo 配置中提取 proxy-providers 的 url
