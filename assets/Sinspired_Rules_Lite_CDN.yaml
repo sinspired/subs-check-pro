@@ -1,4 +1,4 @@
-# update: 2026-06-25 16:48:01
+# update: 2026-06-27 21:30:42
 # repo: https://github.com/sinspired/subs-check-pro 内置规则
 
 log-level: error # 日志等级 silent/error/warning/info/debug
@@ -912,32 +912,6 @@ proxy-groups:
     tolerance: 100
     url: https://cp.cloudflare.com/generate_204
     lazy: false
-    max-failed-times: 3
-    expected-status: 204
-
-  # TikTok地区筛选
-  - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/TikTok.png
-    include-all: true
-    exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
-    filter: (?i)^(?=.*TK|tiktok)(?=.*(?:(?:^|[^-])US|TK-US))
-    name: TIKTOK-US
-    type: url-test
-    interval: 600
-    tolerance: 100
-    url: https://www.gstatic.com/generate_204
-    lazy: true
-    max-failed-times: 3
-    expected-status: 204
-  - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/TikTok.png
-    include-all: true
-    exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
-    filter: (?i)^(?=.*TK|tiktok)(?=.*(?:(?:^|[^-])JP|TK-JP))
-    name: TIKTOK-JP
-    type: url-test
-    interval: 600
-    tolerance: 100
-    url: https://www.gstatic.com/generate_204
-    lazy: true
     max-failed-times: 3
     expected-status: 204
 
