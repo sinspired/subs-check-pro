@@ -109,7 +109,7 @@ func ParseSubscriptionDataStream(
 			if n == nil {
 				continue
 			}
-			k := utils.GenerateProxyKey(n)
+			k := utils.NodeKey(n)
 			if _, dup := lineSeen[k]; dup {
 				lineDeduped++
 				continue

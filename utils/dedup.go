@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+// nodeKeyField 用于在节点 map 上缓存已计算出的去重 key。
+// 同一个节点会在「订阅内去重 → 跨解析器去重 → 批次内去重 → 全局去重」
+// 最多 4 层逻辑里被检查，缓存后只需真正计算一次 GenerateProxyKey。
+const nodeKeyField = "_dk"
+
 // 域名/IP 正则：允许字母、数字、点、横线、冒号(IPv6)
 var domainRegex = regexp.MustCompile(`^[a-zA-Z0-9\.\-\:]+$`)
 
@@ -96,7 +101,7 @@ func GenerateProxyKey(p map[string]any) string {
 	}
 	writeStringWithPrefix(&sb, p, "auth-str", "auth:")
 	writeStringWithPrefix(&sb, p, "private-key", "pk:")
-	writeStringWithPrefix(&sb, p, "flow", "flow:")             // XTLS Flow 必须区分
+	writeStringWithPrefix(&sb, p, "flow", "flow:") // XTLS Flow 必须区分
 
 	// 似乎不用代理连接,仅仅是 ios,safari这些指纹
 	// writeStringWithPrefix(&sb, p, "client-fingerprint", "fp:")
@@ -172,15 +177,34 @@ func GenerateProxyKey(p map[string]any) string {
 	return sb.String()
 }
 
+// NodeKey 返回节点的去重 key，并写入缓存字段。
+// 注意：调用方必须保证节点在最终对外输出前调用 DeleteNodeKey 清理掉该字段，
+// 否则它会污染写出去的代理配置（YAML/JSON）。
+func NodeKey(p map[string]any) string {
+	if v, ok := p[nodeKeyField]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	k := GenerateProxyKey(p)
+	p[nodeKeyField] = k
+	return k
+}
+
+// DeleteNodeKey 清除 NodeKey 写入的缓存字段。
+func DeleteNodeKey(p map[string]any) {
+	delete(p, nodeKeyField)
+}
+
 // DeduplicateNodes 节点去重
 func DeduplicateNodes(nodes []map[string]any) []map[string]any {
 	if len(nodes) == 0 {
 		return nodes
 	}
 	seen := make(map[string]struct{}, len(nodes))
-	out := nodes[:0] // 原地复用，减少分配
+	out := nodes[:0]
 	for _, n := range nodes {
-		k := GenerateProxyKey(n)
+		k := NodeKey(n)
 		if _, dup := seen[k]; dup {
 			continue
 		}

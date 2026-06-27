@@ -122,7 +122,7 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	// 拉取阶段加大 GC 频率，减少堆积压
 	prevGC := debug.SetGCPercent(70)
 	defer debug.SetGCPercent(prevGC)
-	
+
 	// 初始化代理环境变量
 	initEnvironment()
 
@@ -213,7 +213,7 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 					level = KeepLevelHistory
 				}
 
-				key := utils.GenerateProxyKey(proxy)
+				key := utils.NodeKey(proxy)
 				if existLevel, exists := keepLevels[key]; !exists || level > existLevel {
 					uniqueNodes[key] = proxy
 					keepLevels[key] = level
@@ -495,7 +495,7 @@ func processSubscription(
 		}
 
 		// 订阅内去重（减少对全局 map 和 channel 的压力）
-		key := utils.GenerateProxyKey(node)
+		key := utils.NodeKey(node)
 		if _, dup := seenInSub[key]; dup {
 			return true
 		}
@@ -613,6 +613,7 @@ func saveStats(subStats map[string]SubStat) {
 func cleanMetadata(p map[string]any) {
 	delete(p, "sub_was_succeed")
 	delete(p, "sub_from_history")
+	utils.DeleteNodeKey(p)
 }
 
 // ClearCache 检测结束后释放包级全局状态

@@ -409,6 +409,20 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 	if len(batchLinks) > 0 {
 		batchLinks = lo.Uniq(batchLinks)
 
+		// 持久化去重表：贯穿所有 chunk，避免每个 chunk 后对全量
+		// finalNodes 重新扫描（旧实现是 O(n²/chunkSize)）。
+		seen := make(map[string]struct{}, len(batchLinks))
+		appendUnique := func(nodes []map[string]any) {
+			for _, n := range nodes {
+				k := utils.NodeKey(n)
+				if _, dup := seen[k]; dup {
+					batchDeduped++
+					continue
+				}
+				seen[k] = struct{}{}
+				finalNodes = append(finalNodes, n)
+			}
+		}
 		const chunkSize = 10000 // 每次最多喂给 Mihomo 10000 条，保护内存
 		for i := 0; i < len(batchLinks); i += chunkSize {
 			end := min(i+chunkSize, len(batchLinks))
@@ -426,18 +440,14 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 				// 	slog.Debug("标准节点", "index", i, "node", string(nodeJSON))
 				// }
 				// patchXhttpOpts(nodes, data) // 补丁：修复 xhttp 缺失字段
-				finalNodes = append(finalNodes, ToNormalizeNodes(nodes)...)
+				appendUnique(ToNormalizeNodes(nodes))
 			}
 			// 扩展转换 ConvertsV2RayExtra 处理非标准/扩展协议链接
 			if nodes, err := ConvertsV2RayExtra(data); err == nil && len(nodes) > 0 {
 				slog.Debug("扩展转换成功", "数量", len(nodes))
 				// patchXhttpOpts(nodes, data)
-				finalNodes = append(finalNodes, ToNormalizeNodes(nodes)...)
+				appendUnique(ToNormalizeNodes(nodes))
 			}
-			// 每块处理完毕后去重，避免跨 chunk 累积重复节点撑高内存峰值
-			before := len(finalNodes)
-			finalNodes = utils.DeduplicateNodes(finalNodes)
-			batchDeduped += before - len(finalNodes)
 		}
 	}
 
