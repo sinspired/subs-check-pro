@@ -1,1 +1,0 @@
-import{a7 as o,w as a,$ as n}from"./vue-vendor-22929d76.js";import{I as m}from"./main-2fa0f259.js";const l=l=>{const s=o(),t=m();a(l,o=>{o?t.lockToSingleColumn(s.path):t.unlockSingleColumn(s.path)},{immediate:!0}),n(()=>{t.unlockSingleColumn(s.path)})};export{l as u};
