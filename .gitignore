@@ -17,6 +17,7 @@ mihomo-check*
 *.ps1
 *.bak
 *.zip
+*.gz
 *.tar
 bin/*
 test_*.*
