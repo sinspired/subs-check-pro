@@ -373,13 +373,22 @@ func (app *App) registerAPIRoutes(router *gin.Engine) {
 		api.POST("/proxy/check", app.proxyCheckHandler)
 		api.POST("/notify/test", app.notifyTestHandler)
 		api.POST("/substore/update", app.updateSubStoreHandler)
+
+		api.GET("/files-data", app.getFilesData)
 	}
 }
 
 // authMiddleware 认证中间件
 func (app *App) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 1. 优先从 Header 获取 (App端/跨域请求常用)
 		apiKey := c.GetHeader(APIAuthHeader)
+		
+		// 2. 如果 Header 中没有，尝试从 Cookie 兜底读取 (Web端 Ajax 常用)
+		if apiKey == "" {
+			apiKey, _ = c.Cookie("scp_api_key")
+		}
+
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(config.GlobalConfig.APIKey)) != 1 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的API密钥"})
 			return
