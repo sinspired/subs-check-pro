@@ -27,6 +27,8 @@
 - 📗 [通知渠道（Apprise）](Notifications)
 - 🚦 [系统与 GitHub 代理](System-Proxy)
 - 💾 [保存方法](Storage)
+- 💾 [保存方法](Storage)
+- 📱 [安卓手机 CLI（Termux）运行](android)
 
 ## 🚀 快速开始
 

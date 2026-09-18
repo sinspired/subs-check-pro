@@ -270,6 +270,10 @@ speed-test-url: https://custom-domain/speedtest?bytes=1073741824
 
 完整文档请见 Wiki：[内置文件服务](https://github.com/sinspired/subs-check-pro/wiki/File-Service)
 
+## 📱 安卓手机命令行运行
+
+完整文档请见 Wiki：[安卓手机命令行运行](https://github.com/sinspired/subs-check-pro/wiki/android)
+
 ## ✨ 新增功能与性能优化详情
 
 完整说明请见 Wiki：[新增功能与性能优化详情](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
