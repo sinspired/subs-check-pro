@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -302,7 +303,7 @@ func (app *App) registerWebUIRoutes(router *gin.Engine) {
 // 作用：防止未登录用户强行访问 /admin 偷窥网页 UI 结构
 func (app *App) pageAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 优先尝试从 Cookie 读取凭证 (常规 Web 端登录流程)
+		// 优先尝试从 Cookie 读取凭证
 		cookie, err := c.Cookie("scp_api_key")
 		apiKey := ""
 		if err == nil {
@@ -314,13 +315,26 @@ func (app *App) pageAuthMiddleware() gin.HandlerFunc {
 
 		// 对比密钥
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(config.GlobalConfig.APIKey)) != 1 {
-			// 凭证无效，直接 302 重定向到登录页，并终止后续渲染
-			c.Redirect(http.StatusFound, "/login")
+			// 记录用户本来想要访问的路径
+			target := c.Request.URL.Path
+			if c.Request.URL.RawQuery != "" {
+				target += "?" + c.Request.URL.RawQuery
+			}
+
+			// 组装带 redirect 的登录地址
+			redirectURL := "/login"
+			// 防止死循环重定向到 login 自身
+			if target != "" && target != "/" && target != "/login" {
+				redirectURL += "?redirect=" + url.QueryEscape(target)
+			}
+
+			// 凭证无效，带上 redirect 标识重定向到登录页
+			c.Redirect(http.StatusFound, redirectURL)
 			c.Abort()
 			return
 		}
 
-		// 如果是通过 Query 带参访问的，顺手帮浏览器种下 Cookie，方便后续页面刷新时不掉线
+		// 如果是通过 Query 带参访问的，顺手帮浏览器种下 Cookie
 		if err != nil && apiKey != "" {
 			c.SetCookie("scp_api_key", apiKey, 2592000, "/", "", false, false)
 		}
@@ -383,7 +397,7 @@ func (app *App) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. 优先从 Header 获取 (App端/跨域请求常用)
 		apiKey := c.GetHeader(APIAuthHeader)
-		
+
 		// 2. 如果 Header 中没有，尝试从 Cookie 兜底读取 (Web端 Ajax 常用)
 		if apiKey == "" {
 			apiKey, _ = c.Cookie("scp_api_key")
