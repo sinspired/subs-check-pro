@@ -15,14 +15,14 @@ High-performance proxy subscription checker.
 <a href="https://sinspired.github.io/subs-check-pro/"><img alt="doc-site" src="https://img.shields.io/website?url=https%3A%2F%2Fsinspired.github.io%2Fsubs-check-pro%2F&up_message=online&down_message=offline&down_color=red&logo=docusaurus&label=%E6%96%87%E6%A1%A3" /></a>
 <a href="https://github.com/sinspired/subs-check-pro/wiki"><img alt="WIKI" src="https://img.shields.io/website?url=https%3A%2F%2Fgithub.com%2Fsinspired%2Fsubs-check-pro%2Fwiki&down_color=red&logo=github&label=Wiki
 " /></a>
-<a href="https://github.com/sinspired/subs-check-pro-gui"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/sinspired/subs-check-pro-gui?include_prereleases&display_name=release&style=flat&logo=wails&logoColor=E2434B&label=%E8%B7%A8%E5%B9%B3%E5%8F%B0%E7%8E%B0%E4%BB%A3GUI" /></a>
+<a href="https://github.com/sinspired/subs-free"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/sinspired/subs-free?include_prereleases&display_name=release&style=flat&logo=wails&logoColor=E2434B&label=%E8%B7%A8%E5%B9%B3%E5%8F%B0%E7%8E%B0%E4%BB%A3GUI" /></a>
 </p>
 
 # 🚀 网络代理质量检测工具
 
 **测活、测速、媒体解锁**，网络质量检测工具。采用全新设计，适配 PC 和手机设备的现代 WebUI 配置管理界面，自动生成 `mihomo` 和 `sing-box` 订阅，集成 `sub-store` 前端和后端，支持一键复制分享，可在高并发运行时保持低内存占用；支持自动无缝版本更新。
 
-同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-check-pro-gui](https://github.com/sinspired/subs-check-pro-gui)。
+同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-free](https://github.com/sinspired/subs-free)。
 
 ![preview](./doc/images/Subs-Check-PRO_OG.png)
 
@@ -41,8 +41,9 @@ High-performance proxy subscription checker.
 - [x] 🔋 [优化内存占用](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
 - [x] ♾️ 支持检测百万-千万量级的节点库，依然保持较低的内存占用
 - [x] 💻 支持 `Windows` `Linux` `macOS` 多平台部署
+- [x] 📱 支持 `Android` 手机 APP
 - [x] 🐳 支持 `docker` 部署
-- [x] 🖥️ **全新跨平台现代桌面客户端**：可搭配基于 Wails v3 开发的 [subs-check-pro-gui](https://github.com/sinspired/subs-check-pro-gui) 完美实现本地图形化免命令操控（支持 Windows, macOS, Linux）
+- [x] 🖥️ **全新跨平台现代桌面客户端**：可搭配基于 Wails v3 开发的 [subs-free](https://github.com/sinspired/subs-free) 完美实现本地图形化免命令操控（支持 Windows, macOS, Linux）
 - [x] 📱 全新设计的 WebUI 管理界面，优化小屏设备访问体验
 - [x] ✏️ 升级配置编辑器，支持自动补全与高亮，内置预览与配置分析，GUI 式编辑
 - [x] 🧩 集成 `sub-store` 前端，WebUI 一键管理
@@ -70,14 +71,14 @@ High-performance proxy subscription checker.
 
 > [!TIP]
 >
-> 功能更新频繁，请务必查看最新的 [配置文件示例](https://github.com/sinspired/subs-check-pro/blob/main/config/config.yaml.example) 以获取最新功能支持。  
+> 功能更新频繁，请务必查看最新的 [配置文件示例](https://github.com/sinspired/subs-check-pro/blob/main/config/config.yaml.example) 以获取最新功能支持。
 
 > [!NOTE]
 > 查看新增功能及设置方法： [新增功能与性能优化详情](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
 
 ## 📸 预览
 
-![preview](./doc/images/preview.png)  
+![preview](./doc/images/preview.png)
 ![result](./doc/images/results.png)
 
 ### ✨ 现代 WebUI 管理界面
@@ -87,13 +88,21 @@ High-performance proxy subscription checker.
 ![login](./doc/images/login.png)
 ![WebUI](./doc/images/WebUI.png)
 
-### 🖥️ Wails v3 现代化桌面客户端 (subs-check-pro-gui)
+### 🖥️ Wails v3 现代化桌面客户端 (subs-free)
 
 如果你更喜欢原生的桌面应用程序，可以使用全新开发的客户端。它拥有完美的跨平台系统级适配、更低的系统资源开销以及极度现代化的精致 GUI 交互界面。
 
-![GUI](./doc/images/GUI.png)
+#### 💻 桌面端
 
-➡️ 立即前往体验：[subs-check-pro-gui 仓库](https://github.com/sinspired/subs-check-pro-gui)
+![preview](./doc/images/GUI.png)
+
+#### 📱 手机 APP
+
+| Android 完整版                                      | Android 精简版                                                 |
+| --------------------------------------------------- | -------------------------------------------------------------- |
+| <img src="./doc/images/Android.png" alt="Android"/> | <img src="./doc/images/Android_Lite.png" alt="Android_Lite" /> |
+
+➡️ 立即前往体验：[subs-free 仓库](https://github.com/sinspired/subs-free)
 
 ### 📊 检测结果分析报告
 
@@ -118,7 +127,7 @@ High-performance proxy subscription checker.
 
 ### 💻 桌面端 UI 运行（推荐）
 
-直接前往 [subs-check-pro-gui](https://github.com/sinspired/subs-check-pro-gui) 下载适配你当前系统（Windows / macOS / Linux）的安装包，开箱即用，无须配置复杂的命令行参数。
+直接前往 [subs-free](https://github.com/sinspired/subs-free) 下载适配你当前系统（Windows / macOS / Linux）的安装包，开箱即用，无须配置复杂的命令行参数。
 
 ### 🌏 WebUI 控制面板
 
@@ -169,7 +178,7 @@ docker run -d \
 
 <details>
   <summary>展开查看</summary>
-  
+
 ```yaml
 # 优先级 1.system-proxy;2.github-proxy;3.ghproxy-group
 # 即使未设置,也会检测常见端口(v2ray\clash)的系统代理自动设置
@@ -178,10 +187,10 @@ docker run -d \
 # 写法跟环境变量一样，修改需重启生效
 # system-proxy: "http://username:password@192.168.1.1:7890"
 # system-proxy: "socks5://username:password@192.168.1.1:7890"
-system-proxy: ""
+system-proxy: ''
 # Github 代理：获取订阅使用
 # github-proxy: "https://ghfast.top/"
-github-proxy: ""
+github-proxy: ''
 # GitHub 代理列表：程序会自动筛选可用的 GitHub 代理
 ghproxy-group:
 # - https://ghp.yeye.f5.si/
@@ -214,7 +223,7 @@ export HTTPS_PROXY=socks5h://username:password@192.168.1.1:7890
 ```yaml
 # Github Proxy，获取订阅使用，结尾要带的 /
 # github-proxy: "https://ghfast.top/"
-github-proxy: "https://proxy.custom-domain/"
+github-proxy: 'https://proxy.custom-domain/'
 ```
 
 </details>
@@ -250,7 +259,7 @@ speed-test-url: https://custom-domain/speedtest?bytes=1073741824
 
 ## 🌍 域名相关
 
-> [!TIP] 
+> [!TIP]
 > Cloudflare Tunnel 外网访问和通知渠道部署需要域名，可自行注册或点击下方链接注册免费域名
 >
 > [![域名注册](https://img.shields.io/badge/DigitalPlat-注册免费域名-2563eb?style=flat-square&logo=databricks&logoColor=ffffff)](https://dashboard.digitalplat.org/signup?ref=HZcosTVlmQ)

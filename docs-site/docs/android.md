@@ -1,5 +1,7 @@
 # 📱 安卓手机运行 Subs-Check-Pro 教程
 
+⚠️ Android 手机 APP 已发布，请至 [Subs Free](https://github.com/sinspired/subs-free) 下载使用
+
 > 使用 Termux
 
 ## 前置条件

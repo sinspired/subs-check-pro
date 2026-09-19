@@ -7,12 +7,12 @@
 <a href="https://sinspired.github.io/subs-check-pro/"><img alt="doc-site" src="https://img.shields.io/website?url=https%3A%2F%2Fsinspired.github.io%2Fsubs-check-pro%2F&up_message=online&down_message=offline&down_color=red&logo=docusaurus&label=%E6%96%87%E6%A1%A3" /></a>
 <a href="https://github.com/sinspired/subs-check-pro/wiki"><img src="https://img.shields.io/website?url=https%3A%2F%2Fgithub.com%2Fsinspired%2Fsubs-check-pro%2Fwiki&down_color=red&logo=github&label=Wiki
 " /></a>
-<a href="https://github.com/sinspired/subs-check-pro-gui"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/sinspired/subs-check-pro-gui?include_prereleases&display_name=release&style=flat&logo=wails&logoColor=E2434B&label=%E8%B7%A8%E5%B9%B3%E5%8F%B0%E7%8E%B0%E4%BB%A3GUI" /></a>
+<a href="https://github.com/sinspired/subs-free"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/sinspired/subs-free?include_prereleases&display_name=release&style=flat&logo=wails&logoColor=E2434B&label=%E8%B7%A8%E5%B9%B3%E5%8F%B0%E7%8E%B0%E4%BB%A3GUI" /></a>
 </p>
 
 高性能代理订阅检测器，支持测活、测速、媒体解锁，PC/移动端友好的现代 WebUI，自动生成 Mihomo/Clash 与 sing-box 订阅，集成 sub-store，支持一键分享与无缝自动更新。
 
-同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-check-pro-gui](https://github.com/sinspired/subs-check-pro-gui)。
+同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-free](https://github.com/sinspired/subs-free)，支持 Android 手机和 `Windows` `Linux` `Mac`。
 
 ![preview](https://sinspired.github.io/subs-check-pro/img/Subs-Check-PRO_OG.png)
 
@@ -71,7 +71,6 @@ docker run -d \
 Cloudflare Tunnel 外网访问和通知渠道部署需要域名，可自行注册或点击下方链接注册免费域名
 
 [![域名注册](https://img.shields.io/badge/DigitalPlat-注册免费域名-2563eb?style=flat-square&logo=databricks&logoColor=ffffff)](https://dashboard.digitalplat.org/signup?ref=HZcosTVlmQ)
-
 
 请勿用于非法用途！
 
