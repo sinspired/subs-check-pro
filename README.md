@@ -88,9 +88,9 @@ High-performance proxy subscription checker.
 ![login](./doc/images/login.png)
 ![WebUI](./doc/images/WebUI.png)
 
-### 🖥️ Wails v3 现代化桌面客户端 (subs-free)
+### 🖥️ [subs-free](https://github.com/sinspired/subs-free) 跨平台客户端
 
-如果你更喜欢原生的桌面应用程序，可以使用全新开发的客户端。它拥有完美的跨平台系统级适配、更低的系统资源开销以及极度现代化的精致 GUI 交互界面。
+已支持 `Android 手机` 和 `Windows` `Linux` `Mac`。
 
 #### 💻 桌面端
 
