@@ -91,7 +91,7 @@ func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
 	autoUpdate := config.GlobalConfig.EnableSelfUpdate
 
 	// 是否需要提示（任一条件满足）
-	needNotify := !autoUpdate || isDockerEnv || isGUI
+	needNotify := !autoUpdate || isDockerEnv
 
 	if needNotify {
 		slog.Warn("发现新版本",
