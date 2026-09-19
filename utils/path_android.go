@@ -1,4 +1,3 @@
-//utils/path_android.go
 //go:build android
 
 package utils
@@ -9,16 +8,23 @@ import (
 	"strings"
 )
 
-// GetExecutablePath 获取 Android App 专属的可读写沙盒目录
+// GetExecutablePath 获取 Android App 专属的外部可读写沙盒目录
 func GetExecutablePath() string {
-	// 1. 读取 /proc/self/cmdline 获取当前进程包名 (如 com.wails.app)
 	if data, err := os.ReadFile("/proc/self/cmdline"); err == nil {
 		pkgName := strings.Trim(string(data), "\x00\r\n\t ")
 		if idx := strings.IndexByte(pkgName, 0); idx != -1 {
 			pkgName = pkgName[:idx]
 		}
+
 		if pkgName != "" {
-			// Android 私有存储目录：/data/data/<包名>/files
+			// 由于 Java 层的 MainActivity 已经调用过 getExternalFilesDir()，
+			// 系统已经打通了外部沙盒目录的权限。直接硬编码拼接即可无缝读写。
+			extDir := filepath.Join("/storage/emulated/0/Android/data", pkgName, "files")
+			if err := os.MkdirAll(extDir, 0755); err == nil {
+				return extDir
+			}
+
+			// 兜底：如果外部存储挂载失败或不可用，回退到内部存储
 			appDir := filepath.Join("/data/data", pkgName, "files")
 			if err := os.MkdirAll(appDir, 0755); err == nil {
 				return appDir
@@ -26,10 +32,9 @@ func GetExecutablePath() string {
 		}
 	}
 
-	// 2. 兜底方案
+	// 最终兜底工作目录
 	if wd, err := os.Getwd(); err == nil && wd != "/" && wd != "" {
 		return wd
 	}
-
 	return "."
 }
