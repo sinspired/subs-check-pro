@@ -22,7 +22,7 @@ High-performance proxy subscription checker.
 
 **测活、测速、媒体解锁**，网络质量检测工具。采用全新设计，适配 PC 和手机设备的现代 WebUI 配置管理界面，自动生成 `mihomo` 和 `sing-box` 订阅，集成 `sub-store` 前端和后端，支持一键复制分享，可在高并发运行时保持低内存占用；支持自动无缝版本更新。
 
-同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-free](https://github.com/sinspired/subs-free)。
+同时也提供了基于 **Wails v3** 现代化框架开发的跨平台本地图形界面客户端 [subs-free](https://github.com/sinspired/subs-free)，已支持 Android 手机和 `Windows` `Linux` `Mac`。
 
 ![preview](./doc/images/Subs-Check-PRO_OG.png)
 
