@@ -24,6 +24,11 @@ var (
 	isSysProxy    bool                                                          // 系统代理是否可用
 )
 
+var lastNotify struct {
+	version string
+	time    time.Time
+}
+
 // 获取当前架构映射,和GitHub release对应
 func getArch() string {
 	archMap := map[string]string{
@@ -75,6 +80,12 @@ func (app *App) InitUpdateInfo() {
 
 // detectSuccessNotify 发送新版本通知
 func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
+	// 检查是否一周内已提醒过同版本
+	if lastNotify.version == latest.Version() &&
+		time.Since(lastNotify.time) < 7*24*time.Hour {
+		return
+	}
+
 	isGUI := os.Getenv("START_FROM_GUI") != ""
 	isDockerEnv := isDocker()
 	autoUpdate := config.GlobalConfig.EnableSelfUpdate
@@ -101,10 +112,8 @@ func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
 		switch {
 		case isDockerEnv:
 			updateHint = fmt.Sprintf("docker pull sinspired/subs-check-pro:%s", latest.Version())
-
 		case isGUI:
 			updateHint = "GUI内核: " + latest.AssetURL
-
 		default:
 			updateHint = latest.AssetURL
 		}
@@ -119,6 +128,10 @@ func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
 			updateHint,
 		)
 	}
+
+	// 更新提醒状态
+	lastNotify.version = latest.Version()
+	lastNotify.time = time.Now()
 }
 
 // updateSuccess 更新成功处理
