@@ -280,7 +280,7 @@ func GetProxies(progressCallback func(stepName string, done, total, available in
 				validSubsCount.Add(1)
 			}
 			if progressCallback != nil {
-				progressCallback("解析订阅", int(fetchedCount.Add(1)), len(subUrls), int(validSubsCount.Load()))
+				progressCallback("解析订阅列表", int(fetchedCount.Add(1)), len(subUrls), int(validSubsCount.Load()))
 			}
 		}(subURL, tag, isSucced, isHistory)
 	}
