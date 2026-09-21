@@ -24,13 +24,15 @@ type LocalSaver struct {
 
 // NewLocalSaver 创建新的本地保存器
 func NewLocalSaver() (*LocalSaver, error) {
-	basePath := utils.GetPrivateStorageDir()
+	basePath := utils.GetExternalStorageDir()
 	if basePath == "" {
 		return nil, fmt.Errorf("获取可执行文件路径失败")
 	}
 
 	var outputPath string
-	defaultConfigDir := filepath.Join(basePath, "config")
+
+	// 获取配置文件的默认保存位置，兼容移动设备
+	defaultConfigDir := filepath.Join(utils.GetPrivateStorageDir(), "config")
 
 	switch {
 	case config.GlobalConfig.OutputDir != "":

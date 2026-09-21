@@ -34,3 +34,8 @@ func GetPrivateStorageDir() string {
 	// 回退：iOS 推荐使用临时目录
 	return os.TempDir()
 }
+
+// iOS 没有外部存储 → 返回内部存储
+func GetExternalStorageDir() string {
+	return GetPrivateStorageDir()
+}

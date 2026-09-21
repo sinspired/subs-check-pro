@@ -17,3 +17,7 @@ func GetPrivateStorageDir() string {
 	}
 	return filepath.Dir(ex)
 }
+
+func GetExternalStorageDir() string {
+    return GetPrivateStorageDir()
+	}
