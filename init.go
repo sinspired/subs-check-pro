@@ -1,3 +1,4 @@
+// init.go - 内核
 package main
 
 import (
@@ -16,7 +17,6 @@ import (
 	"github.com/lmittmann/tint"
 	mihomoLog "github.com/metacubex/mihomo/log"
 	"github.com/sinspired/subs-check-pro/v3/app"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -32,46 +32,23 @@ func init() {
 		mihomoLog.SetLevel(mihomoLog.SILENT)
 	}
 
-	// 获取日志级别
-	logLevel := getLogLevel()
+	// 1. 初始化基础的文件日志 (此时底层已经执行过 SetDefault 纯文件输出了)
+	fileHandler, err := app.InitLoggerFile()
 
-	logPath, err := app.GetLogPath()
-	if err != nil {
-		slog.Error("无法获取日志存储路径", "error", err)
-	}
-
-	// 配置日志文件
-	fileLogger := &lumberjack.Logger{
-		Filename:   logPath,
-		MaxSize:    10,
-		MaxBackups: 3,
-		MaxAge:     7,
-	}
-
-	// 创建两个单独的handler
-	// 1. 终端输出 - 带颜色
-	consoleHandler := tint.NewTextHandler(getStdout(), &tint.Options{
+	// 2. CLI 需要额外的带颜色的终端输出
+	logLevel := app.GetLogLevel()
+	consoleHandler := tint.NewTextHandler(os.Stdout, &tint.Options{
 		Level:      logLevel,
 		TimeFormat: "01-02 15:04:05",
 	})
 
-	// 2. 文件输出 - 不带颜色
-	fileHandler := tint.NewTextHandler(fileLogger, &tint.Options{
-		Level:      logLevel,
-		TimeFormat: "01-02 15:04:05",
-		NoColor:    true, // 禁用颜色
-	})
-
-	// 创建一个自定义的Slog处理器，将日志同时发送到两个处理器
-	handler := &multiHandler{
-		console: consoleHandler,
-		file:    fileHandler,
+	// 3. 组合双向输出并覆盖刚才的默认设置
+	if err == nil && fileHandler != nil {
+		slog.SetDefault(slog.New(&multiHandler{console: consoleHandler, file: fileHandler}))
+	} else {
+		// 如果文件路径有问题，降级到纯终端输出
+		slog.SetDefault(slog.New(consoleHandler))
 	}
-
-	logger := slog.New(handler)
-
-	// 设置为全局日志记录器
-	slog.SetDefault(logger)
 
 	// 如存在之前未结束的subs-check-pro进程,应终结
 	if runtime.GOOS == "windows" {

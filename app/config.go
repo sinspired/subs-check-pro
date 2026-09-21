@@ -19,7 +19,7 @@ import (
 // initConfigPath 初始化配置文件路径
 func (app *App) initConfigPath() error {
 	if app.configPath == "" {
-		execPath := utils.GetExecutablePath()
+		execPath := utils.GetPrivateStorageDir()
 		configDir := filepath.Join(execPath, "config")
 
 		if err := os.MkdirAll(configDir, 0o755); err != nil {

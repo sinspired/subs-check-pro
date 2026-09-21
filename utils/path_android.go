@@ -3,38 +3,44 @@
 package utils
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
+    "github.com/goccy/go-json"
+    "github.com/wailsapp/wails/v3/pkg/application"
+    "os"
+    "path/filepath"
 )
 
-// GetExecutablePath 获取 Android App 专属的外部可读写沙盒目录
-func GetExecutablePath() string {
-	if data, err := os.ReadFile("/proc/self/cmdline"); err == nil {
-		pkgName := strings.Trim(string(data), "\x00\r\n\t ")
-		if idx := strings.IndexByte(pkgName, 0); idx != -1 {
-			pkgName = pkgName[:idx]
-		}
+type AppInfo struct {
+    Name     string `json:"name"`
+    Version  string `json:"version"`
+    Build    string `json:"build"`
+    BundleId string `json:"bundleId"`
+}
 
-		if pkgName != "" {
-			// 由于 Java 层的 MainActivity 已经调用过 getExternalFilesDir()，
-			// 系统已经打通了外部沙盒目录的权限。直接硬编码拼接即可无缝读写。
-			extDir := filepath.Join("/storage/emulated/0/Android/data", pkgName, "files")
-			if err := os.MkdirAll(extDir, 0755); err == nil {
-				return extDir
-			}
+func GetAppInfo() AppInfo {
+    raw := application.Mobile.AppInfoJSON()
+    var info AppInfo
+    _ = json.Unmarshal([]byte(raw), &info)
+    return info
+}
 
-			// 兜底：如果外部存储挂载失败或不可用，回退到内部存储
-			appDir := filepath.Join("/data/data", pkgName, "files")
-			if err := os.MkdirAll(appDir, 0755); err == nil {
-				return appDir
-			}
-		}
-	}
+// 内部私有存储：StoragePath()，失败时回退到 /data/data/<pkg>/files
+func GetPrivateStorageDir() string {
+    dir := application.Mobile.StoragePath()
+    if dir != "" {
+        if err := os.MkdirAll(dir, 0755); err == nil {
+            return dir
+        }
+    }
 
-	// 最终兜底工作目录
-	if wd, err := os.Getwd(); err == nil && wd != "/" && wd != "" {
-		return wd
-	}
-	return "."
+    // 回退：Android 旧路径仍然有效
+    pkg := GetAppInfo().BundleId
+    if pkg != "" {
+        fallback := filepath.Join("/data/data", pkg, "files")
+        if err := os.MkdirAll(fallback, 0755); err == nil {
+            return fallback
+        }
+    }
+
+    // 最终兜底
+    return "."
 }

@@ -13,6 +13,7 @@ dist/*
 output/*
 subs-check-pro*
 mihomo-check*
+log/
 
 .idea
 .vscode

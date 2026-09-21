@@ -24,7 +24,7 @@ type LocalSaver struct {
 
 // NewLocalSaver 创建新的本地保存器
 func NewLocalSaver() (*LocalSaver, error) {
-	basePath := utils.GetExecutablePath()
+	basePath := utils.GetPrivateStorageDir()
 	if basePath == "" {
 		return nil, fmt.Errorf("获取可执行文件路径失败")
 	}
