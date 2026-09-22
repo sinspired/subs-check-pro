@@ -24,7 +24,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/samber/lo v1.53.0
 	github.com/sinspired/checkip v0.5.3
-	github.com/sinspired/subs-check-pro-webui v1.3.1
+	github.com/sinspired/subs-check-pro-webui v1.3.3
 	github.com/wailsapp/wails/v3 v3.0.0-beta.24
 	golang.org/x/net v0.59.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
