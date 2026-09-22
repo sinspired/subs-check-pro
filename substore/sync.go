@@ -87,10 +87,8 @@ const (
 	latestSingboxJSON = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.json"
 	latestSingboxJS   = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.js"
 
-	// Deprecated: sing-box MT 于 2026-08-31 上架 App Store 后将逐步移除
-	OldSingboxJSON = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.json"
-	// Deprecated: sing-box MT 于 2026-08-31 上架 App Store 后将逐步移除
-	OldSingboxJS = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.js"
+	ExtraSingboxJSON = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.json"
+	ExtraSingboxJS = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.js"
 
 	// subInfoURLKeyword 用于在 SCP 操作中识别旧版 link 模式下的订阅流量信息脚本
 	subInfoURLKeyword = "sub-store-scripts"
@@ -109,7 +107,7 @@ var (
 
 var (
 	LatestSingboxVersion string
-	OldSingboxVersion    string
+	ExtraSingboxVersion  string
 )
 
 // InitSingboxVersion 程序初始化时对 Singbox 版本号进行初始化
@@ -119,12 +117,10 @@ func InitSingboxVersion() {
 	} else {
 		LatestSingboxVersion = "1.14"
 	}
-	if config.GlobalConfig.SingboxOld.Version != "" && config.GlobalConfig.SingboxOld.JSON != "" && config.GlobalConfig.SingboxOld.JS != "" {
-		// Deprecated: sing-box MT 于 2026-08-31 上架 App Store 后将逐步移除
-		OldSingboxVersion = config.GlobalConfig.SingboxOld.Version //nolint:staticcheck // SingboxOld is intentionally retained for iOS compatibility.
+	if config.GlobalConfig.SingboxExtra.Version != "" && config.GlobalConfig.SingboxExtra.JSON != "" && config.GlobalConfig.SingboxExtra.JS != "" {
+		ExtraSingboxVersion = config.GlobalConfig.SingboxExtra.Version
 	} else {
-		// Deprecated: sing-box MT 于 2026-08-31 上架 App Store 后将逐步移除
-		OldSingboxVersion = "1.11"
+		ExtraSingboxVersion = "1.15-pre"
 	}
 }
 
@@ -835,8 +831,8 @@ func needGhProxy(doSub, doMihomo, doSbLatest, doSbOld bool) bool {
 		}
 	}
 	if doSbOld {
-		if !utils.IsLocalURL(config.GlobalConfig.SingboxOld.JS) ||
-			!utils.IsLocalURL(config.GlobalConfig.SingboxOld.JSON) {
+		if !utils.IsLocalURL(config.GlobalConfig.SingboxExtra.JS) ||
+			!utils.IsLocalURL(config.GlobalConfig.SingboxExtra.JSON) {
 			return true
 		}
 	}
@@ -905,8 +901,8 @@ func SyncSubStorePartial(yamlData []byte, doSub, doMihomo, doSbLatest, doSbOld b
 	}
 
 	if doSbOld {
-		if err := processSingboxFile(&config.GlobalConfig.SingboxOld, OldSingboxJS, OldSingboxJSON, OldSingboxVersion); err != nil {
-			name := SingboxName + "-" + OldSingboxVersion
+		if err := processSingboxFile(&config.GlobalConfig.SingboxExtra, ExtraSingboxJS, ExtraSingboxJSON, ExtraSingboxVersion); err != nil {
+			name := SingboxName + "-" + ExtraSingboxVersion
 			slog.Warn(name+"订阅同步失败", "error", err)
 		}
 	}

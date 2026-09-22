@@ -186,8 +186,8 @@ type Config struct {
 	// Singbox 支持最新版和 iOS 兼容版
 	SingboxLatest SingBoxConfig `yaml:"singbox-latest"`
 
-	// Deprecated: SingboxOld iOS 兼容版本 1.11；sing-box MT 于 2026-08-31 上架 App Store 后将逐步移除
-	SingboxOld SingBoxConfig `yaml:"singbox-old"`
+	// SingboxExtra 由于singbox各个版本配置不同，额外配置很有用
+	SingboxExtra SingBoxConfig `yaml:"singbox-extra"`
 
 	// SubProcess sub 订阅操作配置
 	SubProcess SubProcessConfig `yaml:"sub-process"`

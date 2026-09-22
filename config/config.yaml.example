@@ -207,18 +207,15 @@ sub-process:
 # json文件为分流规则
 # js脚本用来根据规则对节点进行处理
 # singbox每个版本规则不兼容，须根据客户端版本选择合适的规则
-# singbox 最新版 1.14.x
 singbox-latest:
   version: 1.14
   json: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.json'
   js: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.js'
 
-# singbox-old iOS 支持同时生成旧版 singbox 配置
-# ⚠️ sing-box MT 于 2026-08-31 上架 App Store 后，iOS 用户可使用最新 singbox 版本，将逐步移除该项配置
-singbox-old:
-  version: 1.11
-  json: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.json'
-  js: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.js'
+singbox-extra:
+  version: 1.15-pre
+  json: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.json'
+  js: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.js'
 
 # 以下配置查看sub-store相关的教程：https://hub.docker.com/r/xream/sub-store
 # sub-store同步gist定时任务

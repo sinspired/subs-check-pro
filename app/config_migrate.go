@@ -21,7 +21,9 @@ type singBoxConfigUnified struct {
 // 仅解析迁移相关字段
 type migrateConfigView struct {
 	SingboxLatest singBoxConfigUnified `yaml:"singbox-latest"`
-	SingboxOld    singBoxConfigUnified `yaml:"singbox-old"`
+	SingboxExtra  singBoxConfigUnified `yaml:"singbox-extra"`
+
+	SingboxOld singBoxConfigUnified `yaml:"singbox-old"`
 
 	SubProcess struct {
 		ResolveDomain any `yaml:"resolve-domain"`
@@ -82,23 +84,53 @@ func (app *App) migrateConfig() error {
 				},
 			}
 
-			content = rewriteSingboxBlock(content, "singbox-latest", newCfg)
+			content = rewriteSingboxBlock(content, "singbox-latest", "singbox-latest", newCfg)
 			needWrite = true
 			migrated = append(migrated, "singbox")
 		}
 
 	}
 
-	// singbox-old：仅当版本 ≤ 1.11 才提示用户
+	// singbox-old → extra 配置
+	// singbox-old → singbox-extra 配置迁移
 	if view.SingboxOld.Version != "" {
-		oldMajor, oldMinor := parseVersion(view.SingboxOld.Version)
+		oldVer := strings.TrimSpace(view.SingboxOld.Version)
+		oldJSON := extractString(view.SingboxOld.JSON)
+		oldJS := extractString(view.SingboxOld.JS)
 
-		// 用户主动填写 >1.11 的版本（例如 1.12），说明有需求 → 不提示
-		if oldMajor == 1 && oldMinor <= 11 {
-			slog.Warn("singbox-old 版本 1.11 已从 App Store 下架")
-			slog.Info("sing-box MT 版本 1.14 已于 2026-8-31 上架 App Store")
-			slog.Info("建议尽快移除 sing-box 1.11 配置，使用新版本")
+		isOfficialJSON := strings.Contains(oldJSON, "sinspired/sub-store-template")
+		isOfficialJS := strings.Contains(oldJS, "sinspired/sub-store-template")
+
+		oldMajor, oldMinor := parseVersion(oldVer)
+
+		var newCfg singBoxConfigV1
+
+		// 如果是官方 1.11 → 升级到 1.15-pre
+		if oldMajor == 1 && oldMinor == 11 && (isOfficialJSON || isOfficialJS) {
+			slog.Info("singbox-old 配置迁移到 singbox-extra (1.15.x)")
+			newCfg = singBoxConfigV1{
+				Version: "1.15-pre",
+				JSON: []string{
+					"https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.json",
+				},
+				JS: []string{
+					"https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.js",
+				},
+			}
+		} else {
+			// 保持原版本，只改 key 名
+			newCfg = singBoxConfigV1{
+				Version: oldVer,
+				JSON:    []string{oldJSON},
+				JS:      []string{oldJS},
+			}
 		}
+
+		// 重写块：把 singbox-old 改成 singbox-extra
+		content = rewriteSingboxBlock(content, "singbox-old", "singbox-extra", newCfg)
+
+		needWrite = true
+		migrated = append(migrated, "singbox-extra")
 	}
 
 	// resolve-domain 布尔 → 新对象格式迁移（含注释）
@@ -204,55 +236,95 @@ func extractString(v any) string {
 	return ""
 }
 
-// rewriteSingboxBlock 在原始 yaml 文本中找到指定 singbox 块，
-// 将其 json/js 写法替换为字符串写法，其余内容保持不变。
-func rewriteSingboxBlock(content, blockKey string, v1 singBoxConfigV1) string {
+// rewriteSingboxBlock 在原始 yaml 文本中找到指定 singbox 块并替换。
+func rewriteSingboxBlock(content, blockKey, newBlockKey string, v1 singBoxConfigV1) string {
 	lines := strings.Split(content, "\n")
+	var newLines []string
 
-	// 找到块的起始行
-	blockStart := -1
-	for i, line := range lines {
-		if strings.TrimSpace(line) == blockKey+":" {
-			blockStart = i
-			break
-		}
-	}
-	if blockStart < 0 {
-		return content
-	}
+	inBlock := false
+	blockIndent := -1
 
-	blockIndent := len(lines[blockStart]) - len(strings.TrimLeft(lines[blockStart], " \t"))
-
-	for i := blockStart + 1; i < len(lines); i++ {
+	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-
-		indent := len(line) - len(strings.TrimLeft(line, " \t"))
-		if indent <= blockIndent {
-			break
-		}
-
 		trimmed := strings.TrimSpace(line)
-		keyIndent := strings.Repeat(" ", indent)
 
-		switch {
-		case strings.HasPrefix(trimmed, "version:"):
-			lines[i] = keyIndent + "version: \"" + v1.Version + "\""
+		// 匹配目标块的起始位置
+		if !inBlock && trimmed == blockKey+":" {
+			inBlock = true
+			blockIndent = len(line) - len(strings.TrimLeft(line, " \t"))
 
-		case strings.HasPrefix(trimmed, "json:"):
-			lines[i] = keyIndent + "json: " + v1.JSON[0]
-
-		case strings.HasPrefix(trimmed, "js:"):
-			lines[i] = keyIndent + "js: " + v1.JS[0]
-
-		default:
+			// 原地安全重命名 BlockKey，不影响前面的缩进
+			if newBlockKey != "" && blockKey != newBlockKey {
+				line = strings.Replace(line, blockKey+":", newBlockKey+":", 1)
+			}
+			newLines = append(newLines, line)
 			continue
 		}
+
+		if inBlock {
+			if trimmed == "" {
+				newLines = append(newLines, line)
+				continue
+			}
+
+			indent := len(line) - len(strings.TrimLeft(line, " \t"))
+			// 缩进回到或小于块起始级别，说明已离开该区块
+			if indent <= blockIndent {
+				inBlock = false
+			} else {
+				keyIndent := strings.Repeat(" ", indent)
+				switch {
+				case strings.HasPrefix(trimmed, "version:"):
+					newLines = append(newLines, keyIndent+"version: \""+v1.Version+"\"")
+					continue
+
+				case strings.HasPrefix(trimmed, "json:"):
+					newLines = append(newLines, keyIndent+"json: "+v1.JSON[0])
+					// 清除多行数组残余
+					i = skipArrayElements(lines, i+1, indent)
+					continue
+
+				case strings.HasPrefix(trimmed, "js:"):
+					newLines = append(newLines, keyIndent+"js: "+v1.JS[0])
+					// 清除多行数组残余
+					i = skipArrayElements(lines, i+1, indent)
+					continue
+
+				default:
+					newLines = append(newLines, line)
+					continue
+				}
+			}
+		}
+
+		// 不在修改目标块内的，原样保留
+		newLines = append(newLines, line)
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(newLines, "\n")
+}
+
+// skipArrayElements 用于向后探测并跳过属于原 json/js 的列表元素 (如 `- url...`)
+func skipArrayElements(lines []string, startIndex int, keyIndent int) int {
+	lastIndex := startIndex - 1
+	for j := startIndex; j < len(lines); j++ {
+		line := lines[j]
+		if strings.TrimSpace(line) == "" {
+			lastIndex = j
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+
+		// 如果是 `- xxx` 列表项且缩进 >= key，或是单纯因为折行导致的更大缩进，都认为是同一级配置，予以前跳。
+		isListItem := strings.HasPrefix(strings.TrimSpace(line), "-")
+		if (isListItem && indent >= keyIndent) || indent > keyIndent {
+			lastIndex = j
+			continue
+		}
+		// 遇到新的同级或上级 key，停止跳过
+		break
+	}
+	return lastIndex
 }
 
 // rewriteResolveDomain resolve-domain: bool → 新对象格式迁移（标准 YAML 注释风格）

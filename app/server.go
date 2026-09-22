@@ -478,7 +478,7 @@ func (app *App) updateConfig(c *gin.Context) {
 	doSub := !reflect.DeepEqual(newConfig.SubProcess, config.GlobalConfig.SubProcess)
 	doMihomo := newConfig.MihomoOverwriteURL != config.GlobalConfig.MihomoOverwriteURL
 	doLatest := !reflect.DeepEqual(newConfig.SingboxLatest, config.GlobalConfig.SingboxLatest)
-	doOld := !reflect.DeepEqual(newConfig.SingboxOld, config.GlobalConfig.SingboxOld)
+	doOld := !reflect.DeepEqual(newConfig.SingboxExtra, config.GlobalConfig.SingboxExtra)
 
 	if err := os.WriteFile(app.configPath, []byte(req.Content), 0o644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置文件失败" + err.Error()})
@@ -497,7 +497,7 @@ func (app *App) updateConfig(c *gin.Context) {
 	hasSubStoreSync := doSub || doMihomo || doLatest || doOld
 	needGetGhProxy := (doMihomo && !isAllLocal(newConfig.MihomoOverwriteURL)) ||
 		(doLatest && !isAllLocal(newConfig.SingboxLatest.JS, newConfig.SingboxLatest.JSON)) ||
-		(doOld && !isAllLocal(newConfig.SingboxOld.JS, newConfig.SingboxOld.JSON))
+		(doOld && !isAllLocal(newConfig.SingboxExtra.JS, newConfig.SingboxExtra.JSON))
 
 	// 在保存接口内直接启动异步无阻塞 goroutine，彻底剔除前端发起的更新 api 和轮询开销
 	if hasSubStoreSync {
@@ -522,7 +522,7 @@ func (app *App) updateConfig(c *gin.Context) {
 					targets = append(targets, substore.SingboxName+newConfig.SingboxLatest.Version)
 				}
 				if doOld {
-					targets = append(targets, substore.SingboxName+newConfig.SingboxOld.Version)
+					targets = append(targets, substore.SingboxName+newConfig.SingboxExtra.Version)
 				}
 
 				// 打印日志，格式如: msg="已触发 Sub-Store 后台同步" name="sub丨mihomo"
@@ -582,7 +582,7 @@ func (app *App) getStatus(c *gin.Context) {
 
 		"subStorePort":  config.GlobalConfig.SubStorePort,
 		"subStorePath":  config.GlobalConfig.SubStorePath,
-		"singboxOld":    substore.OldSingboxVersion,
+		"singboxExtra":    substore.ExtraSingboxVersion,
 		"singboxLatest": substore.LatestSingboxVersion,
 	})
 }
@@ -761,7 +761,7 @@ func (app *App) getOriginVersion(c *gin.Context) {
 }
 
 func (app *App) getSingboxVersions(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"latest": substore.LatestSingboxVersion, "old": substore.OldSingboxVersion})
+	c.JSON(http.StatusOK, gin.H{"latest": substore.LatestSingboxVersion, "extra": substore.ExtraSingboxVersion})
 }
 
 // ReadLastNLines 读取最新日志
