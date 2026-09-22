@@ -264,10 +264,9 @@ func (app *App) formatNextRunTime(next time.Time, loc *time.Location) string {
 	if next.IsZero() {
 		return "未计划"
 	}
-	zoneName, offset := next.Zone()
-	return fmt.Sprintf("%s %s UTC%+d",
+	_, offset := next.Zone()
+	return fmt.Sprintf("%s UTC%+d",
 		next.In(loc).Format("2006-01-02 15:04:05"),
-		zoneName,
 		offset/3600,
 	)
 }
