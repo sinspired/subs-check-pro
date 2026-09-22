@@ -109,7 +109,7 @@ jobs:
         uses: sinspired/multi-release-notify@v1
         with:
           summary: >-
-            高性能代理测活|测速|媒体解锁检测内核，v3 不再依赖 Node！
+            高性能代理测活|测速|媒体解锁检测内核，提供 `Android 手机` 和 `Windows` `Linux` `Mac` 应用和 `Docker` 镜像。
           release_notes: ${{ steps.release.outputs.notes }}
 
           email_url: ${{ secrets.EMAIL_APPRISE_URL }}
