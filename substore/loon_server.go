@@ -37,7 +37,7 @@ func NewLoonServer(addr string, engine *LoonEngine, frontendDir, backendPath str
 	return s
 }
 
-// UpdateEngine 用新引擎原子替换旧引擎，旧引擎里尚未完成的请求继续用旧的执行，
+// UpdateEngine 用新引擎原子替换旧引擎，旧引擎里尚未完成的请求继续用旧的执行
 func (s *LoonServer) UpdateEngine(e *LoonEngine) {
 	s.engine.Store(e)
 }
@@ -71,7 +71,7 @@ func (s *LoonServer) handle(w http.ResponseWriter, r *http.Request) {
 		s.handleBackend(w, r)
 		return
 	}
-	
+
 	s.handleFrontend(w, r)
 }
 
@@ -87,12 +87,20 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 		headers[k] = strings.Join(v, ", ")
 	}
 
-	// 剥离安全前缀，构造供脚本内部匹配的绝对 URL
+	// 剥离安全前缀，构造供脚本内部路由匹配的路径 (如 /api/sync)
 	strippedPath := strings.TrimPrefix(r.URL.Path, s.backendPath)
 	if strippedPath == "" || !strings.HasPrefix(strippedPath, "/") {
 		strippedPath = "/" + strippedPath
 	}
-	fullURL := "https://sub.store" + strippedPath
+
+	// 动态判断 Scheme (兼容 TLS 和 Nginx 等反向代理)
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+
+	// 3. 构造完整 URL：依赖真实请求的 r.Host
+	fullURL := scheme + "://" + r.Host + strippedPath
 	if r.URL.RawQuery != "" {
 		fullURL += "?" + r.URL.RawQuery
 	}
@@ -104,12 +112,9 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 		Body:    string(bodyBytes),
 	}
 
+	// 4. 处理跨域 Origin 标识
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
 		origin = scheme + "://" + r.Host
 	}
 	argument := "cors=" + url.QueryEscape(origin)
@@ -174,15 +179,15 @@ func (s *LoonServer) Start() error {
 			slog.Error("Sub-Store(Loon) 服务异常退出", "error", err)
 		}
 	}()
-	
+
 	// 自己给自己发个 OPTIONS 请求，收到回复才算真正的完全启动
 	tcpAddr, ok := ln.Addr().(*net.TCPAddr)
 	if ok {
 		client := &http.Client{Timeout: 100 * time.Millisecond}
 		probeURL := fmt.Sprintf("http://127.0.0.1:%d/", tcpAddr.Port)
-		
+
 		started := false
-		for i := 0; i < 20 && !started; i++ { 
+		for i := 0; i < 20 && !started; i++ {
 			req, _ := http.NewRequest(http.MethodOptions, probeURL, nil)
 			if resp, err := client.Do(req); err == nil {
 				resp.Body.Close()
