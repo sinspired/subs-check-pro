@@ -517,8 +517,6 @@ func processSubscription(
 		return false
 	}
 
-	filterTypes := config.GlobalConfig.NodeType
-
 	var (
 		rawHits      int // 层 1：解析阶段产出的候选节点数（可能含同订阅内跨解析器重复，见 parse/stream.go）
 		validCount   int // 层 2：通过类型/端口校验、实际发往全局去重队列的节点数（去重前）
@@ -542,13 +540,31 @@ func processSubscription(
 	// 注意：这只是「同一订阅内」的去重；跨订阅去重由消费者侧全局 map 负责。
 	seenInSub := make(map[string]struct{}, 256)
 
+	filterTypes := config.GlobalConfig.NodeType
+
 	// handle 既用作 ParseSubscriptionDataStream 的 yield 回调，也用于处理兜底正则提取出的节点
 	handle := func(node map[string]any) bool {
 		rawHits++
 
 		// 类型过滤
+		// 动态判断虚拟类型，专供 filterTypes 过滤使用
+		virtualType, _ := node["type"].(string)
+		if virtualType == "http" {
+			isTLS := false
+			if tlsVal, ok := node["tls"].(bool); ok && tlsVal {
+				isTLS = true
+			} else if secVal, ok := node["security"].(string); ok && secVal == "tls" {
+				isTLS = true
+			}
+
+			if isTLS {
+				virtualType = "https"
+			}
+		}
+
+		// 2. 类型过滤（基于 virtualType，精准区分 http 和 https）
 		if len(filterTypes) > 0 {
-			if t, ok := node["type"].(string); ok && !lo.Contains(filterTypes, t) {
+			if virtualType == "" || !lo.Contains(filterTypes, virtualType) {
 				typeFiltered++
 				return true
 			}
