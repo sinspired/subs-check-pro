@@ -24,8 +24,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/samber/lo v1.53.0
 	github.com/sinspired/checkip v0.5.3
-	github.com/sinspired/subs-check-pro-webui v1.3.3
-	github.com/wailsapp/wails/v3 v3.0.0-beta.24
+	github.com/sinspired/subs-check-pro-webui v1.3.4
+	github.com/wailsapp/wails/v3 v3.0.0-beta.25
 	golang.org/x/net v0.59.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -49,7 +49,7 @@ require (
 	github.com/davidmz/go-pageant v1.0.2 // indirect
 	github.com/dunglas/httpsfv v1.1.2 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
-	github.com/easytier/easytier/easytier-go v0.0.0-20260919154446-8d200c26d723 // indirect
+	github.com/easytier/easytier/easytier-go v0.0.0-20260924040536-ff3921ce6842 // indirect
 	github.com/enfein/mieru/v3 v3.37.0 // indirect
 	github.com/ericlagergren/aegis v0.0.0-20250325060835-cd0defd64358 // indirect
 	github.com/ericlagergren/polyval v0.0.0-20230805202542-18692a1b76f9 // indirect
