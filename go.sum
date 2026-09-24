@@ -330,8 +330,8 @@ github.com/sina-ghaderi/rabaead v0.0.0-20220730151906-ab6e06b96e8c h1:DjKMC30y6y
 github.com/sina-ghaderi/rabaead v0.0.0-20220730151906-ab6e06b96e8c/go.mod h1:NV/a66PhhWYVmUMaotlXJ8fIEFB98u+c8l/CQIEFLrU=
 github.com/sina-ghaderi/rabbitio v0.0.0-20220730151941-9ce26f4f872e h1:ur8uMsPIFG3i4Gi093BQITvwH9znsz2VUZmnmwHvpIo=
 github.com/sina-ghaderi/rabbitio v0.0.0-20220730151941-9ce26f4f872e/go.mod h1:+e5fBW3bpPyo+3uLo513gIUblc03egGjMM0+5GKbzK8=
-github.com/sinspired/checkip v0.5.3 h1:esSnsq/2mxVZrWfCkEAhUJgij+jAMy89IJy+O3PhS8o=
-github.com/sinspired/checkip v0.5.3/go.mod h1:YN9g9B/RLXALA0h17qpK6SOZIeg+c0iMknHIkjYewqc=
+github.com/sinspired/checkip v0.5.4 h1:0oRABIGV5ucp9ZBxZuSKOtBOGKi8AiNmHnthhbGwnJk=
+github.com/sinspired/checkip v0.5.4/go.mod h1:bLaDeobpiwXZ2J5wXekSnpDBLv7J5LOLxnzJ4A1grrM=
 github.com/sinspired/subs-check-pro-webui v1.3.4 h1:SHlnUn/Od7c/1uQHrOhkGSTiLiALPRsoVYl70VS10EI=
 github.com/sinspired/subs-check-pro-webui v1.3.4/go.mod h1:rg8DBZnTSh5/5tHCwQJrMVX6tKqqI5m8BrTT+gCB92M=
 github.com/sirupsen/logrus v1.10.2 h1:G2SED73/qrAu6YwbdxOD6peLkCBI3z7L+ykJFTXJBBo=
