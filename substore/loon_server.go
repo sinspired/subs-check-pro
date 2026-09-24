@@ -176,7 +176,7 @@ func (s *LoonServer) Start() error {
 	}
 	go func() {
 		if err := s.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
-			slog.Error("Sub-Store(Loon) 服务异常退出", "error", err)
+			slog.Error("Sub-Store(SCP) 服务异常退出", "error", err)
 		}
 	}()
 

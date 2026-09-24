@@ -289,7 +289,7 @@ func startSubStore(ctx context.Context) error {
 	// 这里调用 Start() 时，内部会进行端口绑定和 HTTP 探活
 	if err := server.Start(); err != nil {
 		IsSubStoreRunning.Store(false)
-		return fmt.Errorf("启动 Sub-Store(Loon) 服务失败: %w", err)
+		return fmt.Errorf("启动 Sub-Store(SCP) 服务失败: %w", err)
 	}
 
 	currentLoonServer.Store(server)
