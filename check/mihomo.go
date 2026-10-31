@@ -65,6 +65,16 @@ func SetupMihomoDNS() {
 
 	// 4. 解析 proxy-server-nameserver-policy
 	if len(config.GlobalConfig.ProxyServerNameserverPolicy) > 0 {
+		if len(config.GlobalConfig.ProxyServerNameserver) == 0 {
+			// 需设置 nameserver，节点 DNS 策略才能生效
+			nameServers := []string{"114.114.114.114", "8.8.8.8", "https://dns.alidns.com/dns-query", "1.1.8.8"}
+			if parsedProxy, err := dns.ParseNameServer(nameServers); err == nil {
+				cfg.ProxyServer = parsedProxy
+			} else {
+				slog.Warn("未设置 nameserver，节点 DNS 策略无法生效", "error", err)
+			}
+		}
+
 		for domainStr, v := range config.GlobalConfig.ProxyServerNameserverPolicy {
 			// 兼容单条 string 或 多条 []string
 			var servers []string
