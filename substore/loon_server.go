@@ -202,16 +202,18 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 		var envData map[string]any
 		if err := json.Unmarshal([]byte(resp.Body), &envData); err == nil {
 			if data, ok := envData["data"].(map[string]any); ok {
+
+				// 由于已在 Sub-Store 后端处理，已提 PR，不需要再额外处理
 				// 强制解锁前端的分享(Share)和归档(Archive) UI
-				if feature, ok := data["feature"].(map[string]any); ok {
-					feature["share"] = true
-					feature["archive"] = true
-				} else {
-					data["feature"] = map[string]any{
-						"share":   true,
-						"archive": true,
-					}
-				}
+				// if feature, ok := data["feature"].(map[string]any); ok {
+				// 	feature["share"] = true
+				// 	feature["archive"] = true
+				// } else {
+				// 	data["feature"] = map[string]any{
+				// 		"share":   true,
+				// 		"archive": true,
+				// 	}
+				// }
 
 				meta, _ := data["meta"].(map[string]any)
 				if meta == nil {
