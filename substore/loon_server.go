@@ -22,6 +22,11 @@ import (
 	"github.com/sinspired/subs-check-pro/v3/config"
 )
 
+type cachedResponse struct {
+	resp      *LoonHTTPResponse
+	expiresAt time.Time
+}
+
 // LoonServer 现在只持有单个 engine
 // engine 用 atomic.Pointer 存放，支持资产更新后不重启进程即可热替换。
 type LoonServer struct {
@@ -37,6 +42,9 @@ type LoonServer struct {
 	// inflight 用于并发请求合并：多个相同的订阅请求只会触发一次底层的脚本执行
 	inflightMu sync.Mutex
 	inflight   map[string]*inflightCall
+
+	// 结果缓存器
+	responseCache sync.Map
 }
 
 type inflightCall struct {
@@ -359,6 +367,15 @@ func (s *LoonServer) Shutdown(ctx context.Context) error {
 // 调用方等待结果时仍会响应自身的 clientCtx：客户端断开只会让它提前返回，
 // 后台脚本继续跑完，结果由 Sub-Store 自身缓存，供下一次请求（或定时缓存任务）命中。
 func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req *LoonHTTPRequest, argument string) (*LoonHTTPResponse, error) {
+	// 1. 拦截缓存
+	if val, ok := s.responseCache.Load(key); ok {
+		cached := val.(cachedResponse)
+		if time.Now().Before(cached.expiresAt) {
+			return cached.resp, nil
+		}
+		s.responseCache.Delete(key)
+	}
+
 	s.inflightMu.Lock()
 	call, ok := s.inflight[key]
 	if !ok {
@@ -375,9 +392,18 @@ func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req 
 				s.inflightMu.Unlock()
 				close(call.done)
 			}()
+
 			// 使用与连接脱钩的 baseCtx 执行
 			call.resp, call.err = engine.Execute(s.baseCtx, req, argument)
-			// 记录由于客户端断开导致的后台执行错误，避免错误被静默吞噬
+
+			// 2. 仅对成功的脱机任务结果进行 60 秒短效缓存（解决 Singbox 刷新重试超时）
+			if call.err == nil && call.resp != nil && call.resp.Status >= 200 && call.resp.Status < 400 {
+				s.responseCache.Store(key, cachedResponse{
+					resp:      call.resp,
+					expiresAt: time.Now().Add(60 * time.Second),
+				})
+			}
+
 			if call.err != nil {
 				slog.Debug("后台脱机任务执行失败", "url", req.URL, "err", call.err)
 			}

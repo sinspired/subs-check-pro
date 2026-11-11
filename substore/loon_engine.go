@@ -168,6 +168,42 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 
 		globals := ctx.Globals()
 
+		// 注入 Go 层 Base64 编解码器，提高 QuickJS 下纯 JS TextDecoder 性能
+		globals.Set("__go_base64_to_string", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+			if len(args) == 0 {
+				return ctx.String("")
+			}
+			b64 := args[0].String()
+
+			// 快速清洗非标准字符
+			b64 = strings.Map(func(r rune) rune {
+				if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '+' || r == '/' || r == '=' {
+					return r
+				}
+				return -1
+			}, b64)
+
+			// 自动补齐 Padding，防 Go 严格解析崩溃
+			pad := len(b64) % 4
+			if pad > 0 {
+				b64 += strings.Repeat("=", 4-pad)
+			}
+
+			data, err := base64.StdEncoding.DecodeString(b64)
+			if err != nil {
+				return ctx.String("")
+			}
+			return ctx.String(string(data))
+		}))
+
+		globals.Set("__go_string_to_base64", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+			if len(args) == 0 {
+				return ctx.String("")
+			}
+			str := args[0].String()
+			return ctx.String(base64.StdEncoding.EncodeToString([]byte(str)))
+		}))
+
 		// 注入 Go 原生的加密级安全随机数，供 QuickJS 的 crypto.getRandomValues 使用
 		globals.Set("__go_crypto_get_random_values", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
 			if len(args) == 0 {

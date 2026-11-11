@@ -5,6 +5,11 @@
     if (!g.TextEncoder) {
         g.TextEncoder = class TextEncoder {
             encode(str) {
+                // 尝试调用 Go 层编码器
+                if (typeof __go_string_to_base64 === 'function') {
+                    let b64 = __go_string_to_base64(str);
+                    return __base64_to_uint8array(b64);
+                }
                 let arr = [];
                 for (let i = 0; i < str.length; i++) {
                     let code = str.charCodeAt(i);
@@ -24,6 +29,10 @@
         g.TextDecoder = class TextDecoder {
             decode(arr) {
                 if (!arr) return "";
+                // 如果有原始的 base64 字符串记录，直接抛给 Go 层 CGO 解码
+                if (arr.__orig_b64 && typeof __go_base64_to_string === 'function') {
+                    return __go_base64_to_string(arr.__orig_b64);
+                }
                 let str = "";
                 for (let i = 0; i < arr.length; i++) {
                     let c = arr[i];
@@ -174,7 +183,10 @@ function __base64_to_uint8array(b64) {
     }
 
     // 强制转换为 Buffer，确保内部兼容 Node 原生库的包解析 API
-    return typeof Buffer !== 'undefined' ? Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength) : u8;
+    let res = typeof Buffer !== 'undefined' ? Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength) : u8;
+    // 保留特征值，供 TextDecoder 快速逃逸至原生解码
+    res.__orig_b64 = b64;
+    return res;
 }
 
 function __uint8array_to_base64(u8) {
