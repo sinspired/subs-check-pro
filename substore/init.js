@@ -1,10 +1,88 @@
 // sub_store\init.js
 
+// Web API Polyfill
+(function (g) {
+    if (!g.TextEncoder) {
+        g.TextEncoder = class TextEncoder {
+            encode(str) {
+                let arr = [];
+                for (let i = 0; i < str.length; i++) {
+                    let code = str.charCodeAt(i);
+                    if (code < 0x80) arr.push(code);
+                    else if (code < 0x800) arr.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+                    else if (code < 0xd800 || code >= 0xe000) arr.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+                    else {
+                        i++; code = 0x10000 + (((code & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
+                        arr.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+                    }
+                }
+                return new Uint8Array(arr);
+            }
+        };
+    }
+    if (!g.TextDecoder) {
+        g.TextDecoder = class TextDecoder {
+            decode(arr) {
+                if (!arr) return "";
+                let str = "";
+                for (let i = 0; i < arr.length; i++) {
+                    let c = arr[i];
+                    if (c < 0x80) str += String.fromCharCode(c);
+                    else if (c > 0xbf && c < 0xe0) { str += String.fromCharCode(((c & 0x1f) << 6) | (arr[i + 1] & 0x3f)); i++; }
+                    else if (c > 0xdf && c < 0xf0) { str += String.fromCharCode(((c & 0x0f) << 12) | ((arr[i + 1] & 0x3f) << 6) | (arr[i + 2] & 0x3f)); i += 2; }
+                    else {
+                        let code = (((c & 0x07) << 18) | ((arr[i + 1] & 0x3f) << 12) | ((arr[i + 2] & 0x3f) << 6) | (arr[i + 3] & 0x3f)) - 0x10000;
+                        str += String.fromCharCode(0xd800 | (code >> 10), 0xdc00 | (code & 0x3ff)); i += 3;
+                    }
+                }
+                return str;
+            }
+        };
+    }
+    if (!g.crypto) g.crypto = {};
+    if (!g.crypto.getRandomValues) {
+        g.crypto.getRandomValues = function (arr) {
+            if (typeof __go_crypto_get_random_values === 'function') {
+                let b64 = __go_crypto_get_random_values(arr.length);
+                let _b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                let _b64tab = new Uint8Array(256);
+                for (let i = 0; i < _b64chars.length; i++) _b64tab[_b64chars.charCodeAt(i)] = i;
+
+                b64 = b64.replace(/[^A-Za-z0-9\+\/\=]/g, '');
+                let bufLen = (b64.length * 3) / 4;
+                if (b64.charAt(b64.length - 1) === '=') bufLen--;
+                if (b64.length > 1 && b64.charAt(b64.length - 2) === '=') bufLen--;
+
+                let u8 = new Uint8Array(bufLen);
+                let i = 0, j = 0;
+                while (i < b64.length) {
+                    let c1 = _b64tab[b64.charCodeAt(i++)];
+                    let c2 = _b64tab[b64.charCodeAt(i++)];
+                    let c3 = _b64tab[b64.charCodeAt(i++)];
+                    let c4 = _b64tab[b64.charCodeAt(i++)];
+                    let p = (c1 << 18) | (c2 << 12) | ((c3 !== undefined ? c3 : 0) << 6) | (c4 !== undefined ? c4 : 0);
+                    u8[j++] = (p >> 16) & 255;
+                    if (j < bufLen) u8[j++] = (p >> 8) & 255;
+                    if (j < bufLen) u8[j++] = p & 255;
+                }
+                arr.set(u8);
+            } else {
+                for (let i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256);
+            }
+            return arr;
+        };
+    }
+    if (!g.ReadableStream) g.ReadableStream = class ReadableStream { };
+    if (!g.TransformStream) g.TransformStream = class TransformStream { };
+    if (!g.Response) g.Response = class Response { };
+})(globalThis);
+
 // 接收 Go 层注入的常量字面量
 const $loon = __LOON_JSON_OBJ__;
 const $script = __SCRIPT_JSON_OBJ__;
 var $request = {};
 var $argument = "";
+
 
 const $persistentStore = {
     read: function (key) {

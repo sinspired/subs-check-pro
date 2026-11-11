@@ -103,6 +103,12 @@ func (s *LoonServer) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 规则 C：全局拦截 /share/ 和 /download/
+	// 防止 Sub-Store 官方前端在生成分享/下载链接时漏掉后端前缀导致 404 逃逸到前端
+	if strings.HasPrefix(path, "/share/") || strings.HasPrefix(path, "/download/") {
+		isBackend = true
+	}
+
 	if isBackend {
 		s.handleBackend(w, r)
 		return
@@ -159,8 +165,12 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 	// /api/utils/backup 和 /api/sync/artifacts 等云同步操作也解耦，保证即使前端超时断开，后台也能完整跑完备份逻辑。
 	detach := (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) &&
 		(strings.HasPrefix(strippedPath, "/download/") ||
+			strings.HasPrefix(strippedPath, "/share/") ||
 			strings.HasPrefix(strippedPath, "/api/utils/backup") ||
-			strings.HasPrefix(strippedPath, "/api/sync/artifacts"))
+			strings.HasPrefix(strippedPath, "/api/sync/artifacts") ||
+			strings.HasPrefix(strippedPath, "/api/file/") ||
+			strings.HasPrefix(strippedPath, "/download/sub") ||
+			strings.HasPrefix(strippedPath, "/download/collection"))
 
 	var resp *LoonHTTPResponse
 	if detach {
@@ -192,6 +202,17 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 		var envData map[string]any
 		if err := json.Unmarshal([]byte(resp.Body), &envData); err == nil {
 			if data, ok := envData["data"].(map[string]any); ok {
+				// 强制解锁前端的分享(Share)和归档(Archive) UI
+				if feature, ok := data["feature"].(map[string]any); ok {
+					feature["share"] = true
+					feature["archive"] = true
+				} else {
+					data["feature"] = map[string]any{
+						"share":   true,
+						"archive": true,
+					}
+				}
+
 				meta, _ := data["meta"].(map[string]any)
 				if meta == nil {
 					meta = make(map[string]any)

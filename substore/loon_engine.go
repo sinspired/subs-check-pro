@@ -4,6 +4,7 @@ package substore
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -166,6 +167,22 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 		reqIdCounter := 0
 
 		globals := ctx.Globals()
+
+		// 注入 Go 原生的加密级安全随机数，供 QuickJS 的 crypto.getRandomValues 使用
+		globals.Set("__go_crypto_get_random_values", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+			if len(args) == 0 {
+				return ctx.String("")
+			}
+			length := args[0].Int32()
+			if length <= 0 {
+				return ctx.String("")
+			}
+			buf := make([]byte, length)
+			if _, err := rand.Read(buf); err != nil {
+				return ctx.String("")
+			}
+			return ctx.String(base64.StdEncoding.EncodeToString(buf))
+		}))
 
 		globals.Set("__done", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
 			metaJson := "{}"
