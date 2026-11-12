@@ -1,4 +1,4 @@
-# update: 2026-10-19 13:07:47
+# update: 2026-11-12 14:35:33
 # repo: https://github.com/sinspired/subs-check-pro 内置规则
 
 log-level: error # 日志等级 silent/error/warning/info/debug
@@ -811,11 +811,11 @@ proxy-groups:
       - 'PROXY'
   - icon: https://testingcf.jsdelivr.net/gh/Orz-3/mini@master/Color/Google.png
     name: Google
-    type: fallback
+    type: select
     proxies:
+      - 'YouTube'
       - 'PROXY'
       - 'Gemini'
-      - 'YouTube'
       - 'AUTO'
       - 'HK-AUTO'
       - 'JP-AUTO'
@@ -826,9 +826,10 @@ proxy-groups:
     interval: 300
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
     name: YouTube
-    type: fallback
+    type: select
     proxies:
       - 'YouTube-AUTO'
+      - 'YouTube-CN'
       - 'Gemini'
       - 'AUTO'
       - 'HK-AUTO'
@@ -1083,9 +1084,21 @@ proxy-groups:
     expected-status: 204
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
     include-all: true
-    exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
+    exclude-filter: (?i)(Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置|-(CN|RU)(\||$))
     filter: (?i)(?=.*\bYoutube\b|youtube|YT|YouTube|流媒体)
     name: YouTube-AUTO
+    type: url-test
+    interval: 600
+    tolerance: 100
+    url: https://www.gstatic.com/generate_204
+    lazy: false
+    max-failed-times: 3
+    expected-status: 204
+  - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
+    include-all: true
+    exclude-filter: '(?i)(Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置)'
+    filter: '(?i)(?=.*(?:YouTube|YT|流媒体))(?=.*-CN(\||$))'
+    name: YouTube-CN
     type: url-test
     interval: 600
     tolerance: 100
