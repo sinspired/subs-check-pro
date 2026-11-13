@@ -204,9 +204,7 @@ async function operator(proxies = [], targetPlatform, context) {
           if (!isNaN(nextTime.getTime())) {
             const remainingHours = Math.ceil((nextTime.getTime() - Date.now()) / 3_600_000)
             if (remainingHours > 0) {
-              return remainingHours === 1
-                ? `1 小时后重置`
-                : `${hour} 点重置`
+              return remainingHours === 1 ? '1 小时后重置' : `${hour} 点重置`
             }
           }
         }
@@ -217,8 +215,97 @@ async function operator(proxies = [], targetPlatform, context) {
     return ''
   }
 
-  function buildNodeName(lastProxy, newName) {
-    const oldName = lastProxy?.name || ''
+  // 解析单节点质量：解锁数 -> 下载速度 -> 完整解锁质量 -> 丢包率
+  const RE_TAG_SPEED = /^([\d.]+)\s*(MB|KB)\/s$/i
+  const RE_TAG_LOSS = /^([\d.]+)%$/
+  const RE_TAG_YT = /^YT(?:⁻|-[A-Za-z0-9]+)?$/i
+  const RE_TAG_GM = /^GM(?:⁻)?(?:-[A-Za-z0-9]+)?$/i
+  const RE_TAG_TK = /^TK(?:-[A-Za-z0-9]+)?$/i
+
+  function evaluateNode(name = '') {
+    const segments = String(name).split('|')
+    const unlocked = new Set()
+    let speed = 0
+    let quality = 0
+    let loss = 999
+
+    for (let i = 1; i < segments.length; i++) {
+      const tok = segments[i].trim()
+      if (!tok) continue
+
+      const speedMatch = RE_TAG_SPEED.exec(tok)
+      if (speedMatch) {
+        const val = parseFloat(speedMatch[1])
+        speed = speedMatch[2].toUpperCase() === 'MB' ? val : val / 1024
+        continue
+      }
+
+      const lossMatch = RE_TAG_LOSS.exec(tok)
+      if (lossMatch) {
+        loss = parseFloat(lossMatch[1])
+        continue
+      }
+
+      if (tok === 'GPT⁺') {
+        unlocked.add('openai')
+        quality++
+      } else if (tok === 'GPT') {
+        unlocked.add('openai')
+      } else if (tok === 'CP') {
+        unlocked.add('copilot')
+        quality++
+      } else if (tok === 'CP⁻') {
+        unlocked.add('copilot')
+      } else if (tok === 'X') {
+        unlocked.add('x')
+        quality++
+      } else if (tok === 'NF') {
+        unlocked.add('netflix')
+        quality++
+      } else if (tok === 'D+') {
+        unlocked.add('disney')
+        quality++
+      } else if (RE_TAG_YT.test(tok)) {
+        unlocked.add('youtube')
+        if (!tok.includes('⁻')) quality++
+      } else if (RE_TAG_GM.test(tok)) {
+        unlocked.add('gemini')
+        if (!tok.includes('⁻')) quality++
+      } else if (RE_TAG_TK.test(tok)) {
+        unlocked.add('tiktok')
+        quality++
+      }
+    }
+
+    return { unlockCount: unlocked.size, speed, quality, loss }
+  }
+
+  function isBetterScore(a, b) {
+    if (!b) return true
+    if (a.unlockCount !== b.unlockCount) return a.unlockCount > b.unlockCount
+    if (a.speed !== b.speed) return a.speed > b.speed
+    if (a.quality !== b.quality) return a.quality > b.quality
+    return a.loss < b.loss
+  }
+
+  function pickBestTemplateNode(list, compatibleTypes) {
+    let bestProxy = null
+    let bestScore = null
+    // 倒序遍历：有标签时严格按最优胜出；若全无标签，自动回退到末位兼容节点
+    for (let i = list.length - 1; i >= 0; i--) {
+      const p = list[i]
+      if (!p || !compatibleTypes.has(p.type?.toLowerCase())) continue
+      const score = evaluateNode(p.name)
+      if (isBetterScore(score, bestScore)) {
+        bestProxy = p
+        bestScore = score
+      }
+    }
+    return { bestProxy, bestScore }
+  }
+
+  function buildNodeName(templateProxy, newName) {
+    const oldName = templateProxy?.name || ''
     const flagMatch = oldName.match(/\p{RI}{2}/u)
     const flag = flagMatch ? flagMatch[0] : ''
     return `♾️ ${newName}${flag ? ` [${flag}]` : ''}`
@@ -243,8 +330,7 @@ async function operator(proxies = [], targetPlatform, context) {
   if (args.hideExpire) {
     expires = undefined
   }
-  const date = expires
-    ? new Date(expires * 1000).toLocaleDateString('sv') // YYYY-MM-DD
+  const date = expires ? new Date(expires * 1000).toLocaleDateString('sv') // YYYY-MM-DD
     : ''
 
   let show = upload + download
@@ -283,9 +369,8 @@ async function operator(proxies = [], targetPlatform, context) {
   // 三端兼容协议白名单
   const COMPATIBLE_TYPES = new Set(['ss', 'trojan', 'vmess', 'vless'])
 
-  // proxies 的最后一项
-  const lastProxy = proxies[proxies.length - 1]
-  const canReuseLast = Boolean(lastProxy && COMPATIBLE_TYPES.has(lastProxy.type?.toLowerCase()))
+  // proxies 中选择解锁最全，下载速度最大的节点
+  const { bestProxy, bestScore } = pickBestTemplateNode(proxies, COMPATIBLE_TYPES)
 
   const dummyNode = {
     type: 'ss',
@@ -295,16 +380,19 @@ async function operator(proxies = [], targetPlatform, context) {
     password: 'password',
   }
 
-  const finalName = buildNodeName(lastProxy, name)
+  const finalName = buildNodeName(bestProxy, name)
   proxies.unshift({
-    ...(canReuseLast ? lastProxy : dummyNode),
+    ...(bestProxy || dummyNode),
     name: finalName,
   })
 
-  log(
-    `📊 订阅「${sub.name}」已添加信息节点：${finalName}` +
-    `（模板：${canReuseLast ? `复用末位 ${lastProxy.type}` : '兜底虚拟 ss'}，总节点 ${proxies.length}）`
-  )
+  const templateDesc = bestProxy
+    ? (bestScore.unlockCount > 0 || bestScore.speed > 0
+      ? `复用最优 ${bestProxy.type} 节点：「${bestProxy.name || '未命名'}」[解锁 ${bestScore.unlockCount}/8 | ${bestScore.speed.toFixed(1)}MB/s]`
+      : `复用 ${bestProxy.type} 节点：「${bestProxy.name || '未命名'}」`)
+    : '兜底虚拟 ss'
+
+  log(`📊 订阅「${sub.name}」已添加流量到期信息节点：${finalName} ➟ 模板：${templateDesc}，总节点 ${proxies.length}`)
 
   return proxies
 }
