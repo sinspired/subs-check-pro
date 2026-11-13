@@ -28,7 +28,7 @@
 async function operator(proxies = [], targetPlatform, context) {
   function log(msg, level = 'INFO') {
     const badge = level === 'ERROR' ? '❌ ' : level === 'WARN' ? '⚠️ ' : ''
-    const text = `[Sub-Info] ${badge}${msg}`
+    const text = `[注入流量信息节点] ${badge}${msg}`
     if (level === 'ERROR' && typeof console.error === 'function') console.error(text)
     else if (level === 'WARN' && typeof console.warn === 'function') console.warn(text)
     else console.log(text)
@@ -388,11 +388,12 @@ async function operator(proxies = [], targetPlatform, context) {
 
   const templateDesc = bestProxy
     ? (bestScore.unlockCount > 0 || bestScore.speed > 0
-      ? `复用最优 ${bestProxy.type} 节点：「${bestProxy.name || '未命名'}」[解锁 ${bestScore.unlockCount}/8 | ${bestScore.speed.toFixed(1)}MB/s]`
+      ? `检测到最优 ${bestProxy.type} 节点：${bestProxy.name || '未命名'} ➟ [解锁 ${bestScore.unlockCount}/8 | ${bestScore.speed.toFixed(1)}MB/s]`
       : `复用 ${bestProxy.type} 节点：「${bestProxy.name || '未命名'}」`)
     : '兜底虚拟 ss'
 
-  log(`📊 订阅「${sub.name}」已添加流量到期信息节点：${finalName} ➟ 模板：${templateDesc}，总节点 ${proxies.length}`)
+  log(`订阅「${sub.name}」共 ${proxies.length} 个节点，${templateDesc}`)
+  log(`订阅「${sub.name}」已添加流量到期信息节点：${finalName}`)
 
   return proxies
 }
