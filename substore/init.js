@@ -86,6 +86,79 @@
     if (!g.Response) g.Response = class Response { };
 })(globalThis);
 
+// 加速排序期间的正则重复匹配（解决内置 RegexSortOperator 在无 JIT 引擎下重复跑几十万次正则的问题）
+// 加速 RegexSortOperator：在 Array.prototype.sort 执行期间缓存 RegExp.prototype.test / String.prototype.search 结果
+(function () {
+    const _origSort = Array.prototype.sort;
+    const _origTest = RegExp.prototype.test;
+    const _origSearch = String.prototype.search;
+
+    let _sortDepth = 0;
+    let _regexTestCache = null;   // Map<RegExp, Map<string, boolean>>
+    let _regexSearchCache = null; // Map<RegExp, Map<string, number>>
+
+    RegExp.prototype.test = function (str) {
+        if (_regexTestCache === null) {
+            return _origTest.call(this, str);
+        }
+        let m = _regexTestCache.get(this);
+        if (m === undefined) {
+            if (!(this instanceof RegExp) || this.global || this.sticky) {
+                return _origTest.call(this, str);
+            }
+            m = new Map();
+            _regexTestCache.set(this, m);
+        }
+        const s = typeof str === 'string' ? str : String(str);
+        let hit = m.get(s);
+        if (hit !== undefined) return hit;
+        hit = _origTest.call(this, s);
+        m.set(s, hit);
+        return hit;
+    };
+
+    String.prototype.search = function (regexp) {
+        if (_regexSearchCache === null) {
+            return _origSearch.call(this, regexp);
+        }
+        let m = _regexSearchCache.get(regexp);
+        if (m === undefined) {
+            if (!(regexp instanceof RegExp) || regexp.global || regexp.sticky) {
+                return _origSearch.call(this, regexp);
+            }
+            m = new Map();
+            _regexSearchCache.set(regexp, m);
+        }
+        const s = typeof this === 'string' ? this : String(this);
+        let hit = m.get(s);
+        if (hit !== undefined) return hit;
+        hit = _origSearch.call(s, regexp);
+        m.set(s, hit);
+        return hit;
+    };
+
+    Array.prototype.sort = function (compareFn) {
+        if (typeof compareFn !== 'function' || this.length < 20) {
+            return _origSort.call(this, compareFn);
+        }
+        const isOuter = _sortDepth === 0;
+        _sortDepth++;
+        if (isOuter) {
+            _regexTestCache = new Map();
+            _regexSearchCache = new Map();
+        }
+        try {
+            return _origSort.call(this, compareFn);
+        } finally {
+            _sortDepth--;
+            if (isOuter) {
+                _regexTestCache = null;
+                _regexSearchCache = null;
+            }
+        }
+    };
+})();
+
 // 接收 Go 层注入的常量字面量
 const $loon = __LOON_JSON_OBJ__;
 const $script = __SCRIPT_JSON_OBJ__;

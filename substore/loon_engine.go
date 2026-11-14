@@ -527,6 +527,15 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 
 				if timing != nil && timing.start.Unix() > 0 {
 					timing.total = time.Since(timing.start)
+					if e.netDebug {
+						e.logger.Info("底层HTTP分段耗时",
+							"url", opts.URL,
+							"dnsMs", timing.dnsDone.Sub(timing.dnsStart).Milliseconds(),
+							"tcpMs", timing.connectDone.Sub(timing.connectStart).Milliseconds(),
+							"ttfbMs", timing.gotFirstByte.Sub(timing.start).Milliseconds(),
+							"totalMs", timing.total.Milliseconds(),
+						)
+					}
 				}
 
 				if err != nil {
