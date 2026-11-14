@@ -21,6 +21,7 @@ $execName = "subs-check-pro"
 function Set-CrossCompiler($goos, $goarch) {
     # 引入 quickjs-go 后，所有平台都必须开启 CGO
     $env:CGO_ENABLED = "1"
+    $env:CGO_CFLAGS = "-O3"
 
     # 检查 Zig 是否存在
     if (-not (Get-Command zig -ErrorAction SilentlyContinue)) {

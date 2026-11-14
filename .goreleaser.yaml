@@ -70,6 +70,7 @@ builds:
     binary: subs-check-pro
     env:
       - CGO_ENABLED=1
+      - CGO_CFLAGS=-O3
       # 使用镜像内置的 Linux GNU 编译器
       - CC={{ if eq .Arch "amd64" }}x86_64-linux-gnu-gcc{{ else if eq .Arch "arm64" }}aarch64-linux-gnu-gcc{{ else }}arm-linux-gnueabihf-gcc{{ end }}
       - CXX={{ if eq .Arch "amd64" }}x86_64-linux-gnu-g++{{ else if eq .Arch "arm64" }}aarch64-linux-gnu-g++{{ else }}arm-linux-gnueabihf-g++{{ end }}
@@ -91,6 +92,7 @@ builds:
     binary: subs-check-pro
     env:
       - CGO_ENABLED=1
+      - CGO_CFLAGS=-O3
       # 使用镜像内置的 MinGW 编译器
       - CC={{ if eq .Arch "amd64" }}x86_64-w64-mingw32-gcc{{ else if eq .Arch "arm64" }}/llvm-mingw/bin/aarch64-w64-mingw32-gcc{{ else }}i686-w64-mingw32-gcc{{ end }}
       - CXX={{ if eq .Arch "amd64" }}x86_64-w64-mingw32-g++{{ else if eq .Arch "arm64" }}/llvm-mingw/bin/aarch64-w64-mingw32-g++{{ else }}i686-w64-mingw32-g++{{ end }}
@@ -109,6 +111,7 @@ builds:
     binary: subs-check-pro
     env:
       - CGO_ENABLED=1
+      - CGO_CFLAGS=-O3
       # 使用 OSXCross (苹果跨平台编译器)，镜像内自带了 Apple SDK
       - CC={{ if eq .Arch "amd64" }}o64-clang{{ else }}oa64-clang{{ end }}
       - CXX={{ if eq .Arch "amd64" }}o64-clang++{{ else }}oa64-clang++{{ end }}
