@@ -1,6 +1,6 @@
 //go:build windows
 
-package assets
+package substore
 
 import (
 	"os/exec"

@@ -11,15 +11,15 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/goccy/go-yaml"
-	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/config"
+	"github.com/sinspired/subs-check-pro/v2/substore"
 	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
 // initConfigPath 初始化配置文件路径
 func (app *App) initConfigPath() error {
 	if app.configPath == "" {
-		execPath := utils.GetExecutablePath()
+		execPath := utils.GetPrivateStorageDir()
 		configDir := filepath.Join(execPath, "config")
 
 		if err := os.MkdirAll(configDir, 0o755); err != nil {
@@ -237,9 +237,15 @@ func (app *App) onConfigChange() {
 
 	oldUpdateSwitcher := config.GlobalConfig.EnableSelfUpdate
 	oldCronCheckUpdateExpr := config.GlobalConfig.CronCheckUpdate
+	oldUpgradeToV3 := config.GlobalConfig.UpgradeToV3
 	oldSubStoreUpdateCron := config.GlobalConfig.SubStoreUpdateCron
 	oldSubStorePath := config.GlobalConfig.SubStorePath
 	oldSubStorePort := config.GlobalConfig.SubStorePort
+
+	// 记录旧的 Sub-Store 定时同步任务配置
+	oldSubStoreSyncCron := config.GlobalConfig.SubStoreSyncCron
+	oldSubStoreProduceCron := config.GlobalConfig.SubStoreProduceCron
+	oldSubStorePushService := config.GlobalConfig.SubStorePushService
 
 	if err := app.loadConfig(); err != nil {
 		slog.Error("重新加载配置文件失败", "error", err)
@@ -247,6 +253,7 @@ func (app *App) onConfigChange() {
 	}
 
 	// 去掉开头的冒号，统一格式
+	oldSubStorePort = strings.TrimPrefix(oldSubStorePort, ":")
 	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
 	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
 
@@ -258,6 +265,7 @@ func (app *App) onConfigChange() {
 		)
 		slog.Error("SubStore 服务因端口冲突禁用，请修改端口配置")
 		config.GlobalConfig.SubStorePort = ""
+		subStorePort = ""
 	}
 
 	if config.GlobalConfig.APIKey == "" {
@@ -274,74 +282,75 @@ func (app *App) onConfigChange() {
 		}
 	}
 
+	needStartSubStore := false
+	needRestartSubStore := false
+
 	switch {
-	case oldSubStorePort != "" && config.GlobalConfig.SubStorePort != "" && oldSubStorePort != config.GlobalConfig.SubStorePort:
-		// 端口变更 → 重启
-		slog.Debug("重启 sub-store（端口变更）")
-		if app.cancel != nil && !app.checking.Load() {
-			app.cancel()
-			time.Sleep(500 * time.Millisecond)
-			if err := assets.KillNode(); err != nil {
-				slog.Error("强制清理 node 失败", "err", err)
-			}
-			app.ctx, app.cancel = context.WithCancel(context.Background())
-		}
-		go assets.RunSubStoreService(app.ctx)
+	case oldSubStorePort != "" && subStorePort != "" && oldSubStorePort != subStorePort:
+		slog.Info("Sub-Store 端口变更", "old", oldSubStorePort, "new", subStorePort)
+		needRestartSubStore = true
 
-	case oldSubStorePort == "" && config.GlobalConfig.SubStorePort != "":
-		// 首次配置端口 → 启动
+	case oldSubStorePort == "" && subStorePort != "":
 		slog.Debug("启动 sub-store")
-		go assets.RunSubStoreService(app.ctx)
+		needStartSubStore = true
 
-	case oldSubStorePort != "" && config.GlobalConfig.SubStorePort == "":
-		// 端口被清空 → 停止
-		slog.Debug("停止 sub-store（端口已清空）")
-		if app.cancel != nil && !app.checking.Load() {
-			app.cancel()
-			app.ctx, app.cancel = context.WithCancel(context.Background())
+	case oldSubStorePort != "" && subStorePort == "":
+		if err := substore.StopSubStore(); err != nil {
+			slog.Error("停止 Sub-Store 服务失败", "error", err)
 		}
+		slog.Info("Sub-Store 服务已禁用", "port", "未设置")
 	}
 
 	// 去掉开头斜杠以进行比对
 	oldSubStorePath = strings.TrimPrefix(oldSubStorePath, "/")
 	config.GlobalConfig.SubStorePath = strings.TrimPrefix(config.GlobalConfig.SubStorePath, "/")
 
-	// 如果sub-store路径变化，重启sub-store服务
+	// 处理 sub-store 路径变化
 	if config.GlobalConfig.SubStorePath == "" {
 		if subStorePath := os.Getenv("SUB_STORE_PATH"); subStorePath != "" {
 			if subStorePath != oldSubStorePath {
 				slog.Info("从环境变量获取sub-store路径", "sub-store-path", subStorePath)
 				config.GlobalConfig.SubStorePath = subStorePath
-				// 重启sub-store服务
-				if app.cancel != nil {
-					app.cancel()
-					app.ctx, app.cancel = context.WithCancel(context.Background())
-				}
-				go assets.RunSubStoreService(app.ctx)
+				needRestartSubStore = true
 			}
 		} else {
-			if assets.InitSubStorePath != "" {
-				slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
+			if substore.InitSubStorePath != "" {
+				slog.Warn("Sub-Store 路径清空，将使用随机路径")
 				config.GlobalConfig.SubStorePath = utils.GenerateRandomString(20)
 				slog.Info("已随机生成", "sub-store-path", config.GlobalConfig.SubStorePath)
-
-				if app.cancel != nil {
-					app.cancel()
-					app.ctx, app.cancel = context.WithCancel(context.Background())
-				}
-				go assets.RunSubStoreService(app.ctx)
+				needRestartSubStore = true
 			} else {
 				config.GlobalConfig.SubStorePath = oldSubStorePath
 				slog.Debug("保留首次运行自动生成的sub-store路径", "sub-store-path", config.GlobalConfig.SubStorePath)
 			}
 		}
 	} else if oldSubStorePath != config.GlobalConfig.SubStorePath {
-		slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
-		if app.cancel != nil {
-			app.cancel()
-			app.ctx, app.cancel = context.WithCancel(context.Background())
+		slog.Warn("sub-store路径发生变化", "path", config.GlobalConfig.SubStorePath)
+		needRestartSubStore = true
+	}
+
+	// 检查 Sub-Store 定时任务或推送配置是否变化（Node 版需重启生效）
+	cronChanged := oldSubStoreSyncCron != config.GlobalConfig.SubStoreSyncCron ||
+		oldSubStoreProduceCron != config.GlobalConfig.SubStoreProduceCron ||
+		oldSubStorePushService != config.GlobalConfig.SubStorePushService
+	if cronChanged {
+		slog.Warn("Sub-Store 定时同步任务设置变化，重新配置 Sub-Store 定时同步任务")
+		if !needStartSubStore && !needRestartSubStore && subStorePort != "" {
+			substore.ReloadSubStoreCronJobs()
 		}
-		go assets.RunSubStoreService(app.ctx)
+	}
+
+	// 统一执行启停/重启（仅当 Sub-Store 处于启用状态时）
+	if subStorePort != "" {
+		if needStartSubStore {
+			// 若首次启用，InitSingboxVersion 也建议在此兜底调用一次
+			substore.InitSingboxVersion()
+			go substore.RunSubStoreService(app.ctx)
+		} else if needRestartSubStore {
+			if err := substore.ReStartSubStore(app.ctx); err != nil {
+				slog.Error("Sub-Store 重启失败", "error", err)
+			}
+		}
 	}
 
 	// 检查测活/测速调度（主测速流程调度）是否发生变化
@@ -364,10 +373,25 @@ func (app *App) onConfigChange() {
 		slog.Warn("版本更新设置变化，重新配置主程序定时更新任务")
 		app.UpdateSelfUpdateCron()
 	}
+	
+	if oldUpgradeToV3 != config.GlobalConfig.UpgradeToV3 {
+		if config.GlobalConfig.UpgradeToV3 {
+			slog.Warn("已开启 upgrade-to-v3，允许检测 >= v2（含 v3）版本更新")
+		} else {
+			slog.Warn("已关闭 upgrade-to-v3，仅检测 v2 版本更新")
+		}
+		app.runStartupUpdateCheck()
+	}
 
 	// 检查后台 Sub-Store 资源更新任务是否发生变化
 	if oldSubStoreUpdateCron != config.GlobalConfig.SubStoreUpdateCron {
-		slog.Warn("Sub-Store 资源更新设置变化，重新配置 Sub-Store 定时更新任务")
+		slog.Warn("Sub-Store 资源更新设置变化，重新配置 Sub-Store 定时资源更新任务")
 		app.UpdateSubStoreCron()
+	}
+
+	// 检查 Sub-Store 原生定时任务（Gist 同步和缓存更新）是否发生变化
+	if oldSubStoreSyncCron != config.GlobalConfig.SubStoreSyncCron || oldSubStoreProduceCron != config.GlobalConfig.SubStoreProduceCron {
+		slog.Warn("Sub-Store 定时同步任务设置变化，重新配置 Sub-Store 定时同步任务")
+		substore.ReloadSubStoreCronJobs()
 	}
 }

@@ -1,4 +1,4 @@
-package assets
+package substore
 
 import (
 	"archive/zip"
@@ -17,6 +17,8 @@ import (
 	"github.com/sinspired/subs-check-pro/v2/config"
 	"github.com/sinspired/subs-check-pro/v2/utils"
 )
+
+const subStoreAssetName = "sub-store.bundle.js"
 
 // SubStoreUpdateResult 包含了 Sub-Store 资产更新的结果信息
 type SubStoreUpdateResult struct {
@@ -91,6 +93,7 @@ func newSubStoreUpdater() *subStoreUpdater {
 	// 继承 DefaultTransport 的优良特性(超时、连接池等)，而不是用空结构体
 	directTransport := http.DefaultTransport.(*http.Transport).Clone()
 	directTransport.Proxy = nil
+	directTransport.ResponseHeaderTimeout = 20 * time.Second
 
 	proxyTransport := directTransport.Clone()
 	useSysProxy := utils.GetSysProxy()
@@ -106,8 +109,8 @@ func newSubStoreUpdater() *subStoreUpdater {
 	}
 
 	return &subStoreUpdater{
-		proxyClient:  &http.Client{Transport: proxyTransport, Timeout: 30 * time.Second},
-		directClient: &http.Client{Transport: directTransport, Timeout: 30 * time.Second},
+		proxyClient:  &http.Client{Transport: proxyTransport, Timeout: 3 * time.Minute},
+		directClient: &http.Client{Transport: directTransport, Timeout: 3 * time.Minute},
 		useSysProxy:  useSysProxy,
 	}
 }
@@ -230,52 +233,89 @@ func UpdateSubStoreAssets() (*SubStoreUpdateResult, error) {
 
 	updater := newSubStoreUpdater()
 	result := &SubStoreUpdateResult{}
+	var errs []string
 
-	// 更新后端
-	result.UpdatedBackend, result.NewBackendVer = updater.updateComponent(
-		"后端", "sub-store-org/Sub-Store", "sub-store.bundle.js", getLocalJSVersion(paths.jsPath),
-		func(dlURL, version string) error { return updater.downloadFile(dlURL, paths.jsPath, "下载后端") },
+	// 定义后端版本号文件路径，和 JS 处于同一目录
+	backendVerPath := filepath.Join(filepath.Dir(paths.jsPath), "backend.version")
+	localBVerBytes, _ := os.ReadFile(backendVerPath)
+	localBVer := strings.TrimSpace(string(localBVerBytes))
+	if localBVer == "" {
+		localBVer = getLocalJSVersion(paths.jsPath)
+	}
+
+	updBackend, newBVer, errB := updater.updateComponent(
+		"后端", "sub-store-org/Sub-Store", subStoreAssetName, localBVer,
+		func(dlURL, version string) error {
+			if err := updater.downloadFile(dlURL, paths.jsPath, "下载后端"); err != nil {
+				return err
+			}
+			// 下载成功后，写入 backend.version
+			return os.WriteFile(backendVerPath, []byte(version), 0644)
+		},
 	)
+	if errB != nil {
+		errs = append(errs, errB.Error())
+	} else {
+		result.UpdatedBackend = updBackend
+		result.NewBackendVer = newBVer
+	}
 
 	// 更新前端
 	localFVerBytes, _ := os.ReadFile(filepath.Join(paths.frontDir, "frontend.version"))
-	result.UpdatedFrontend, result.NewFrontendVer = updater.updateComponent(
-		"前端", "sub-store-org/Sub-Store-Front-End", "dist.zip", string(localFVerBytes),
+	updFront, newFVer, errF := updater.updateComponent(
+		"前端", "sub-store-org/Sub-Store-Front-End", "dist.zip", strings.TrimSpace(string(localFVerBytes)),
 		func(dlURL, version string) error {
 			if err := updater.extractRemoteZipToPath(dlURL, paths.frontDir, "下载前端"); err != nil {
 				return err
 			}
-			// 使用显式传入的 version 写入，不再依赖延迟赋值的 result
 			return os.WriteFile(filepath.Join(paths.frontDir, "frontend.version"), []byte(version), 0644)
 		},
 	)
+	if errF != nil {
+		errs = append(errs, errF.Error())
+	} else {
+		result.UpdatedFrontend = updFront
+		result.NewFrontendVer = newFVer
+	}
+
+	// 内嵌 Node 版无法热重载 JS 引擎：只要后端脚本更新成功且服务正在运行，就重启 Node 进程
+	if result.UpdatedBackend {
+		if restartErr := RestartIfRunning(); restartErr != nil {
+			errs = append(errs, fmt.Sprintf("重启 Sub-Store 后端失败: %v", restartErr))
+		}
+	}
+
+	if len(errs) > 0 {
+		return result, errors.New(strings.Join(errs, "；"))
+	}
 
 	return result, nil
 }
 
 // updateComponent 抽象的通用组件更新流 (增加 tag 参数向下传递)
-func (u *subStoreUpdater) updateComponent(name, repo, assetName, localVerRaw string, downloadAction func(dlURL, tag string) error) (bool, string) {
+func (u *subStoreUpdater) updateComponent(name, repo, assetName, localVerRaw string, downloadAction func(dlURL, tag string) error) (bool, string, error) {
 	tag, dlURL, err := u.getLatestRelease(repo, assetName)
 	if err != nil {
-		slog.Error(fmt.Sprintf("获取 Sub-Store %s 版本失败", name), "error", err)
-		return false, ""
+		err = fmt.Errorf("获取 Sub-Store %s 版本失败: %w", name, err)
+		slog.Error(err.Error())
+		return false, "", err
 	}
 
 	localVer, remoteVer := parseVersion(localVerRaw), parseVersion(tag)
 	if remoteVer == nil || (localVer != nil && !remoteVer.GreaterThan(localVer)) {
-		return false, "" // 无需更新
+		return false, "", nil
 	}
 
 	slog.Info(fmt.Sprintf("Sub-Store %s 有新版", name), "local", localVer, "remote", tag)
 
-	// 将获取到的 tag 传给闭包函数
 	if err := downloadAction(dlURL, tag); err != nil {
-		slog.Error(fmt.Sprintf("更新 Sub-Store %s 失败", name), "error", err)
-		return false, ""
+		err = fmt.Errorf("更新 Sub-Store %s 失败: %w", name, err)
+		slog.Error(err.Error())
+		return false, "", err
 	}
 
 	slog.Info(fmt.Sprintf("Sub-Store %s 已更新", name), "version", tag)
-	return true, tag
+	return true, tag, nil
 }
 
 // getLatestRelease 智能获取代理后的下载地址，包含 API 请求防挂回退
@@ -320,15 +360,26 @@ func (u *subStoreUpdater) downloadFile(rawURL, path, title string) error {
 	}
 	defer resp.Body.Close()
 
-	outFile, err := os.Create(path)
+	// 使用 .tmp 后缀进行下载替换原子化
+	// 避免断网/下载失败时提前清空了原后端文件导致 Sub-Store JS 运行环境受损崩溃
+	tmpPath := path + ".tmp"
+	outFile, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
 
-	// 显示下载进度
 	_, err = io.Copy(outFile, &progressReader{Reader: resp.Body, total: resp.ContentLength, title: title})
-	return err
+	outFile.Close() // 必须先释放文件句柄
+
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("下载进度中断: %w", err)
+	}
+	// 覆写
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("替换新版本失败: %w", err)
+	}
+	return nil
 }
 
 // extractRemoteZipToPath 下载并解压
@@ -340,7 +391,11 @@ func (u *subStoreUpdater) extractRemoteZipToPath(rawURL string, targetDir string
 	defer resp.Body.Close()
 
 	// 将下载流写入临时文件，避免将整个 ZIP 文件读入内存(防止低配设备 OOM)
-	tmpFile, err := os.CreateTemp("", "substore-front-*.zip")
+	parentDir := filepath.Dir(targetDir)
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		return fmt.Errorf("创建前端上级目录失败: %w", err)
+	}
+	tmpFile, err := os.CreateTemp(parentDir, "substore-front-*.zip")
 	if err != nil {
 		return err
 	}
@@ -353,36 +408,78 @@ func (u *subStoreUpdater) extractRemoteZipToPath(rawURL string, targetDir string
 		return fmt.Errorf("下载 ZIP 失败: %w", err)
 	}
 
-	// 从磁盘打开 ZIP 进行流式解压
-	zipReader, err := zip.OpenReader(tmpName)
+	return installFrontendZip(tmpName, targetDir)
+}
+
+// installFrontendZip 把前端 zip（内含 dist/ 目录）安装到 targetDir。
+// 拆成独立函数以便脱离网络做单元测试。
+func installFrontendZip(zipPath, targetDir string) error {
+	zipReader, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return fmt.Errorf("解析 ZIP 失败: %w", err)
 	}
 	defer zipReader.Close()
 
-	_ = os.RemoveAll(targetDir)
-	cleanTargetDir := filepath.Clean(targetDir) + string(os.PathSeparator)
+	// 先解压到暂存目录，成功后再整体替换，失败不影响现有前端
+	stageDir := targetDir + ".new"
+	oldDir := targetDir + ".old"
+	_ = os.RemoveAll(stageDir)
+	_ = os.RemoveAll(oldDir)
+	defer os.RemoveAll(stageDir) // 成功时 stageDir 已被改名，这里是 no-op；失败时负责清理
 
+	cleanStageDir := filepath.Clean(stageDir) + string(os.PathSeparator)
+	extracted := 0
 	for _, f := range zipReader.File {
 		if !strings.HasPrefix(f.Name, "dist/") || strings.TrimPrefix(f.Name, "dist/") == "" {
 			continue
 		}
 
-		targetPath := filepath.Join(targetDir, filepath.FromSlash(strings.TrimPrefix(f.Name, "dist/")))
-		if !strings.HasPrefix(targetPath, cleanTargetDir) {
+		targetPath := filepath.Join(stageDir, filepath.FromSlash(strings.TrimPrefix(f.Name, "dist/")))
+		if !strings.HasPrefix(targetPath, cleanStageDir) {
 			return fmt.Errorf("非法的文件路径穿越: %s", targetPath)
 		}
 
 		if f.FileInfo().IsDir() {
-			_ = os.MkdirAll(targetPath, 0755)
+			_ = os.MkdirAll(targetPath, 0o755)
 			continue
 		}
 
-		_ = os.MkdirAll(filepath.Dir(targetPath), 0755)
+		_ = os.MkdirAll(filepath.Dir(targetPath), 0o755)
 		if err := extractZipFile(f, targetPath); err != nil {
 			return err
 		}
+		extracted++
 	}
+	if extracted == 0 {
+		return fmt.Errorf("ZIP 中没有找到 dist/ 目录下的前端文件，已保留现有前端")
+	}
+
+	// scp/ 是本程序自带的图标资源，不在前端 zip 里，需带到新目录
+	scpOld, scpNew := filepath.Join(targetDir, "scp"), filepath.Join(stageDir, "scp")
+	scpMoved := false
+	if _, err := os.Stat(scpOld); err == nil {
+		if _, err := os.Stat(scpNew); os.IsNotExist(err) {
+			scpMoved = os.Rename(scpOld, scpNew) == nil
+		}
+	}
+	restoreScp := func() {
+		if scpMoved {
+			_ = os.Rename(scpNew, scpOld)
+		}
+	}
+
+	if _, err := os.Stat(targetDir); err == nil {
+		if err := os.Rename(targetDir, oldDir); err != nil {
+			restoreScp()
+			return fmt.Errorf("备份旧前端目录失败: %w", err)
+		}
+	}
+	if err := os.Rename(stageDir, targetDir); err != nil {
+		_ = os.Rename(oldDir, targetDir) // 回滚旧前端
+		restoreScp()
+		return fmt.Errorf("切换到新前端目录失败: %w", err)
+	}
+	_ = os.RemoveAll(oldDir)
 	return nil
 }
 

@@ -1,6 +1,6 @@
 //go:build linux
 
-package assets
+package substore
 
 import (
 	"os/exec"

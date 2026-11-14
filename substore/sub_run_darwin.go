@@ -1,6 +1,6 @@
 //go:build darwin
 
-package assets
+package substore
 
 import (
 	"os/exec"

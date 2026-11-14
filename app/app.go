@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -21,11 +20,11 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/robfig/cron/v3"
 	"github.com/sinspired/subs-check-pro/v2/app/monitor"
-	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/check"
 	"github.com/sinspired/subs-check-pro/v2/config"
 	proxyutils "github.com/sinspired/subs-check-pro/v2/proxy"
 	"github.com/sinspired/subs-check-pro/v2/save"
+	"github.com/sinspired/subs-check-pro/v2/substore"
 	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
@@ -74,6 +73,7 @@ type lastCheckResult struct {
 	duration  atomic.Int64
 	Total     atomic.Int64
 	available atomic.Int64
+	traffic   atomic.Int64
 }
 
 // New 创建新的应用实例
@@ -152,28 +152,23 @@ func (app *App) Initialize() error {
 	}
 
 	if config.GlobalConfig.SubStorePort != "" {
-		if runtime.GOOS == "linux" && runtime.GOARCH == "386" {
-			slog.Warn("Node.js 不支持 Linux 32位架构，Sub-Store 服务未启动")
+		// Sub-Store 服务启动时,Singbox 版本号才有意义
+		substore.InitSingboxVersion()
+
+		subStoreAddr := normalizeListenAddr(config.GlobalConfig.SubStorePort)
+		if !subStorePortAvailable {
+			substore.IsSubStoreRunning.Store(false)
+			slog.Warn("Sub-Store 端口已被其他进程占用，Sub-Store 服务未启动，请修改端口后重启",
+				"addr", subStoreAddr)
 		} else {
-
-			// Sub-Store 服务启动时,Singbox 版本号才有意义
-			utils.InitSingboxVersion()
-
-			subStoreAddr := normalizeListenAddr(config.GlobalConfig.SubStorePort)
-			if !subStorePortAvailable {
-				assets.IsSubStoreRunning.Store(false)
-				slog.Warn("Sub-Store 端口已被其他进程占用，Sub-Store 服务未启动，请修改端口后重启",
-					"addr", subStoreAddr)
-			} else {
-				// 使用 app.ctx 启动 sub-store，让其可被取消
-				go assets.RunSubStoreService(app.ctx)
-				// 短暂等待，保证 Sub-Store 启动日志按预期顺序输出
-				time.Sleep(500 * time.Millisecond)
-			}
+			// 使用 app.ctx 启动 sub-store，让其可被取消
+			go substore.RunSubStoreService(app.ctx)
+			// 短暂等待，保证 Sub-Store 启动日志按预期顺序输出
+			time.Sleep(500 * time.Millisecond)
 		}
 	} else {
 		slog.Warn("Sub-Store 服务已禁用", "port", "未设置")
-		assets.IsSubStoreRunning.Store(false)
+		substore.IsSubStoreRunning.Store(false)
 	}
 
 	// 启动内存监控
@@ -181,13 +176,14 @@ func (app *App) Initialize() error {
 
 	// 注册退出前清理逻辑（兜底）
 	utils.BeforeExitHook = func() {
-		NodeAlive, err := assets.FindNode()
-		if err == nil && NodeAlive {
-			slog.Warn("强制退出前，尝试清理 node 子进程")
-			if err := assets.KillNode(); err != nil {
-				slog.Error("强制清理 node 失败", "err", err)
+		// 检查内置 Sub-Store 服务是否仍在运行
+		if substore.IsSubStoreRunning.Load() {
+			slog.Warn("强制退出前，尝试关闭 Sub-Store 内置服务及释放端口")
+			if err := substore.StopSubStore(); err != nil {
+				slog.Error("强制停止 Sub-Store 服务失败", "err", err)
+			} else {
+				slog.Info("Sub-Store 服务已成功停止，端口已释放")
 			}
-			slog.Warn("程序未正常退出，强制停止")
 		}
 	}
 
@@ -268,10 +264,9 @@ func (app *App) formatNextRunTime(next time.Time, loc *time.Location) string {
 	if next.IsZero() {
 		return "未计划"
 	}
-	zoneName, offset := next.Zone()
-	return fmt.Sprintf("%s %s UTC%+d",
+	_, offset := next.Zone()
+	return fmt.Sprintf("%s UTC%+d",
 		next.In(loc).Format("2006-01-02 15:04:05"),
-		zoneName,
 		offset/3600,
 	)
 }
@@ -374,16 +369,21 @@ func (app *App) triggerCheck() {
 			slog.Info("下次检测时间", "time", app.formatNextRunTime(entries[0].Next, app.cron.Location()))
 		}
 	}
-	debug.FreeOSMemory()
 	check.CurrentStepName.Store("检测完成")
+
+	// 手动标记检测完成
+	app.checking.Store(false)
+
+	// 释放内存
+	releaseMemory()
 }
 
 // checkProxies 执行代理检测
 func (app *App) checkProxies() error {
 	if config.GlobalConfig.PrintProgress {
-		slog.Info("启动检测任务", "进度", "显示")
+		slog.Info("启动检测任务", "终端进度条", "显示")
 	} else {
-		slog.Info("启动检测任务", "进度", "隐藏")
+		slog.Info("启动检测任务", "终端进度条", "隐藏")
 	}
 
 	startTime := time.Now()
@@ -393,7 +393,7 @@ func (app *App) checkProxies() error {
 	check.StartProgress()
 	defer check.StopProgress()
 
-	results, err := check.Check()
+	results, historyNodes, err := check.Check()
 	if err != nil {
 		return fmt.Errorf("检测代理失败: %w", err)
 	}
@@ -401,10 +401,7 @@ func (app *App) checkProxies() error {
 	slog.Info("检测完成")
 
 	check.CurrentStepName.Store("保存配置")
-	save.SaveConfig(results)
-
-	check.CurrentStepName.Store("发送通知")
-	utils.SendNotifyCheckResult(len(results), check.CheckTrafficTotal)
+	save.SaveConfig(results, historyNodes)
 
 	check.CurrentStepName.Store("更新订阅")
 	utils.UpdateSubs()
@@ -422,11 +419,25 @@ func (app *App) checkProxies() error {
 	app.lastCheck.duration.Store(int64(endTime.Sub(startTime).Seconds()))
 	app.lastCheck.Total.Store(int64(check.ProxyCount.Load()))
 	app.lastCheck.available.Store(int64(len(results)))
+	app.lastCheck.traffic.Store(int64(check.TotalBytes.Load()))
 
-	check.CurrentStepName.Store("内存释放")
+	check.CurrentStepName.Store("发送通知")
+	utils.SendNotifyCheckResult(len(results), check.CheckTrafficTotal)
+
+	check.CurrentStepName.Store("清理检测缓存")
 	// 切断所有大对象的应用
 	results = nil //nolint:ineffassign
 	proxyutils.ClearCache()
+
+	// 每次运行清理旧缓存，防止多轮执行后失效订阅残留或混淆
+	proxyutils.SubStatsMutex.Lock()
+	proxyutils.SubStats = make(map[string]proxyutils.SubStat)
+	proxyutils.SubStatsMutex.Unlock()
+	return nil
+}
+
+// releaseMemory 释放mihomo检测内存
+func releaseMemory() {
 	cleanupMihomo()
 
 	// 等待底层 xhttp/tcp goroutine 退出释放缓冲区
@@ -446,7 +457,6 @@ func (app *App) checkProxies() error {
 		"HeapInuse", ms.HeapInuse/1024/1024,
 		"HeapReleased", ms.HeapReleased/1024/1024,
 		"Sys", ms.Sys/1024/1024)
-	return nil
 }
 
 // waitGoroutinesDrain 等待残留 goroutine 退出
@@ -481,11 +491,6 @@ func cleanupMihomo() {
 	resolver.ClearCache()
 }
 
-// TempLog 返回临时日志路径
-func TempLog() string {
-	return filepath.Join(os.TempDir(), "subs-check-pro.log")
-}
-
 // Shutdown 尝试优雅关闭所有子服务与资源
 func (app *App) Shutdown() error {
 	slog.Debug("开始关闭应用...")
@@ -500,6 +505,11 @@ func (app *App) Shutdown() error {
 	// 取消上下文，通知各子服务退出（sub-store 等）
 	if app.cancel != nil {
 		app.cancel()
+	}
+
+	// 确定性等待 Sub-Store 及其 Node 子进程退出并释放端口
+	if !substore.WaitSubStoreStopped(3 * time.Second) {
+		_ = substore.StopSubStore()
 	}
 
 	// 停止 ticker/cron/updateCron/watcher（如果存在）

@@ -1,4 +1,4 @@
-package assets
+package substore
 
 import (
 	"bytes"
@@ -15,20 +15,31 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/klauspost/compress/zstd"
 	"github.com/shirou/gopsutil/v4/process"
+	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/config"
 	"github.com/sinspired/subs-check-pro/v2/save/method"
 	"github.com/sinspired/subs-check-pro/v2/utils"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var InitSubStorePath = ""
-var IsSubStoreRunning atomic.Bool
+var (
+	InitSubStorePath  = ""
+	IsSubStoreRunning atomic.Bool
+
+	opMu           sync.Mutex         // 串行化 Stop / ReStart / Reload 操作
+	stateMu        sync.Mutex         // 仅保护下面几个状态字段，不跨越阻塞操作持有
+	serviceCancel  context.CancelFunc // 取消当前 Sub-Store 守护循环
+	serviceDone    chan struct{}      // 标识当前守护循环及 Node 子进程已完全退出
+	savedParentCtx context.Context    // 供无参 ReloadSubStoreCronJobs() 复用
+	currentNodePID atomic.Int32       // 精确记录当前子进程 PID
+)
 
 type subStorePaths struct {
 	substoreDir                       string
@@ -121,13 +132,31 @@ func logStop(port string) {
 	}
 }
 
-// RunSubStoreService 运行sub-store服务，支持 ctx，可被外部取消
+// RunSubStoreService 运行 sub-store 服务，支持 ctx，可被外部取消
 func RunSubStoreService(ctx context.Context) {
+	runSubStoreService(ctx, nil)
+}
+
+func runSubStoreService(parentCtx context.Context, ready chan<- struct{}) {
+	notifyReady := func() {
+		if ready != nil {
+			close(ready)
+			ready = nil
+		}
+	}
+
+	if parentCtx == nil {
+		IsSubStoreRunning.Store(false)
+		notifyReady()
+		return
+	}
+
 	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
 	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
 
 	if subStorePort == "" {
 		IsSubStoreRunning.Store(false)
+		notifyReady()
 		return
 	}
 
@@ -135,28 +164,72 @@ func RunSubStoreService(ctx context.Context) {
 	port, err := strconv.Atoi(subStorePort)
 	if err != nil || port < 1 || port > 65535 {
 		slog.Error("SubStore 端口不合法，请检查配置", "port", subStorePort)
+		IsSubStoreRunning.Store(false)
+		notifyReady()
 		return
 	}
 
 	if subStorePort == listenPort {
 		slog.Error("SubStore 服务因端口冲突禁用，请修改端口配置")
+		IsSubStoreRunning.Store(false)
+		notifyReady()
 		return
 	}
 
-	for {
-		if err := startSubStore(ctx); err != nil {
-			slog.Error("Sub-Store 服务崩溃, 正在重启...", "error", err)
-			IsSubStoreRunning.Store(false)
+	// 若之前已有未退出的实例，先安全停掉，避免双实例抢占端口
+	stateMu.Lock()
+	oldCancel := serviceCancel
+	oldDone := serviceDone
+	stateMu.Unlock()
+
+	if oldCancel != nil {
+		oldCancel()
+	}
+	if oldDone != nil {
+		select {
+		case <-oldDone:
+		case <-time.After(5 * time.Second):
+			slog.Warn("等待旧 Sub-Store 实例退出超时，尝试强制清理进程")
+			_ = KillNode()
 		}
+	}
+
+	// 派生独立子 ctx，使 Stop/ReStart 与 App 主 ctx 解耦
+	subCtx, cancel := context.WithCancel(parentCtx)
+	done := make(chan struct{})
+
+	stateMu.Lock()
+	savedParentCtx = parentCtx
+	serviceCancel = cancel
+	serviceDone = done
+	stateMu.Unlock()
+
+	notifyReady()
+
+	defer func() {
+		cancel()
+		stateMu.Lock()
+		if serviceDone == done {
+			serviceCancel = nil
+			serviceDone = nil
+		}
+		stateMu.Unlock()
+		IsSubStoreRunning.Store(false)
+		close(done)
+	}()
+
+	for {
+		if err := startSubStore(subCtx); err != nil && subCtx.Err() == nil {
+			slog.Error("Sub-Store 服务崩溃, 正在重启...", "error", err)
+		}
+		IsSubStoreRunning.Store(false)
 
 		select {
-		case <-ctx.Done():
+		case <-subCtx.Done():
 			subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
 			logStop(subStorePort)
-			IsSubStoreRunning.Store(false)
 			return
 		case <-time.After(3 * time.Second): // 缩短重启重试等待时间为 3 秒
-			IsSubStoreRunning.Store(true)
 		}
 	}
 }
@@ -203,8 +276,8 @@ func startSubStore(ctx context.Context) error {
 	if nodeBinPath := os.Getenv("NODEBIN_PATH"); nodeBinPath != "" {
 		nodePath = nodeBinPath
 	}
-	// 支持自定义sub-store脚本路径
-	if subStoreBinPath := os.Getenv("SUB_STORE_PATH"); subStoreBinPath != "" {
+	// 支持自定义 sub-store 脚本路径（避免与 API 路由前缀变量 SUB_STORE_PATH 冲突）
+	if subStoreBinPath := os.Getenv("SUB_STORE_SCRIPT_PATH"); subStoreBinPath != "" {
 		jsPath = subStoreBinPath
 	}
 
@@ -227,6 +300,10 @@ func startSubStore(ctx context.Context) error {
 		IsSubStoreRunning.Store(false)
 		return fmt.Errorf("启动 Sub-Store 失败: %w", err)
 	}
+
+	pid := int32(cmd.Process.Pid)
+	currentNodePID.Store(pid)
+	defer currentNodePID.CompareAndSwap(pid, 0)
 
 	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
 	slog.Info("Sub-Store 服务启动", "port", subStorePort, "pid", cmd.Process.Pid)
@@ -432,24 +509,38 @@ func extractAssets(paths *subStorePaths) error {
 	// 1. Node 二进制：通过检查文件是否存在及大小，避免每次启动重写（实现原 TODO），极大减少磁盘 IO
 	if info, err := os.Stat(paths.nodePath); os.IsNotExist(err) || info.Size() == 0 {
 		slog.Debug("正在释放 Node 环境...")
-		if err := atomicDecodeZstdToFile(EmbeddedNode, paths.nodePath, 0o755, "node 二进制文件"); err != nil {
+		if err := atomicDecodeZstdToFile(assets.EmbeddedNode, paths.nodePath, 0o755, "node 二进制文件"); err != nil {
 			return err
 		}
 	}
 
-	// 2. 后端 JS
-	embedBackendVer := parseVersion(extractVersionFromJS(EmbeddedSubStoreBackend))
-	localBackendVer := parseVersion(getLocalJSVersion(paths.jsPath))
-	shouldOverwriteBackend := localBackendVer == nil || (embedBackendVer != nil && embedBackendVer.GreaterThan(localBackendVer))
+	// 2. 后端 JS（优先读取 backend.version，兼容旧版从 JS 头部注释兜底读取）
+	backendVerPath := filepath.Join(paths.substoreDir, "backend.version")
+	embedBackendVer := parseVersion(extractVersionFromJS(assets.EmbeddedSubStoreBackend))
+
+	localBVerBytes, _ := os.ReadFile(backendVerPath)
+	localBackendVer := parseVersion(string(localBVerBytes))
+	if localBackendVer == nil {
+		localBackendVer = parseVersion(getLocalJSVersion(paths.jsPath))
+		// 历史文件存在版本注释但缺少 backend.version 时自动补齐，避免 sub_update 误判为首次下载
+		if localBackendVer != nil {
+			_ = os.WriteFile(backendVerPath, []byte(localBackendVer.String()), 0o644)
+		}
+	}
+
+	_, jsStatErr := os.Stat(paths.jsPath)
+	shouldOverwriteBackend := os.IsNotExist(jsStatErr) || localBackendVer == nil || (embedBackendVer != nil && embedBackendVer.GreaterThan(localBackendVer))
 
 	if shouldOverwriteBackend {
-		if err := writeEmbeddedFile(EmbeddedSubStoreBackend, paths.jsPath, 0o644, "Sub-Store 核心脚本"); err != nil {
+		if err := writeEmbeddedFile(assets.EmbeddedSubStoreBackend, paths.jsPath, 0o644, "Sub-Store 核心脚本"); err != nil {
 			return err
 		}
 		if embedBackendVer != nil {
+			if err := os.WriteFile(backendVerPath, []byte(embedBackendVer.String()), 0o644); err != nil {
+				return fmt.Errorf("写入后端版本文件失败: %w", err)
+			}
 			updatedLogs = append(updatedLogs, "后端", embedBackendVer.String())
 
-			// 优化日志：避免打印 <nil>
 			localStr := "未知/已损坏"
 			if localBackendVer != nil {
 				localStr = localBackendVer.String()
@@ -459,7 +550,7 @@ func extractAssets(paths *subStorePaths) error {
 	}
 
 	// 3. 前端资源
-	embedFVerBytes, _ := EmbeddedSubStoreFrontend.ReadFile("frontend/frontend.version")
+	embedFVerBytes, _ := assets.EmbeddedSubStoreFrontend.ReadFile("frontend/frontend.version")
 	embedFVer := parseVersion(string(embedFVerBytes))
 	localFVerBytes, _ := os.ReadFile(filepath.Join(paths.frontDir, "frontend.version"))
 	localFVer := parseVersion(string(localFVerBytes))
@@ -467,7 +558,7 @@ func extractAssets(paths *subStorePaths) error {
 
 	if shouldOverwriteFrontend {
 		_ = os.RemoveAll(paths.frontDir)
-		if err := extractFrontendFS(EmbeddedSubStoreFrontend, paths.frontDir); err != nil {
+		if err := extractFrontendFS(assets.EmbeddedSubStoreFrontend, paths.frontDir); err != nil {
 			return fmt.Errorf("解压前端资源失败: %w", err)
 		}
 		if embedFVer != nil {
@@ -484,15 +575,18 @@ func extractAssets(paths *subStorePaths) error {
 
 	// 4. 其他静态资源配置
 	assets := []embeddedAsset{
-		{EmbeddedSubsCheckProLogo, paths.subsCheckProLogoPath, "subs-check-pro svg logo"},
-		{EmbeddedSingBoxLogo, paths.singBoxLogoPath, "sing-box svg logo"},
-		{EmbeddedShadowrocketConfig, paths.shadowrocketConfigPath, "Shadowrocket 配置文件"},
-		{EmbeddedOverrideYamlACL4SSR, paths.overYamlACL4SSRPath, "ACL4SSR 配置文件"},
-		{EmbeddedOverrideYamlSinspiredRulesCDN, paths.overYamlSinspiredRulesCDNPath, "Sinspired CDN 配置"},
-		{EmbeddedOverrideYamlSinspiredRulesLiteCDN, paths.overYamlSinspiredRulesLiteCDNPath, "Sinspired Lite CDN 配置"},
+		{assets.EmbeddedSubsCheckProLogo, paths.subsCheckProLogoPath, "subs-check-pro svg logo"},
+		{assets.EmbeddedSingBoxLogo, paths.singBoxLogoPath, "sing-box svg logo"},
+		{assets.EmbeddedShadowrocketConfig, paths.shadowrocketConfigPath, "Shadowrocket 配置文件"},
+		{assets.EmbeddedOverrideYamlACL4SSR, paths.overYamlACL4SSRPath, "ACL4SSR 配置文件"},
+		{assets.EmbeddedOverrideYamlSinspiredRulesCDN, paths.overYamlSinspiredRulesCDNPath, "Sinspired CDN 配置"},
+		{assets.EmbeddedOverrideYamlSinspiredRulesLiteCDN, paths.overYamlSinspiredRulesLiteCDNPath, "Sinspired Lite CDN 配置"},
 	}
 
 	for _, asset := range assets {
+		if info, err := os.Stat(asset.path); err == nil && info.Size() == int64(len(asset.data)) {
+			continue
+		}
 		if err := writeEmbeddedFile(asset.data, asset.path, 0o644, asset.desc); err != nil {
 			return err
 		}
@@ -548,6 +642,15 @@ func FindNode() (bool, error) {
 
 // KillNode 杀掉 Node 进程
 func KillNode() error {
+	if pid := currentNodePID.Load(); pid > 0 {
+		if err := killProcess(pid); err == nil {
+			currentNodePID.CompareAndSwap(pid, 0)
+			IsSubStoreRunning.Store(false)
+			slog.Debug("Sub-Store 服务已通过 KillNode 强制终结", "pid", pid)
+			return nil
+		}
+	}
+
 	paths, err := getSubStorePaths()
 	if err != nil {
 		return err
@@ -597,4 +700,122 @@ func removeOldSinspiredFiles() {
 			}
 		}
 	}
+}
+
+// StopSubStore 优雅停止当前运行中的 Sub-Store 服务并等待子进程退出、端口释放
+func StopSubStore() error {
+	opMu.Lock()
+	defer opMu.Unlock()
+	return stopSubStoreLocked(5 * time.Second)
+}
+
+func stopSubStoreLocked(timeout time.Duration) error {
+	stateMu.Lock()
+	cancel := serviceCancel
+	done := serviceDone
+	stateMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+
+	if done != nil {
+		select {
+		case <-done:
+			slog.Info("Sub-Store 服务已停止")
+		case <-time.After(timeout):
+			slog.Warn("等待 Sub-Store 服务停止超时，尝试强制终止进程")
+			if err := KillNode(); err != nil {
+				return err
+			}
+			select {
+			case <-done:
+			case <-time.After(1 * time.Second):
+			}
+		}
+	} else if IsSubStoreRunning.Load() || currentNodePID.Load() > 0 {
+		if err := KillNode(); err != nil {
+			return err
+		}
+	}
+
+	IsSubStoreRunning.Store(false)
+	return nil
+}
+
+// WaitSubStoreStopped 确定性地等待当前 Sub-Store 实例（含 Node 进程）完全退出
+func WaitSubStoreStopped(timeout time.Duration) bool {
+	stateMu.Lock()
+	done := serviceDone
+	stateMu.Unlock()
+
+	if done == nil {
+		return !IsSubStoreRunning.Load() && currentNodePID.Load() == 0
+	}
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// ReStartSubStore 重启 Sub-Store 服务
+func ReStartSubStore(ctx context.Context) error {
+	opMu.Lock()
+	defer opMu.Unlock()
+
+	if err := stopSubStoreLocked(5 * time.Second); err != nil {
+		return err
+	}
+
+	if ctx == nil {
+		stateMu.Lock()
+		ctx = savedParentCtx
+		stateMu.Unlock()
+	}
+	if ctx == nil {
+		return fmt.Errorf("Sub-Store 尚未初始化上下文，无法重启")
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	ready := make(chan struct{})
+	go runSubStoreService(ctx, ready)
+	<-ready
+	return nil
+}
+
+// ReloadSubStoreCronJobs 重新加载 Sub-Store 定时任务配置。
+// Node 版本通过环境变量 SUB_STORE_BACKEND_SYNC_CRON / SUB_STORE_PRODUCE_CRON 注入，
+// 若服务正在运行则通过重启使新配置生效。
+func ReloadSubStoreCronJobs() {
+	stateMu.Lock()
+	running := serviceDone != nil
+	parentCtx := savedParentCtx
+	stateMu.Unlock()
+
+	if !running || parentCtx == nil {
+		return
+	}
+	if err := ReStartSubStore(parentCtx); err != nil {
+		slog.Error("重启 Sub-Store 以应用定时任务配置失败", "error", err)
+	}
+}
+
+// RestartIfRunning 若 Sub-Store 当前正在运行，则重启服务以加载磁盘上的新后端脚本
+func RestartIfRunning() error {
+	stateMu.Lock()
+	running := serviceDone != nil
+	parentCtx := savedParentCtx
+	stateMu.Unlock()
+
+	if !running || parentCtx == nil {
+		return nil
+	}
+
+	slog.Info("Sub-Store 后端 正在重启以应用新版本...")
+	return ReStartSubStore(parentCtx)
 }
