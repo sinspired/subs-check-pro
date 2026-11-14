@@ -1,5 +1,5 @@
 # ==============================================================================
-# Go 应用程序跨平台编译脚本 (PowerShell)
+# Go 应用程序跨平台编译脚本 (PowerShell) - Zig 交叉编译 (支持 QuickJS CGO)
 # ==============================================================================
 
 param(
@@ -7,7 +7,9 @@ param(
     [string]$Commit,
     [switch]$Clean,
     [switch]$Debug,
-    [switch]$Experiment
+    [switch]$Experiment,
+    [switch]$Win,
+    [switch]$Lin
 )
 
 # --- 1. 配置 ---
@@ -18,49 +20,53 @@ $execName = "subs-check-pro"
 # --- 2. 编译目标平台 ---
 $targets = @(
     @{ GOOS = "windows"; GOARCH = "amd64"; OutputFile = "$execName.exe" },
-    @{ GOOS = "windows"; GOARCH = "386";   OutputFile = "$execName.exe" },
-    @{ GOOS = "linux";   GOARCH = "amd64"; OutputFile = "$execName" },
-    @{ GOOS = "linux";   GOARCH = "arm64"; OutputFile = "$execName" },
-    @{ GOOS = "linux";   GOARCH = "arm";   OutputFile = "$execName" },
-    @{ GOOS = "darwin";  GOARCH = "amd64"; OutputFile = "$execName" },
-    @{ GOOS = "darwin";  GOARCH = "arm64"; OutputFile = "$execName" }
+    @{ GOOS = "windows"; GOARCH = "386"; OutputFile = "$execName.exe" },
+    @{ GOOS = "linux"; GOARCH = "amd64"; OutputFile = "$execName" },
+    @{ GOOS = "linux"; GOARCH = "arm64"; OutputFile = "$execName" },
+    @{ GOOS = "linux"; GOARCH = "arm"; OutputFile = "$execName" },
+    @{ GOOS = "darwin"; GOARCH = "amd64"; OutputFile = "$execName" },
+    @{ GOOS = "darwin"; GOARCH = "arm64"; OutputFile = "$execName" }
 )
 
-# 如果是 Debug 模式，只保留 Windows/amd64 和 Linux/amd64
+# Debug 模式
 if ($Debug) {
-    # Debug模式默认保留缓存
     $Clean = $false
 
-    $targets = @(
-        @{ GOOS = "linux";   GOARCH = "amd64"; OutputFile = "$execName" }
-        # @{ GOOS = "windows"; GOARCH = "amd64"; OutputFile = "$execName.exe" }
-        # @{ GOOS = "linux";   GOARCH = "arm64"; OutputFile = "$execName" }
-        # @{ GOOS = "linux";   GOARCH = "arm"; OutputFile = "$execName" }
-        # @{ GOOS = "windows"; GOARCH = "386"; OutputFile = "$execName.exe" }
-        # @{ GOOS = "darwin"; GOARCH = "amd64"; OutputFile = "$execName" }
-        # @{ GOOS = "darwin"; GOARCH = "arm64"; OutputFile = "$execName" }
-    )
-
-    # 动态生成目标平台描述，如 "windows/amd64, linux/amd64, windows/386"
-    $targetList = $targets | ForEach-Object { "$($_.GOOS)/$($_.GOARCH)" }
-    $targetText = $targetList -join ", "
-
-    Write-Host "🐞 Debug 模式，仅编译: $targetText" -ForegroundColor Blue
+    if ($Win -and -not $Lin) {
+        # 仅 Windows
+        $targets = @(
+            @{ GOOS = "windows"; GOARCH = "amd64"; OutputFile = "$execName.exe" }
+        )
+        Write-Host "🐞 Debug 模式，仅编译 Windows/amd64" -ForegroundColor Blue
+    }
+    elseif ($Lin -and -not $Win) {
+        # 仅 Linux
+        $targets = @(
+            @{ GOOS = "linux"; GOARCH = "amd64"; OutputFile = "$execName" }
+        )
+        Write-Host "🐞 Debug 模式，仅编译 Linux/amd64" -ForegroundColor Blue
+    }
+    else {
+        # 默认：Windows + Linux
+        $targets = @(
+            @{ GOOS = "linux"; GOARCH = "amd64"; OutputFile = "$execName" },
+            @{ GOOS = "windows"; GOARCH = "amd64"; OutputFile = "$execName.exe" }
+        )
+        Write-Host "🐞 Debug：默认 Win+Lin（单独编译用 -Win / -Lin）" -ForegroundColor Blue
+    }
 }
 
 # --- 3. 开始编译 ---
 Write-Host "🚀 开始交叉编译 Go 应用程序..." -ForegroundColor Cyan
+
 if ($Version -ne "") {
-    if ($Commit -ne "") {
-        Write-Host "🎫 指定编译版本：$Version-$Commit"
-    }
-    else {
+    if ($Commit -eq "") {
         $Commit = git rev-parse --short HEAD
-        Write-Host "🎫 指定编译版本：$Version-$Commit"
     }
+    Write-Host "🎫 指定编译版本：$Version-$Commit"
 }
 else {
-    Write-Host "🎫 未指定指定编译版本，默认为：dev-unknown"
+    Write-Host "🎫 未指定版本，默认为：dev-unknown"
 }
 
 if (-not (Test-Path $outputDir)) {
@@ -75,13 +81,14 @@ if ($Clean) {
     go clean -cache -r
 }
 
-# 启用实验特性: 绿茶垃圾回收器和 JSON v2 编码器
+# 启用实验特性
 if ($Experiment) {
-    Write-Host "🧪 启用实验特性: JSON v2 编码器" -ForegroundColor Yellow
-    $env:GOEXPERIMENT = "jsonv2"
+    # Write-Host "🧪 启用实验特性: JSON v2 编码器" -ForegroundColor Yellow
+    # $env:GOEXPERIMENT = "jsonv2"
 }
 
 $successALL = $true
+
 try {
     # 跨平台编译循环
     foreach ($target in $targets) {
@@ -91,11 +98,11 @@ try {
 
             # --- 架构映射：GOARCH → goreleaser 归档命名风格 ---
             switch ($target.GOARCH) {
-                "amd64"  { $archStr = "x86_64" }
-                "386"    { $archStr = "i386" }
-                "arm64"  { $archStr = "aarch64" }
-                "arm"    { $archStr = "armv7" }
-                default  { $archStr = $target.GOARCH }
+                "amd64" { $archStr = "x86_64" }
+                "386" { $archStr = "i386" }
+                "arm64" { $archStr = "aarch64" }
+                "arm" { $archStr = "armv7" }
+                default { $archStr = $target.GOARCH }
             }
 
             $platformIdentifier = "{0}_{1}" -f ($target.GOOS.Substring(0, 1).ToUpper() + $target.GOOS.Substring(1)), $archStr
@@ -118,15 +125,13 @@ try {
                 continue
             }
 
-            # Docker 兼容输出：bin/subs-check-pro-linux-{dockerArch}
-            # dockerArch 直接从 GOARCH 推导，linux/arm 对应 Docker 的 linux/arm/v7
-            # 仅 linux 平台需要输出，其他平台跳过
+            # Docker 兼容输出
             if ($target.GOOS -eq "linux") {
                 $dockerArch = switch ($target.GOARCH) {
-                    "amd64"  { "amd64" }
-                    "arm64"  { "arm64" }
-                    "arm"    { "arm" }
-                    default  { "" }
+                    "amd64" { "amd64" }
+                    "arm64" { "arm64" }
+                    "arm" { "arm" }
+                    default { "" }
                 }
                 if ($dockerArch -ne "") {
                     $dockerBin = Join-Path $outputDir "$execName-linux-$dockerArch"
@@ -135,16 +140,17 @@ try {
                 }
             }
 
-            # 打包可执行文件
-            $relativeArchivePath = Join-Path $relativeOutputDir "$archiveName.$archiveExt"
-            Write-Host "  -> 打包为: $relativeArchivePath" -ForegroundColor DarkGray
-            if ($target.GOOS -eq "windows") {
-                Compress-Archive -Path "$platformDir/subs-check-pro*" -DestinationPath $archivePath -Force
-            }
-            else {
-                Push-Location $outputDir
-                tar -czf $archivePath $platformIdentifier
-                Pop-Location
+            if (!$Debug) {
+                # 打包
+                Write-Host "  -> 打包为: $relativeOutputDir/$archiveName.$archiveExt" -ForegroundColor DarkGray
+                if ($target.GOOS -eq "windows") {
+                    Compress-Archive -Path "$platformDir/*" -DestinationPath $archivePath -Force
+                }
+                else {
+                    Push-Location $outputDir
+                    tar -czf $archivePath $platformIdentifier
+                    Pop-Location
+                }
             }
         }
         finally {
@@ -159,10 +165,10 @@ catch {
     Write-Host "❌ 编译过程中出现错误: $_" -ForegroundColor Red
 }
 finally {
-    # 循环结束后，清理全局实验性变量
     Write-Host "🧹 清理全局环境变量..." -ForegroundColor Yellow
     Remove-Item Env:GOEXPERIMENT -ErrorAction SilentlyContinue
     Remove-Item Env:GODEBUG -ErrorAction SilentlyContinue
+    Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue
 }
 
 if ($successALL) {

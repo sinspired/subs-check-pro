@@ -4,7 +4,7 @@ before:
   hooks:
     - go mod tidy
     - go get -u github.com/sinspired/subs-check-pro-webui
-    - go install github.com/tc-hib/go-winres@latest
+    - env GOBIN=/usr/local/bin go install github.com/tc-hib/go-winres@latest
     - go generate ./...
 
 release:
@@ -29,42 +29,43 @@ changelog:
   # 过滤掉不需要显示在日志中的提交
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^style:"
-      - "^Merge pull request"
-      - "^Merge branch"
-      - "go mod tidy"
+      - '^docs:'
+      - '^test:'
+      - '^style:'
+      - '^Merge pull request'
+      - '^Merge branch'
+      - 'go mod tidy'
       - "^(?i)chore\\(doc\\):" # 过滤单纯的 README 调整
 
-  format: "{{ .SHA }}: {{ .Message }}"
+  format: '{{ .SHA }}: {{ .Message }}'
   # 提交分组配置
   groups:
-    - title: "✨ 新功能"
+    - title: '✨ 新功能'
       # 匹配 feat: 或 feat(scope): 且不区分大小写
       regexp: "^(?i)feat(\\([\\w-]+\\))?:+.*$"
       order: 0
-    - title: "🐛 Bug 修复"
+    - title: '🐛 Bug 修复'
       # 匹配 fix: 或 fix(scope): 且不区分大小写
       regexp: "^(?i)fix(\\([\\w-]+\\))?:+.*$"
       order: 1
-    - title: "🚀 性能优化"
+    - title: '🚀 性能优化'
       # 匹配 perf: 或 perf(scope): 且不区分大小写
       regexp: "^(?i)perf(\\([\\w-]+\\))?:+.*$"
       order: 2
-    - title: "🔧 重构维护"
+    - title: '🔧 重构维护'
       # 匹配 refactor/chore/build/ci 及其带作用域的形式
       regexp: "^(?i)(chore|refactor|build|ci)(\\([\\w-]+\\))?:+.*$"
       order: 3
-    - title: "📝 文档更新"
+    - title: '📝 文档更新'
       regexp: "^(?i)docs(\\([\\w-]+\\))?:+.*$"
       order: 4
-    - title: "📦 其他"
+    - title: '📦 其他'
       order: 999
 
 # 构建配置
 builds:
   - id: subs-check-pro
+    binary: subs-check-pro
     env:
       - CGO_ENABLED=0
     targets:
@@ -78,7 +79,7 @@ builds:
       - darwin_arm64
       # openwrt / 路由器
       - linux_mipsle_softfloat
-    mod_timestamp: "{{ .CommitTimestamp }}"
+    mod_timestamp: '{{ .CommitTimestamp }}'
     flags:
       - -trimpath
     ldflags:
@@ -109,13 +110,13 @@ dockers_v2:
     dockerfile: Dockerfile.goreleaser
     # 同时发布到 GitHub Container Registry 和 Docker Hub
     images:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}"
-      - "{{ .Env.DOCKERHUB_USERNAME }}/subs-check-pro"
+      - 'ghcr.io/{{ .Env.GITHUB_REPOSITORY }}'
+      - '{{ .Env.DOCKERHUB_USERNAME }}/subs-check-pro'
 
     # 自动发布 latest 和 版本号
     tags:
-      - "{{ .Version }}"
-      - "{{ if not .IsNightly }}latest{{ end }}"
+      - '{{ .Version }}'
+      - '{{ if eq .Prerelease "" }}latest{{ end }}'
 
     # docker buildx 的平台列表
     platforms:
@@ -125,19 +126,17 @@ dockers_v2:
 
     # OCI 镜像规范标签
     annotations:
-      "org.opencontainers.image.title": "subs-check-pro"
-      "org.opencontainers.image.description": "高性能代理检测筛选工具，支持高并发测活、测速、媒体检测"
-      "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "{{.ProjectName}}"
-      "org.opencontainers.image.revision": "{{ .FullCommit }}"
-      "org.opencontainers.image.version": "{{ .Version }}"
-      "org.opencontainers.image.source": "{{.GitURL}}"
-
-      "org.opencontainers.image.base.name": "{{.BaseImage}}"
-      "org.opencontainers.image.base.digest": "{{.BaseImageDigest}}"
-
+      'org.opencontainers.image.title': 'subs-check-pro'
+      'org.opencontainers.image.description': '高性能代理检测筛选工具，支持高并发测活、测速、媒体检测'
+      'org.opencontainers.image.created': '{{.Date}}'
+      'org.opencontainers.image.name': '{{.ProjectName}}'
+      'org.opencontainers.image.revision': '{{ .FullCommit }}'
+      'org.opencontainers.image.version': '{{ .Version }}'
+      'org.opencontainers.image.source': '{{.GitURL}}'
+      'org.opencontainers.image.base.name': '{{.BaseImage}}'
+      'org.opencontainers.image.base.digest': '{{.BaseImageDigest}}'
     # 正式版本创建物料清单 (SBOM)，预发布版本跳过
-    sbom: "{{ not .IsNightly }}"
+    sbom: '{{ eq .Prerelease "" }}'
 
 # 压缩可执行文件
 upx:

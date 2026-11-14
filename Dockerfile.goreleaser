@@ -1,8 +1,11 @@
 # 提取 glibc 运行时依赖和时区、证书
-FROM debian:bookworm-slim AS provider
+FROM debian:trixie-slim AS provider
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libatomic1 libstdc++6 libgcc-s1 \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    libatomic1 \
+    libstdc++6 \
+    libgcc-s1 \
     ca-certificates \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
