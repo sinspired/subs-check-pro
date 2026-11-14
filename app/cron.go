@@ -1,15 +1,14 @@
 package app
 
 import (
-	"context"
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/robfig/cron/v3"
 	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/config"
+	"github.com/sinspired/subs-check-pro/v2/substore"
 	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
@@ -193,7 +192,7 @@ func (app *App) UpdateSubStoreCron() {
 
 			slog.Debug("定时检查并更新 Sub-Store 前后端...")
 			// 接收更新结果对象
-			result, err := assets.UpdateSubStoreAssets()
+			result, err := substore.UpdateSubStoreAssets()
 			if err != nil {
 				slog.Error("更新 Sub-Store 失败", "error", err)
 				return
@@ -201,30 +200,6 @@ func (app *App) UpdateSubStoreCron() {
 
 			// 如果有任何一端更新了
 			if result != nil && (result.UpdatedBackend || result.UpdatedFrontend) {
-				// 后端更新完成后，在外部进行优雅重启
-				if result.UpdatedBackend {
-					if !app.checking.Load() {
-						slog.Info("Sub-Store 服务 重启中...")
-						if app.cancel != nil {
-							app.cancel()
-							time.Sleep(500 * time.Millisecond)
-							if err := assets.KillNode(); err != nil {
-								slog.Error("强制清理 node 失败", "err", err)
-							}
-							app.ctx, app.cancel = context.WithCancel(context.Background())
-						}
-						go assets.RunSubStoreService(app.ctx)
-					} else {
-						slog.Warn("当前正在执行代理检测，跳过重启 Sub-Store 服务，新后端将在下次启动时生效")
-					}
-				}
-
-				// 发送通知
-				utils.SendNotifySubStoreAssets(
-					result.UpdatedFrontend, result.NewFrontendVer,
-					result.UpdatedBackend, result.NewBackendVer,
-				)
-
 				// 组装成功信息
 				args := []any{}
 
@@ -240,6 +215,12 @@ func (app *App) UpdateSubStoreCron() {
 				}
 
 				slog.Info("Sub-Store 更新成功", args...)
+
+				// 发送通知
+				utils.SendNotifySubStoreAssets(
+					result.UpdatedFrontend, result.NewFrontendVer,
+					result.UpdatedBackend, result.NewBackendVer,
+				)
 			}
 		}
 	})

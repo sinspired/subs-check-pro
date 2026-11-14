@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -183,28 +184,81 @@ func UnsetAllProxyEnvVars() {
 	}
 }
 
-// GetGhProxy 检测 github 代理是否可用，并设置可用的 github 代理
-func GetGhProxy() bool {
-	GhProxy := config.GlobalConfig.GithubProxy
-	GhProxyGroup := config.GlobalConfig.GithubProxyGroup
+// FindBestGhProxyResult 查找最佳 GhProxy 的结果结构体
+type FindBestGhProxyResult struct {
+	OK        bool    `json:"ok"`
+	ProxyUsed string  `json:"proxy_used,omitempty"`
+	LatencyMS int64   `json:"latency_ms,omitempty"`
+	SpeedKBps float64 `json:"speed_kbps,omitempty"`
+	Error     string  `json:"error,omitempty"`
+	FromGroup bool    `json:"-"` // 用于标记是否来自代理组，严格保持原有的日志打印逻辑
+}
 
-	if GhProxy == "" && GhProxyGroup == nil {
-		slog.Debug("未配置 githubproxy，将不使用 githubproxy")
-		IsGhProxyAvailable = false
-		return false
+// uniqueStrings 字符串切片去重过滤空值
+func uniqueStrings(input []string) []string {
+	u := make([]string, 0, len(input))
+	m := make(map[string]bool)
+	for _, val := range input {
+		val = strings.TrimSpace(val)
+		if val != "" && !m[val] {
+			m[val] = true
+			u = append(u, val)
+		}
+	}
+	return u
+}
+
+// FindBestGhProxy 从单一配置和组配置中检测并找出最佳的 GitHub 代理
+// isManual: 标识是否为前端 WebUI 手动触发
+func FindBestGhProxy(manualProxy string, isManual bool) FindBestGhProxyResult {
+	var ghProxy string
+	var GhProxyGroup []string
+
+	if isManual {
+		if manualProxy != "" {
+			// 场景 A: 前端输入框有明确的值，只测这一个
+			ghProxy = manualProxy
+			GhProxyGroup = nil
+		} else {
+			// 场景 B: 前端输入框被清空，说明用户对当前保存的值不满意
+			// 强制跳过单测，把原来保存的值放进组里，和组内代理一起并发赛跑！
+			ghProxy = ""
+			GhProxyGroup = append([]string{}, config.GlobalConfig.GithubProxyGroup...)
+			if config.GlobalConfig.GithubProxy != "" {
+				GhProxyGroup = append(GhProxyGroup, config.GlobalConfig.GithubProxy)
+			}
+			GhProxyGroup = uniqueStrings(GhProxyGroup) // 去重
+		}
+	} else {
+		// 场景 C: 后端定时或自动发起的常规检测
+		ghProxy = config.GlobalConfig.GithubProxy
+		GhProxyGroup = config.GlobalConfig.GithubProxyGroup
 	}
 
-	// 先检测单个 GhProxy
-	if GhProxy != "" {
-		if ok, normalized, _ := checkGhProxyAvailable(GhProxy); ok {
-			config.GlobalConfig.GithubProxy = normalized
-			slog.Debug("GitHub代理", "normalized", normalized)
-			IsGhProxyAvailable = true
-			return true
+	if ghProxy == "" && len(GhProxyGroup) == 0 {
+		return FindBestGhProxyResult{Error: "未配置 GitHub 代理"}
+	}
+
+	// 1. 如果有单独的代理需要测（场景 A 和 C 都会走到这）
+	if ghProxy != "" {
+		start := time.Now()
+		if ok, normalized, speed := checkGhProxyAvailable(ghProxy); ok {
+			cost := time.Since(start)
+			return FindBestGhProxyResult{
+				OK:        true,
+				ProxyUsed: normalized,
+				LatencyMS: cost.Milliseconds(),
+				SpeedKBps: speed,
+				FromGroup: false,
+			}
+		}
+		// 如果是前端手动指定的值（场景 A），一旦失败直接返回，不再测组
+		if isManual && manualProxy != "" {
+			return FindBestGhProxyResult{Error: "指定的 GitHub 代理检测失败"}
 		}
 	}
 
-	// 并发检测 GhProxyGroup
+	// 2. 并发检测组内代理（场景 B 和 场景 C 失败后会走到这）
 	if len(GhProxyGroup) > 0 {
 		slog.Debug("开始并发检测 GhProxyGroup 内的代理")
 
@@ -251,22 +305,52 @@ func GetGhProxy() bool {
 		}
 
 		if best.ok {
-			config.GlobalConfig.GithubProxy = best.proxy
-			if best.cost.Milliseconds() < 1000 {
-				slog.Info("最佳GitHub代理", "URL", best.proxy,
-					"耗时", strconv.FormatInt(best.cost.Milliseconds(), 10)+"ms",
-					"速度", strconv.FormatFloat(best.speedKBps, 'f', 1, 64)+"KB/s",
+			return FindBestGhProxyResult{
+				OK:        true,
+				ProxyUsed: best.proxy,
+				LatencyMS: best.cost.Milliseconds(),
+				SpeedKBps: best.speedKBps,
+				FromGroup: true, // 标记为来自代理组
+			}
+		}
+	}
+
+	return FindBestGhProxyResult{Error: "所有配置的 GitHub 代理均不可用"}
+}
+
+// GetGhProxy 检测 github 代理是否可用，并设置可用的 github 代理
+func GetGhProxy() bool {
+	if config.GlobalConfig.GithubProxy == "" && len(config.GlobalConfig.GithubProxyGroup) == 0 {
+		slog.Debug("未配置 githubproxy，将不使用 githubproxy")
+		IsGhProxyAvailable = false
+		return false
+	}
+
+	// 后端自动调用时，isManual 传 false，走常规逻辑
+	result := FindBestGhProxy("", false)
+
+	if result.OK {
+		config.GlobalConfig.GithubProxy = result.ProxyUsed
+
+		if result.FromGroup {
+			cost := time.Duration(result.LatencyMS) * time.Millisecond
+			if cost.Milliseconds() < 1000 {
+				slog.Info("最佳GitHub代理", "URL", result.ProxyUsed,
+					"耗时", strconv.FormatInt(cost.Milliseconds(), 10)+"ms",
+					"速度", strconv.FormatFloat(result.SpeedKBps, 'f', 1, 64)+"KB/s",
 				)
 			} else {
-				slog.Info("最佳GitHub代理", "URL", best.proxy,
-					"耗时", strconv.FormatFloat(best.cost.Seconds(), 'f', 2, 64)+"s",
-					"速度", strconv.FormatFloat(best.speedKBps, 'f', 1, 64)+"KB/s",
+				slog.Info("最佳GitHub代理", "URL", result.ProxyUsed,
+					"耗时", strconv.FormatFloat(cost.Seconds(), 'f', 2, 64)+"s",
+					"速度", strconv.FormatFloat(result.SpeedKBps, 'f', 1, 64)+"KB/s",
 				)
 			}
-
-			IsGhProxyAvailable = true
-			return true
+		} else {
+			slog.Debug("GitHub代理", "normalized", result.ProxyUsed)
 		}
+
+		IsGhProxyAvailable = true
+		return true
 	}
 
 	slog.Debug("未找到可用的 GitHubProxy，将不使用 GitHubProxy")
@@ -295,7 +379,8 @@ func checkGhProxyAvailable(githubProxy string) (bool, string, float64) {
 	client := &http.Client{
 		Timeout: 15 * time.Second,
 		Transport: &http.Transport{
-			Proxy: nil,
+			Proxy:           nil,
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 		},
 	}
 
@@ -358,10 +443,13 @@ func isSysProxyAvailable(ctx context.Context, proxy string) bool {
 
 	transport := &http.Transport{
 		Proxy: http.ProxyURL(proxyURL),
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, // 忽略 TLS 证书校验
+		},
 	}
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   8 * time.Second,
+		Timeout:   15 * time.Second,
 	}
 
 	// 检测目标列表
@@ -456,7 +544,7 @@ func findAvailableSysProxy(configProxy string, candidates []string) string {
 
 // CheckProxy 支持前端手动检测系统代理可用性，获取可用系统代理
 func CheckProxy(proxyAddr string) CheckProxyResult {
-	const timeout = 10 * time.Second
+	const timeout = 15 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

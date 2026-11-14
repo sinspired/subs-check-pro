@@ -8,8 +8,29 @@ import (
 	"strings"
 )
 
+// looksLikeBase64 快速判断：所有字节是否都落在 base64 字符集（标准/URL-safe/填充）
+// 或可被 cleanBase64 清除的空白字符内。只要出现其它字节，decodeBase64 必然失败。
+func looksLikeBase64(data []byte) bool {
+	for _, c := range data {
+		switch {
+		case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9',
+			c == '+', c == '/', c == '-', c == '_', c == '=',
+			c == ' ', c == '\n', c == '\r', c == '\t':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // TryDecodeBase64 尝试 Base64 解码，失败则返回原数据
 func TryDecodeBase64(data []byte) []byte {
+	// 明显不是 base64（逐行链接、网页、yaml 等）时直接返回。
+	// 否则 cleanBase64(string(data)) 会为整份数据拷贝两份、decode 再来一份，
+	// 对几 MB 的非 base64 内容是纯粹的浪费（FallbackExtractV2Ray / ConvertsV2RayExtra 都会走到这里）。
+	if !looksLikeBase64(data) {
+		return data
+	}
 	decoded, err := decodeBase64(cleanBase64(string(data)))
 	if err != nil {
 		return data

@@ -1,7 +1,6 @@
 package parse
 
 import (
-	"bytes"
 	"fmt"
 	"log/slog"
 
@@ -44,9 +43,41 @@ func ParseSubscriptionDataStream(
 		return stats, nil
 	}
 
-	// ── 2. YAML / JSON
+	// ── 2a. 标准 Clash/Mihomo 配置：定位 proxies 块，分块流式解析（峰值内存与订阅大小无关）。
+	//    不适用或没有解析出节点时原样退回下面的整体解析，行为与改动前一致。
+	if streamClashProxies(data, func(node map[string]any) bool {
+		if !yield(node) {
+			return false
+		}
+		stats["Mihomo/Clash"]++
+		return true
+	}) {
+		slog.Debug("解析成功", "订阅", subURL, "格式", "Mihomo/Clash(分块)")
+		return stats, nil
+	}
+
+	// ── 2a'. 整份文档是节点映射列表（- {name: …}）：同样分块解析
+	if streamRootList(data, func(node map[string]any) bool {
+		if !yield(node) {
+			return false
+		}
+		stats["GeneralJSON"]++
+		return true
+	}) {
+		slog.Debug("解析成功", "订阅", subURL, "格式", "General YAML List(分块)")
+		return stats, nil
+	}
+
+	// ── 2b. YAML / JSON 整体解析
+	//    base64 / 逐行链接 / ip:port / 网页等内容不可能解析成 map 或 list，直接跳过，
+	//    省下对整份数据构建一遍 YAML AST 的时间和内存。
 	var generic any
-	if err := yaml.Unmarshal(data, &generic); err == nil {
+	if !looksStructured(data) {
+		generic = nil
+	} else if err := yaml.Unmarshal(data, &generic); err != nil {
+		generic = nil
+	}
+	if generic != nil {
 		switch val := generic.(type) {
 		case map[string]any:
 			if proxies, ok := val["proxies"].([]any); ok {
@@ -124,16 +155,18 @@ func ParseSubscriptionDataStream(
 	}
 
 	anyHit := false
+	v2rayOK := false // 整体 ConvertsV2Ray 是否成功：成功时逐行解析可跳过已转换过的标准链接行
 
 	if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
 		anyHit = true
+		v2rayOK = true
 		slog.Debug("使用了convert.ConvertsV2Ray", "长度", len(nodes))
 		if !drainLine(ToNormalizeNodes(nodes), "V2Ray-Base64") {
 			stats["LineDedup"] = lineDeduped
 			return stats, nil
 		}
 	}
-	if nodes, d := parseRawLines(data, subURL); len(nodes) > 0 {
+	if nodes, d := parseRawLinesOpt(data, subURL, v2rayOK); len(nodes) > 0 {
 		anyHit = true
 		stats["BatchDedup"] += d // ← parseRawLines 内部批次去重数
 		if !drainLine(nodes, "RawLines") {
@@ -155,16 +188,8 @@ func ParseSubscriptionDataStream(
 			return stats, nil
 		}
 	}
-	if bytes.Contains(data, []byte("=")) &&
-		(bytes.Contains(data, []byte("[VMess]")) || bytes.Contains(data, []byte(", 20"))) {
-		if nodes := ParseSurfboardProxies(data); len(nodes) > 0 {
-			anyHit = true
-			if !drainLine(nodes, "Surfboard") {
-				stats["LineDedup"] = lineDeduped
-				return stats, nil
-			}
-		}
-	}
+	// 注：ParseSurfboardProxies 直接调用 ParseBracketKVProxies，二者解析结果完全相同，
+	// 这里不再单独调用 Surfboard（它的产出会被上面的跨解析器去重全部丢弃），统一由下面的 BracketKV 处理。
 	if nodes := ParseV2RayJSONLines(data); len(nodes) > 0 {
 		anyHit = true
 		if !drainLine(nodes, "V2RayJSON") {

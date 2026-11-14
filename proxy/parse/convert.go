@@ -1,6 +1,7 @@
 package parse
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -341,6 +342,12 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 	// }
 
 	slog.Debug("统一处理链接列表", "subURL", subURL, "猜测协议", fileGuessedScheme, "条数", len(links))
+
+	// 逐链接的 Debug 日志即使级别未开启，也会为每个参数做一次接口装箱分配；
+	// 几十万条链接时这是一笔可观的垃圾，提前判断一次。
+	debugOn := slog.Default().Enabled(context.Background(), slog.LevelDebug)
+	hasMieru := false // 是否存在 mieru:// 链接：只有它才需要 ConvertsV2RayExtra
+
 	for _, link := range links {
 		link = strings.TrimSpace(link)
 		if link == "" {
@@ -364,7 +371,12 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 
 		// 2. 标准化链接 或 智能扩展 IP:Port
 		if strings.Contains(link, "://") {
-			slog.Debug("处理标准链接", "raw", subURL, "link", link)
+			if debugOn {
+				slog.Debug("处理标准链接", "raw", subURL, "link", link)
+			}
+			if !hasMieru && len(link) >= 8 && strings.EqualFold(link[:8], "mieru://") {
+				hasMieru = true
+			}
 			// 已有协议头，进行简单修复
 			batchLinks = append(batchLinks, FixupProxyLink(link))
 		} else {
@@ -381,10 +393,14 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 						// 只有当文件名暗示了明确的、非通用的代理协议 (如 vmess, ss, hysteria) 时，才使用单一前缀。
 						// 如果是 "" (未知)，则进入 Else 分支进行激进猜测。
 						if isKnown {
-							slog.Debug("通过文件名猜测到协议", "raw", subURL, "type", fileGuessedScheme)
+							if debugOn {
+								slog.Debug("通过文件名猜测到协议", "raw", subURL, "type", fileGuessedScheme)
+							}
 							batchLinks = append(batchLinks, prefix+host+":"+port)
 						} else {
-							slog.Debug("未发现协议，同时生成http(s)/socks5协议", "raw", subURL, "数量", len(links))
+							if debugOn {
+								slog.Debug("未发现协议，同时生成http(s)/socks5协议", "raw", subURL, "数量", len(links))
+							}
 							// 直接组装对象，绕过字符串 URI 拼装和 Mihomo 解析
 							if fileGuessedScheme != "all" {
 								baseName := fmt.Sprintf("Auto-%s:%s", host, port)
@@ -465,10 +481,13 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 					slog.Debug("标准转换成功", "数量", len(nodes))
 					chunkNodes = append(chunkNodes, ToNormalizeNodes(nodes)...)
 				}
-				// 扩展转换
-				if nodes, err := ConvertsV2RayExtra(data); err == nil && len(nodes) > 0 {
-					slog.Debug("扩展转换成功", "数量", len(nodes))
-					chunkNodes = append(chunkNodes, ToNormalizeNodes(nodes)...)
+				// 扩展转换：目前只处理 mieru://，没有 mieru 链接时它只会白白把整块数据
+				// 转成 string、按行切分一遍，然后返回「格式无效」
+				if hasMieru {
+					if nodes, err := ConvertsV2RayExtra(data); err == nil && len(nodes) > 0 {
+						slog.Debug("扩展转换成功", "数量", len(nodes))
+						chunkNodes = append(chunkNodes, ToNormalizeNodes(nodes)...)
+					}
 				}
 
 				appendUnique(chunkNodes)
@@ -660,6 +679,10 @@ func convertListToNodes(list []any) []map[string]any {
 
 // ExtractAndParseProxies 提取分散的 proxies: 块并解析
 func ExtractAndParseProxies(data []byte) []map[string]any {
+	// 没有 proxies: 就不可能有块，省掉整份数据的逐行扫描
+	if !bytes.Contains(data, []byte("proxies:")) {
+		return nil
+	}
 	var nodes []map[string]any
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	var buffer bytes.Buffer
@@ -726,7 +749,17 @@ func ExtractAndParseProxies(data []byte) []map[string]any {
 // ParseYamlFlowList 逐行解析 YAML 流式列表 (容错模式)
 // 专门处理格式错误或缩进错误的 Clash 格式列表，例如：
 // - {name: ...}
+//
+// 为控制内存，每 flowChunkLines 行为一块解析（见 clashChunkItems 的说明）；
+// 某一块解析失败时逐行重试，只丢弃损坏的行，而不是让整份订阅的节点全部作废。
 func ParseYamlFlowList(data []byte) []map[string]any {
+	// 每个节点行都要同时含 "{" 和 "}"，整份数据里没有就不用扫描了
+	if bytes.IndexByte(data, '{') < 0 {
+		return nil
+	}
+
+	const flowChunkLines = clashChunkItems
+
 	var nodes []map[string]any
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 
@@ -734,7 +767,44 @@ func ParseYamlFlowList(data []byte) []map[string]any {
 	// 默认 64k 对于 flow yaml 通常足够，如果遇到超长行可能会需要调整，但一般代理配置不会单行超 64k
 	scanner.Buffer(make([]byte, 64*1024), 2048*1024)
 
-	var batchYaml bytes.Buffer // 集中收集所有有效的 flow 节点
+	var (
+		batchYaml bytes.Buffer // 当前块收集到的有效 flow 节点行
+		offs      []int        // 每一行在 batchYaml 中的起始偏移，用于坏块逐行重试
+	)
+
+	collect := func(list []map[string]any) {
+		for _, m := range list {
+			// 利用我们刚才修改的 bool 返回值直接拦截
+			if NormalizeNode(m) {
+				nodes = append(nodes, m)
+			}
+		}
+	}
+
+	flush := func() {
+		if len(offs) == 0 {
+			return
+		}
+		b := batchYaml.Bytes()
+		var tmp []map[string]any
+		if err := yaml.Unmarshal(b, &tmp); err == nil {
+			collect(tmp)
+		} else {
+			// 块内有坏行：逐行重试，隔离坏行
+			for i, s := range offs {
+				e := len(b)
+				if i+1 < len(offs) {
+					e = offs[i+1]
+				}
+				var one []map[string]any
+				if yaml.Unmarshal(b[s:e], &one) == nil {
+					collect(one)
+				}
+			}
+		}
+		batchYaml.Reset()
+		offs = offs[:0]
+	}
 
 	for scanner.Scan() {
 		lineBytes := bytes.TrimSpace(scanner.Bytes())
@@ -772,24 +842,16 @@ func ParseYamlFlowList(data []byte) []map[string]any {
 		// 4. 构造合法的 YAML 列表项字符串
 		// 只有通过了上述所有检查，才进行 string 转换和拼接，这是必要的开销
 		// 构造形式： "- { ... }"
-		// 将有效行作为 YAML 列表项写入 Buffer
+		offs = append(offs, batchYaml.Len())
 		batchYaml.WriteString("- ")
 		batchYaml.Write(cleanBytes)
 		batchYaml.WriteString("\n")
-	}
 
-	// 循环结束后，一次性执行最昂贵的反序列化
-	if batchYaml.Len() > 0 {
-		var tempNodes []map[string]any
-		if err := yaml.Unmarshal(batchYaml.Bytes(), &tempNodes); err == nil {
-			for _, m := range tempNodes {
-				// 利用我们刚才修改的 bool 返回值直接拦截
-				if NormalizeNode(m) {
-					nodes = append(nodes, m)
-				}
-			}
+		if len(offs) >= flowChunkLines {
+			flush()
 		}
 	}
+	flush()
 
 	if len(nodes) > 0 {
 		slog.Debug("使用逐行 YAML 容错解析成功", "count", len(nodes))
@@ -801,6 +863,10 @@ func ParseYamlFlowList(data []byte) []map[string]any {
 // ParseV2RayJSONLines 解析 xray-json
 // 这是一个简化的实现，提取核心字段
 func ParseV2RayJSONLines(data []byte) []map[string]any {
+	// 每行都必须含 "protocol" 才会被处理，整份数据里都没有就不用扫描了
+	if !bytes.Contains(data, []byte(`"protocol"`)) {
+		return nil
+	}
 	var nodes []map[string]any
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 
@@ -1009,6 +1075,13 @@ func ParseBracketKVProxies(data []byte) []map[string]any {
 			continue
 		}
 
+		// vless://…?type=ws 这类链接的 "=" 出现在查询参数里，"=" 之前会带着 "://"；
+		// Surge/QuanX 的 "名称 = 类型, 地址, 端口" 其名称部分不会是链接。
+		// 逐行链接订阅会让每一行都走到这里，提前排除可省掉后面的 Split/TrimSpace 分配。
+		if strings.Contains(left, "://") {
+			continue
+		}
+
 		left = strings.TrimSpace(left)
 		right = strings.TrimSpace(right)
 
@@ -1124,18 +1197,27 @@ func ExtractV2RayLinks(data []byte) []string {
 		v2rayLinkRegexCompiled = regexp.MustCompile(pattern)
 	})
 
-	links = v2rayLinkRegexCompiled.FindAllString(string(data), -1)
+	// 没有 "://" 就不可能匹配到任何链接，省掉对整份数据的正则扫描
+	if !bytes.Contains(data, []byte("://")) {
+		return links
+	}
 
-	if len(links) == 0 {
+	// 直接在 []byte 上匹配，避免 string(data) 整份拷贝
+	matches := v2rayLinkRegexCompiled.FindAll(data, -1)
+	if len(matches) == 0 {
 		return links
 	}
 
 	// 简单清洗结果
-	out := make([]string, 0, len(links))
-	for _, s := range links {
+	debugOn := slog.Default().Enabled(context.Background(), slog.LevelDebug)
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		s := string(m)
 		t := strings.Trim(s, "\"'`,;：")
 		if t != "" {
-			slog.Debug("正则捕获", "raw", s, "cleaned", t)
+			if debugOn {
+				slog.Debug("正则捕获", "raw", s, "cleaned", t)
+			}
 			out = append(out, t)
 		}
 	}
@@ -1155,6 +1237,12 @@ func ExtractMarkdownURLs(data []byte) []string {
 		if _, ok := seen[u]; ok {
 			return
 		}
+
+		// -> 增加 DoH / DNS 过滤逻辑 <-
+		if IsIgnoredURL(u) {
+			return
+		}
+
 		if parsed, err := url.Parse(u); err == nil && parsed.Host != "" {
 			seen[u] = struct{}{}
 			out = append(out, u)

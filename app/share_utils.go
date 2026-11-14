@@ -147,7 +147,7 @@ func (app *App) handleEncryptedShare(basePath string) gin.HandlerFunc {
 				ShowInput:   true,
 				BadgeStyle:  "idle",
 				BadgeText:   "Encrypted",
-				ExtraHint:   template.HTML("开启 <code>keep-success-proxies: true</code> 保留并加载历史节点。"),
+				ExtraHint:   template.HTML("开启 <code>use-last-result: true</code> 加载上次检测节点 all.yaml；开启 <code>use-history-result: true</code> 加载并保存历史节点 history.html"),
 			})
 			return
 		}
@@ -180,7 +180,7 @@ func (app *App) handleEncryptedShare(basePath string) gin.HandlerFunc {
 				Files:       readDirFiles(basePath),
 				ShareCode:   serverPassword,
 				FooterText:  "Encrypted Access",
-				ExtraHint:   template.HTML("开启 <code>keep-success-proxies: true</code> 保留及加载历史节点。"),
+				ExtraHint:   template.HTML("开启 <code>use-last-result: true</code> 加载上次检测节点 all.yaml；开启 <code>use-history-result: true</code> 加载并保存历史节点 history.html"),
 			})
 			return
 		}
@@ -225,7 +225,7 @@ func (app *App) handleFileShare(basePath string, _ bool) gin.HandlerFunc {
 				BadgeStyle:  "warning",
 				BadgeText:   "Public",
 				FooterText:  "Open Access",
-				ExtraHint:   template.HTML("开启 <code>keep-success-proxies: true</code> 可保留历史节点。"),
+				ExtraHint:   template.HTML("开启 <code>use-last-result: true</code> 加载上次检测节点 all.yaml；开启 <code>use-history-result: true</code> 加载并保存历史节点 history.html"),
 			})
 			return
 		}
@@ -237,7 +237,7 @@ func (app *App) handleFileShare(basePath string, _ bool) gin.HandlerFunc {
 			return
 		}
 		if _, err := os.Stat(absPath); err != nil {
-			// ★ 修复：文件不存在时渲染错误页
+			// 文件不存在时渲染错误页
 			renderSharePage(c, http.StatusNotFound, SharePageData{
 				Title:       "文件未找到",
 				HeaderColor: "var(--danger)",
@@ -253,13 +253,17 @@ func (app *App) handleFileShare(basePath string, _ bool) gin.HandlerFunc {
 	}
 }
 
-// handleFilesIndex 渲染文件管理索引页：
-// 根据 share-password 是否配置动态控制加密分享入口的状态
+// handleFilesIndex 仅渲染空壳 HTML，不再注入业务数据
 func (app *App) handleFilesIndex(c *gin.Context) {
+	c.HTML(http.StatusOK, "files.html", gin.H{})
+}
+
+// getFilesData 提供给前端 API，返回 JSON 格式的文件列表和配置状态
+func (app *App) getFilesData(c *gin.Context) {
 	type StaticFileEntry struct {
-		Route    string
-		Name     string
-		IconName string
+		Route    string `json:"route"`
+		Name     string `json:"name"`
+		IconName string `json:"iconName"`
 	}
 
 	saver, err := method.NewLocalSaver()
@@ -293,8 +297,9 @@ func (app *App) handleFilesIndex(c *gin.Context) {
 		}
 	}
 
-	c.HTML(http.StatusOK, "files.html", gin.H{
-		"HasPassword": config.GlobalConfig.SharePassword != "",
-		"PublicFiles": entries,
+	// 统一返回 JSON 给前端
+	c.JSON(http.StatusOK, gin.H{
+		"has_password": config.GlobalConfig.SharePassword != "",
+		"public_files": entries,
 	})
 }

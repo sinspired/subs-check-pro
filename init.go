@@ -1,3 +1,4 @@
+// init.go - 内核
 package main
 
 import (
@@ -16,15 +17,12 @@ import (
 	"github.com/lmittmann/tint"
 	mihomoLog "github.com/metacubex/mihomo/log"
 	"github.com/sinspired/subs-check-pro/v2/app"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
 	Version       = "dev"
 	CurrentCommit = "unknown"
 )
-
-var TempLog string
 
 func init() {
 	// 设置依赖库日志级别
@@ -34,41 +32,23 @@ func init() {
 		mihomoLog.SetLevel(mihomoLog.SILENT)
 	}
 
-	// 获取日志级别
-	logLevel := getLogLevel()
+	// 1. 初始化基础的文件日志 (此时底层已经执行过 SetDefault 纯文件输出了)
+	fileHandler, err := app.InitLoggerFile()
 
-	// 配置日志文件
-	fileLogger := &lumberjack.Logger{
-		Filename:   app.TempLog(),
-		MaxSize:    10,
-		MaxBackups: 3,
-		MaxAge:     7,
-	}
-
-	// 创建两个单独的handler
-	// 1. 终端输出 - 带颜色
-	consoleHandler := tint.NewTextHandler(getStdout(), &tint.Options{
+	// 2. CLI 需要额外的带颜色的终端输出
+	logLevel := app.GetLogLevel()
+	consoleHandler := tint.NewTextHandler(os.Stdout, &tint.Options{
 		Level:      logLevel,
 		TimeFormat: "01-02 15:04:05",
 	})
 
-	// 2. 文件输出 - 不带颜色
-	fileHandler := tint.NewTextHandler(fileLogger, &tint.Options{
-		Level:      logLevel,
-		TimeFormat: "01-02 15:04:05",
-		NoColor:    true, // 禁用颜色
-	})
-
-	// 创建一个自定义的Slog处理器，将日志同时发送到两个处理器
-	handler := &multiHandler{
-		console: consoleHandler,
-		file:    fileHandler,
+	// 3. 组合双向输出并覆盖刚才的默认设置
+	if err == nil && fileHandler != nil {
+		slog.SetDefault(slog.New(&multiHandler{console: consoleHandler, file: fileHandler}))
+	} else {
+		// 如果文件路径有问题，降级到纯终端输出
+		slog.SetDefault(slog.New(consoleHandler))
 	}
-
-	logger := slog.New(handler)
-
-	// 设置为全局日志记录器
-	slog.SetDefault(logger)
 
 	// 如存在之前未结束的subs-check-pro进程,应终结
 	if runtime.GOOS == "windows" {
@@ -83,8 +63,9 @@ func init() {
 	fmt.Println("1. 本项目完全开源免费，请勿相信任何收费版本")
 	fmt.Println("2. 本项目仅供学习交流，请勿用于非法用途")
 	fmt.Println("3. 项目地址：https://github.com/sinspired/subs-check-pro")
-	fmt.Println("4. 桌面应用：https://github.com/sinspired/subs-check-pro-gui")
-	fmt.Println("5. 镜像地址：ghcr.io/sinspired/subs-check-pro:latest")
+	fmt.Println("4. 镜像地址：ghcr.io/sinspired/subs-check-pro:latest")
+	fmt.Println("5. 客户端：https://github.com/sinspired/subs-free")
+	fmt.Println("6. v3 版本已发布，如需升级需手动下载新版本")
 	fmt.Println("==================================================")
 
 	if strings.ToLower(os.Getenv("SUB_CHECK_PPROF")) != "" {

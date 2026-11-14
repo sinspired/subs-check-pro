@@ -1,11 +1,10 @@
-// Package assets 嵌入的node、sub-store、MaxMind数据库等资产
+// Package assets 嵌入的资产文件
 package assets
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/goccy/go-json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/oschwald/maxminddb-golang/v2"

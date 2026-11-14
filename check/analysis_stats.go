@@ -13,6 +13,7 @@ import (
 	"github.com/sinspired/subs-check-pro/v2/config"
 	proxyutils "github.com/sinspired/subs-check-pro/v2/proxy"
 	"github.com/sinspired/subs-check-pro/v2/save/method"
+	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
 var (
@@ -46,14 +47,16 @@ var LastCheckResultStr atomic.Value
 
 // AnalysisStats 统计结构
 type AnalysisStats struct {
-	Total     int
-	Types     map[string]int
-	Countries map[string]int
-	CFIncon   map[string]int // ⁰ (不一致)
-	CFCon     map[string]int // ¹⁺ (一致)
-	CFBlock   map[string]int // ⁻¹ (proxyIP 异常)
-	NonCF     map[string]int // ² (独立VPS)
-	Media     map[string]int
+	Total      int
+	Types      map[string]int
+	Countries  map[string]int
+	CFIncon    map[string]int // ⁰ (不一致)
+	CFCon      map[string]int // ¹⁺ (一致)
+	CFBlock    map[string]int // ⁻¹ (proxyIP 异常)
+	NonCF      map[string]int // ² (独立VPS)
+	Media      map[string]int
+	SpeedSum   int // 速度总和
+	SpeedCount int // 参与测速数量
 }
 
 func newAnalysisStats() *AnalysisStats {
@@ -74,9 +77,11 @@ func (pc *ProxyChecker) GenerateAnalysisReport() {
 	for _, result := range pc.results {
 		if result.Proxy != nil {
 			if subURL, ok := result.Proxy["sub_url"].(string); ok {
+				proxyutils.SubStatsMutex.Lock() // 加锁
 				stats := proxyutils.SubStats[subURL]
 				stats.Success++
 				proxyutils.SubStats[subURL] = stats
+				proxyutils.SubStatsMutex.Unlock() // 解锁
 			}
 		}
 	}
@@ -96,6 +101,12 @@ func (pc *ProxyChecker) GenerateAnalysisReport() {
 		update := func(s *AnalysisStats) {
 			s.Total++
 			s.Types[pType]++
+
+			// 如果有速度则累计平均速度
+			if speedON && result.Speed > 0 {
+				s.SpeedSum += result.Speed
+				s.SpeedCount++
+			}
 
 			// 节点属性识别
 			hasTag := false
@@ -271,6 +282,17 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 	sb.WriteString("  check_traffic_download_raw: ")
 	sb.WriteString(strconv.FormatUint(DOWN.Load(), 10))
 	sb.WriteString("\n")
+	// 计算本次检测所有订阅文件的大小
+	var totalSubSize uint64
+	for _, stat := range proxyutils.SubStats {
+		totalSubSize += uint64(stat.Size)
+	}
+	sb.WriteString("  total_subs_size: ")
+	sb.WriteString(utils.FormatTraffic(totalSubSize))
+	sb.WriteString("\n")
+	sb.WriteString("  total_subs_size_raw: ")
+	sb.WriteString(strconv.FormatUint(totalSubSize, 10))
+	sb.WriteString("\n")
 
 	var speedText string
 	if speedON {
@@ -339,8 +361,35 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 			sb.WriteString(", total: ")
 			sb.WriteString(strconv.Itoa(pStat.Total))
 			sb.WriteString(" }\n")
+			// 输出平均速度
+			if speedON && st.SpeedCount > 0 {
+				avgSpeed := st.SpeedSum / st.SpeedCount
+				sb.WriteString("    avg_speed: ")
+				if avgSpeed < 100 {
+					sb.WriteString(strconv.Itoa(avgSpeed))
+					sb.WriteString(" KB/s\n")
+				} else {
+					sb.WriteString(strconv.FormatFloat(float64(avgSpeed)/1024, 'f', 1, 64))
+					sb.WriteString(" MB/s\n")
+				}
+			}
+			// 输出流量
+			if pStat.Traffic > 0 {
+				sb.WriteString("    traffic: ")
+				sb.WriteString(utils.FormatTraffic(pStat.Traffic))
+				sb.WriteString("\n")
+			}
+			// 输出该订阅文件的大小
+			if pStat.Size > 0 {
+				sb.WriteString("    file_size: ")
+				sb.WriteString(utils.FormatTraffic(uint64(pStat.Size)))
+				sb.WriteString("\n")
+			}
 			sb.WriteString("    protocols: { ")
 			sb.WriteString(formatMapToInline(st.Types))
+			sb.WriteString(" }\n")
+			sb.WriteString("    locations: { ")
+			sb.WriteString(formatMapToInline(st.Countries))
 			sb.WriteString(" }\n")
 			sb.WriteString("    top_locations: [")
 			sb.WriteString(getTopKeys(st.Countries, 3))
@@ -356,10 +405,76 @@ func saveDetailedAnalysis(global *AnalysisStats, subs map[string]*AnalysisStats,
 			sbBad.WriteString(", total: ")
 			sbBad.WriteString(strconv.Itoa(pStat.Total))
 			sbBad.WriteString(" }\n")
+			// 输出消耗的流量
+			if pStat.Traffic > 0 {
+				sbBad.WriteString("    traffic: ")
+				sbBad.WriteString(utils.FormatTraffic(pStat.Traffic))
+				sbBad.WriteString("\n")
+			}
+			// 输出该订阅文件的大小
+			if pStat.Size > 0 {
+				sbBad.WriteString("    file_size: ")
+				sbBad.WriteString(utils.FormatTraffic(uint64(pStat.Size)))
+				sbBad.WriteString("\n")
+			}
+			// 写入明确的失效原因
+			if pStat.ErrMsg != "" {
+				sbBad.WriteString("    error: \"")
+				sbBad.WriteString(pStat.ErrMsg)
+				sbBad.WriteString("\"\n")
+			}
 		}
 	}
 
-	_ = method.SaveToStats([]byte(sb.String()+sbBad.String()), "subs-analysis.yaml", "分析结果")
+	// 4. 远程订阅清单：每个清单拉取到的订阅链接及其归属关系。
+	// 链接自身的统计（成功率/协议/地区/错误原因）已在上方 subs_ranking / subs_ranking_bad 中，
+	// 前端按 URL 关联后展示在对应的远程订阅下方，这里不重复存一份。
+	sbRemote := buildRemoteSubsYAML(proxyutils.SnapshotRemoteStats())
+
+	_ = method.SaveToStats([]byte(sb.String()+sbBad.String()+sbRemote), "subs-analysis.yaml", "分析结果")
+}
+
+// buildRemoteSubsYAML 生成 remote_subs 段，结构示例：
+//
+//	remote_subs:
+//	  - url: "https://example.com/list.txt"
+//	    count: 12
+//	    error: "..."        # 仅在清单拉取失败/解析不到链接时出现
+//	    urls:
+//	      - "https://a.example.com/sub"
+//
+// 字符串统一使用 strconv.Quote 输出双引号标量：其转义序列均为合法的 YAML 双引号转义，
+// 可避免 URL 中的 # {} : 等字符被 YAML 误解析。
+func buildRemoteSubsYAML(remotes []proxyutils.RemoteStat) string {
+	if len(remotes) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\nremote_subs:\n")
+	for _, r := range remotes {
+		sb.WriteString("  - url: ")
+		sb.WriteString(strconv.Quote(r.URL))
+		sb.WriteString("\n    count: ")
+		sb.WriteString(strconv.Itoa(r.Count))
+		sb.WriteString("\n")
+		if r.ErrMsg != "" {
+			sb.WriteString("    error: ")
+			sb.WriteString(strconv.Quote(r.ErrMsg))
+			sb.WriteString("\n")
+		}
+		if len(r.URLs) == 0 {
+			sb.WriteString("    urls: []\n")
+			continue
+		}
+		sb.WriteString("    urls:\n")
+		for _, u := range r.URLs {
+			sb.WriteString("      - ")
+			sb.WriteString(strconv.Quote(u))
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
 }
 
 // generateSummary 生成单段落详细摘要
@@ -675,12 +790,25 @@ func cmpFloat(a, b float64) int {
 	return 0
 }
 
-// CleanupMetadata 清理元数据
+// CleanupMetadata 清理元数据，并为输出结果进行 map 隔离复制
 func (pc *ProxyChecker) CleanupMetadata() {
-	for _, result := range pc.results {
+	for i, result := range pc.results {
 		if result.Proxy != nil {
-			delete(result.Proxy, "sub_url")
-			delete(result.Proxy, "sub_tag")
+			// 1. 创建一个新的干净 Map (浅拷贝)
+			cleanProxy := make(map[string]any, len(result.Proxy))
+
+			// 2. 将除了需要清理的元数据之外的字段复制到新 Map
+			for k, v := range result.Proxy {
+				if k == "sub_url" || k == "sub_tag" || k == "history_score" {
+					continue
+				}
+				cleanProxy[k] = v
+			}
+
+			// 3. 将新 Map 替换回 results 数组中
+			// 这样 all.yaml 会用这个干净的 Map
+			// 而 history.yaml 依然保留着最初拥有 sub_url 和 history_score 的完整 Map
+			pc.results[i].Proxy = cleanProxy
 		}
 	}
 }

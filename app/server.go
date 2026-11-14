@@ -1,9 +1,8 @@
-// Package app: server.go
+// Package app: server.go，内核库
 package app
 
 import (
 	"bufio"
-	"context"
 	"crypto/subtle"
 	"fmt"
 	"html/template"
@@ -13,6 +12,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -25,10 +25,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-yaml"
 	"github.com/sinspired/subs-check-pro-webui/webui"
-	"github.com/sinspired/subs-check-pro/v2/assets"
 	"github.com/sinspired/subs-check-pro/v2/check"
 	"github.com/sinspired/subs-check-pro/v2/config"
 	"github.com/sinspired/subs-check-pro/v2/save/method"
+	"github.com/sinspired/subs-check-pro/v2/substore"
 	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
@@ -45,7 +45,7 @@ const (
 	PublicPath      = "/more"
 	FilesPath       = "/files"
 	AnalysisPath    = "/analysis"
-	SubInfoPath     = utils.SubInfoPath
+	SubInfoPath     = substore.SubInfoPath
 	APIAuthHeader   = "X-API-Key"
 	HeaderFromCheck = "X-From-Subs-Check-pro"
 	QueryFromCheck  = "from_subs_check_pro"
@@ -279,11 +279,68 @@ func corsWails(c *gin.Context) {
 
 // registerWebUIRoutes 注册WebUI路由
 func (app *App) registerWebUIRoutes(router *gin.Engine) {
-	router.GET(AdminPath, func(c *gin.Context) {
+	// 1. 独立的登录页面路由 (公开访问)
+	router.GET("/login", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.html", gin.H{
+			"configPath": app.configPath,
+		})
+	})
+
+	// 2. 受保护的管理面板路由组 (必须鉴权)
+	protectedPages := router.Group("/")
+	protectedPages.Use(app.pageAuthMiddleware())
+	{
+		// 只有合法用户才能请求到 admin.html 的网页源码
+		protectedPages.GET(AdminPath, func(c *gin.Context) {
 		c.HTML(http.StatusOK, "admin.html", gin.H{
 			"configPath": app.configPath,
 		})
 	})
+	}
+}
+
+// pageAuthMiddleware 专门给 HTML 页面使用的鉴权中间件
+// 作用：防止未登录用户强行访问 /admin 偷窥网页 UI 结构
+func (app *App) pageAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 优先尝试从 Cookie 读取凭证
+		cookie, err := c.Cookie("scp_api_key")
+		apiKey := ""
+		if err == nil {
+			apiKey = cookie
+		} else {
+			// 从 Query 参数读取凭证
+			apiKey = c.Query("api_key")
+		}
+
+		// 对比密钥
+		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(config.GlobalConfig.APIKey)) != 1 {
+			// 记录用户本来想要访问的路径
+			target := c.Request.URL.Path
+			if c.Request.URL.RawQuery != "" {
+				target += "?" + c.Request.URL.RawQuery
+			}
+
+			// 组装带 redirect 的登录地址
+			redirectURL := "/login"
+			// 防止死循环重定向到 login 自身
+			if target != "" && target != "/" && target != "/login" {
+				redirectURL += "?redirect=" + url.QueryEscape(target)
+			}
+
+			// 凭证无效，带上 redirect 标识重定向到登录页
+			c.Redirect(http.StatusFound, redirectURL)
+			c.Abort()
+			return
+		}
+
+		// 如果是通过 Query 带参访问的，顺手帮浏览器种下 Cookie
+		if err != nil && apiKey != "" {
+			c.SetCookie("scp_api_key", apiKey, 2592000, "/", "", false, false)
+		}
+
+		c.Next()
+	}
 }
 
 // registerPublicRoutes 注册 主题/分析报告/版本号等 公共路由
@@ -304,7 +361,12 @@ func (app *App) registerPublicRoutes(router *gin.Engine) {
 		app.setTheme(c)
 	})
 
-	router.GET(AnalysisPath, app.handleAnalysis)
+	// 将分析页面放入受保护的路由中
+	protectedPages := router.Group("/")
+	protectedPages.Use(app.pageAuthMiddleware())
+	{
+		protectedPages.GET(AnalysisPath, app.handleAnalysis)
+	}
 }
 
 // registerAPIRoutes 注册api状态路由
@@ -323,15 +385,25 @@ func (app *App) registerAPIRoutes(router *gin.Engine) {
 		api.POST("/logs/clear", app.clearLogsHandler)
 		api.GET("/analysis-report", app.getAnalysisReport)
 		api.POST("/proxy/check", app.proxyCheckHandler)
+		api.POST("/proxy/check-github", app.checkGhProxyHandler)
 		api.POST("/notify/test", app.notifyTestHandler)
 		api.POST("/substore/update", app.updateSubStoreHandler)
+
+		api.GET("/files-data", app.getFilesData)
 	}
 }
 
 // authMiddleware 认证中间件
 func (app *App) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 1. 优先从 Header 获取 (App端/跨域请求常用)
 		apiKey := c.GetHeader(APIAuthHeader)
+
+		// 2. 如果 Header 中没有，尝试从 Cookie 兜底读取 (Web端 Ajax 常用)
+		if apiKey == "" {
+			apiKey, _ = c.Cookie("scp_api_key")
+		}
+
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(config.GlobalConfig.APIKey)) != 1 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效的API密钥"})
 			return
@@ -391,6 +463,7 @@ func (app *App) updateConfig(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求格式"})
+		slog.Error("配置更新失败，请求格式错误", "error", err)
 		return
 	}
 
@@ -398,6 +471,7 @@ func (app *App) updateConfig(c *gin.Context) {
 	var newConfig config.Config
 	if err := yaml.Unmarshal([]byte(req.Content), &newConfig); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "YAML格式或解析错误: " + err.Error()})
+		slog.Error("配置更新失败，YAML格式或解析错误", "error", err)
 		return
 	}
 
@@ -405,7 +479,7 @@ func (app *App) updateConfig(c *gin.Context) {
 	doSub := !reflect.DeepEqual(newConfig.SubProcess, config.GlobalConfig.SubProcess)
 	doMihomo := newConfig.MihomoOverwriteURL != config.GlobalConfig.MihomoOverwriteURL
 	doLatest := !reflect.DeepEqual(newConfig.SingboxLatest, config.GlobalConfig.SingboxLatest)
-	doOld := !reflect.DeepEqual(newConfig.SingboxOld, config.GlobalConfig.SingboxOld)
+	doOld := !reflect.DeepEqual(newConfig.SingboxExtra, config.GlobalConfig.SingboxExtra)
 
 	if err := os.WriteFile(app.configPath, []byte(req.Content), 0o644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置文件失败" + err.Error()})
@@ -424,7 +498,7 @@ func (app *App) updateConfig(c *gin.Context) {
 	hasSubStoreSync := doSub || doMihomo || doLatest || doOld
 	needGetGhProxy := (doMihomo && !isAllLocal(newConfig.MihomoOverwriteURL)) ||
 		(doLatest && !isAllLocal(newConfig.SingboxLatest.JS, newConfig.SingboxLatest.JSON)) ||
-		(doOld && !isAllLocal(newConfig.SingboxOld.JS, newConfig.SingboxOld.JSON))
+		(doOld && !isAllLocal(newConfig.SingboxExtra.JS, newConfig.SingboxExtra.JSON))
 
 	// 在保存接口内直接启动异步无阻塞 goroutine，彻底剔除前端发起的更新 api 和轮询开销
 	if hasSubStoreSync {
@@ -433,28 +507,28 @@ func (app *App) updateConfig(c *gin.Context) {
 			// 无论执行成功或失败，结束时重置后台更新标记
 			defer subStoreSyncing.Store(false)
 
-			if config.GlobalConfig.SubStorePort != "" && assets.IsSubStoreRunning.Load() {
+			if config.GlobalConfig.SubStorePort != "" && substore.IsSubStoreRunning.Load() {
 				// 等待500ms确保后端的 filewatcher（如 fsnotify）已将最新文件重载进 config.GlobalConfig 中
 				time.Sleep(500 * time.Millisecond)
 
 				// 收集所有触发了更新的项目名称
 				var targets []string
 				if doSub {
-					targets = append(targets, utils.SubName)
+					targets = append(targets, substore.SubName)
 				}
 				if doMihomo {
-					targets = append(targets, utils.MihomoName)
+					targets = append(targets, substore.MihomoName)
 				}
 				if doLatest {
-					targets = append(targets, utils.SingboxName+newConfig.SingboxLatest.Version)
+					targets = append(targets, substore.SingboxName+newConfig.SingboxLatest.Version)
 				}
 				if doOld {
-					targets = append(targets, utils.SingboxName+newConfig.SingboxOld.Version)
+					targets = append(targets, substore.SingboxName+newConfig.SingboxExtra.Version)
 				}
 
 				// 打印日志，格式如: msg="已触发 Sub-Store 后台同步" name="sub丨mihomo"
 				slog.Info("已触发 Sub-Store 后台同步", "name", strings.Join(targets, "丨"))
-				utils.SyncSubStorePartial(nil, doSub, doMihomo, doLatest, doOld)
+				substore.SyncSubStorePartial(nil, doSub, doMihomo, doLatest, doOld)
 			}
 		}()
 	}
@@ -481,6 +555,7 @@ func (app *App) getStatus(c *gin.Context) {
 			"duration":  app.lastCheck.duration.Load(),
 			"total":     app.lastCheck.Total.Load(),
 			"available": app.lastCheck.available.Load(),
+			"traffic":   app.lastCheck.traffic.Load(),
 		}
 	}
 
@@ -500,7 +575,7 @@ func (app *App) getStatus(c *gin.Context) {
 		"successlimited":    check.Successlimited.Load(),
 		"processResults":    check.ProcessResults.Load(),
 		"lastCheck":         lastCheck,
-		"isSubStoreRunning": assets.IsSubStoreRunning.Load(),
+		"isSubStoreRunning": substore.IsSubStoreRunning.Load(),
 		"subStoreSyncing":   subStoreSyncing.Load(),  // 配置文件同步状态
 		"subStoreUpdating":  subStoreUpdating.Load(), // 程序资源更新状态
 		"subStoreUpdateMsg": updateMsg,
@@ -508,8 +583,8 @@ func (app *App) getStatus(c *gin.Context) {
 
 		"subStorePort":  config.GlobalConfig.SubStorePort,
 		"subStorePath":  config.GlobalConfig.SubStorePath,
-		"singboxOld":    utils.OldSingboxVersion,
-		"singboxLatest": utils.LatestSingboxVersion,
+		"singboxExtra":  substore.ExtraSingboxVersion,
+		"singboxLatest": substore.LatestSingboxVersion,
 	})
 }
 
@@ -545,62 +620,52 @@ func (app *App) updateSubStoreHandler(c *gin.Context) {
 		defer app.updateMu.Unlock()
 
 		slog.Info("Sub-Store 触发手动更新检查...")
-		result, err := assets.UpdateSubStoreAssets()
+		result, err := substore.UpdateSubStoreAssets()
 
 		var finalMsg string
-		if err != nil {
-			slog.Error("更新 Sub-Store 失败", "error", err)
-			finalMsg = "更新 Sub-Store 失败: " + err.Error()
-		} else if result != nil && (result.UpdatedBackend || result.UpdatedFrontend) {
-			if result.UpdatedBackend {
-				if !app.checking.Load() {
-					slog.Info("Sub-Store 服务 重启中...")
-					if app.cancel != nil {
-						app.cancel()
-						time.Sleep(500 * time.Millisecond)
-						if err := assets.KillNode(); err != nil {
-							slog.Error("强制清理 node 失败", "err", err)
-						}
-						app.ctx, app.cancel = context.WithCancel(context.Background())
-					}
-					go assets.RunSubStoreService(app.ctx)
-				} else {
-					slog.Warn("当前正在执行代理检测，跳过重启 Sub-Store 服务，新后端将在下次启动时生效")
-				}
-			}
-
-			// 触发已聚合在 APP 层的通知系统
-			utils.SendNotifySubStoreAssets(
-				result.UpdatedFrontend, result.NewFrontendVer,
-				result.UpdatedBackend, result.NewBackendVer,
-			)
-
-			// 组装成功信息
+		if result != nil && (result.UpdatedBackend || result.UpdatedFrontend) {
+			// 有更新成功的部分
 			var parts []string
 			args := []any{}
 
 			if result.UpdatedFrontend {
 				parts = append(parts, "前端 "+result.NewFrontendVer)
-				args = append(args,
-					"前端", result.NewFrontendVer,
-				)
+				args = append(args, "前端", result.NewFrontendVer)
 			}
 			if result.UpdatedBackend {
 				parts = append(parts, "后端 "+result.NewBackendVer)
-				args = append(args,
-					"后端", result.NewBackendVer,
-				)
+				args = append(args, "后端", result.NewBackendVer)
 			}
+
+			// 如果部分更新成功，但另一半失败了
+			if err != nil {
+				finalMsg = "Sub-Store 部分更新成功: " + strings.Join(parts, ", ") + "，但伴随错误: " + err.Error()
+				slog.Error("Sub-Store 部分更新成功，但有报错", "error", err)
+			} else {
 			finalMsg = "Sub-Store 更新成功: " + strings.Join(parts, ", ")
 			slog.Info("Sub-Store 更新成功", args...)
+			}
+		} else if err != nil {
+			// 没有任何更新成功，且存在报错
+			slog.Error("更新 Sub-Store 失败", "error", err)
+			finalMsg = "更新 Sub-Store 失败: " + err.Error()
 		} else {
 			finalMsg = "Sub-Store 已是最新版本，无需更新"
 			slog.Info("Sub-Store 已是最新版本，无需更新")
 		}
+
 		// 写入最终结果供前端轮询获取
 		subStoreUpdateMu.Lock()
 		subStoreUpdateMsg = finalMsg
 		subStoreUpdateMu.Unlock()
+
+		// 触发已聚合在 APP 层的通知系统 (增加判空防止 nil panic)
+		if result != nil {
+			utils.SendNotifySubStoreAssets(
+				result.UpdatedFrontend, result.NewFrontendVer,
+				result.UpdatedBackend, result.NewBackendVer,
+			)
+		}
 	}()
 
 	// 立即响应 200，前端轮询 /api/status 看到 subStoreUpdating = true 即可显示对应特效
@@ -609,7 +674,11 @@ func (app *App) updateSubStoreHandler(c *gin.Context) {
 
 // getLogs 获取日志
 func (app *App) getLogs(c *gin.Context) {
-	logPath := TempLog()
+	logPath, err := GetLogPath()
+	if err != nil {
+		slog.Error("无法获取日志存储路径", "error", err)
+	}
+
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		c.JSON(http.StatusOK, gin.H{"logs": []string{"[暂无日志文件]"}})
 		return
@@ -664,13 +733,12 @@ func AnalysisReportPath() (string, error) {
 func (app *App) getAnalysisReport(c *gin.Context) {
 	reportPath, err := AnalysisReportPath()
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"report": ""}) // 路径错误返回空，不报错
+		c.JSON(http.StatusOK, gin.H{"report_data": nil})
 		return
 	}
 
-	// 检查文件是否存在
 	if _, err := os.Stat(reportPath); os.IsNotExist(err) {
-		c.JSON(http.StatusOK, gin.H{"report": ""}) // 文件不存在返回空
+		c.JSON(http.StatusOK, gin.H{"report_data": nil})
 		return
 	}
 
@@ -680,7 +748,18 @@ func (app *App) getAnalysisReport(c *gin.Context) {
 		return
 	}
 
-	// 返回 JSON 对象，包含 report 字符串
+	// 直接在 Go 端把 YAML 解析为 map，框架会自动将其序列化为超高效率的 JSON 返回
+	var parsedData any
+	if err := yaml.Unmarshal(data, &parsedData); err == nil {
+		// 返回 parsedData 给前端，同时保留一个 raw_report 兼容老逻辑
+		c.JSON(http.StatusOK, gin.H{
+			"report_data": parsedData,
+			"report":      string(data),
+		})
+		return
+	}
+
+	// 解析失败的兜底
 	c.JSON(http.StatusOK, gin.H{"report": string(data)})
 }
 
@@ -700,7 +779,7 @@ func (app *App) getOriginVersion(c *gin.Context) {
 }
 
 func (app *App) getSingboxVersions(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"latest": utils.LatestSingboxVersion, "old": utils.OldSingboxVersion})
+	c.JSON(http.StatusOK, gin.H{"latest": substore.LatestSingboxVersion, "extra": substore.ExtraSingboxVersion})
 }
 
 // ReadLastNLines 读取最新日志
@@ -848,7 +927,10 @@ func (app *App) notifyTestHandler(c *gin.Context) {
 }
 
 func (app *App) clearLogsHandler(c *gin.Context) {
-	logPath := TempLog()
+	logPath, err := GetLogPath()
+	if err != nil {
+		slog.Error("无法获取日志存储路径", "error", err)
+	}
 
 	// 清空日志内容
 	if err := os.Truncate(logPath, 0); err != nil {
@@ -865,4 +947,17 @@ func (app *App) clearLogsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "日志文件已清空",
 	})
+}
+
+// checkGhProxyHandler 检测 GitHub 代理是否可用，并返回最佳代理
+// POST /api/proxy/check-github
+func (app *App) checkGhProxyHandler(c *gin.Context) {
+	var req struct {
+		Proxy string `json:"proxy"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	// 第二个参数传 true，代表这是来自前端 WebUI 的手动触发检测
+	result := utils.FindBestGhProxy(strings.TrimSpace(req.Proxy), true)
+	c.JSON(http.StatusOK, result)
 }

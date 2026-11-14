@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +23,6 @@ import (
 
 	"github.com/juju/ratelimit"
 	"github.com/metacubex/mihomo/adapter"
-	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/oschwald/maxminddb-golang/v2"
 	"github.com/samber/lo"
@@ -84,6 +86,7 @@ type Result struct {
 	Country        string
 	CountryCodeTag string
 	ISPTag         string
+	Speed          int
 }
 
 // ProxyChecker 处理代理检测的主要结构体
@@ -103,6 +106,11 @@ type ProxyChecker struct {
 	mediaChan chan *ProxyJob
 
 	pt *ProgressTracker
+
+	// 用于回收失败但还有分数的历史节点、以及本次成功的节点
+	historyChan chan map[string]any
+	HistoryPool []map[string]any
+	historyWg   sync.WaitGroup
 }
 
 // ProxyJob 在测活-测速-流媒体检测任务间传输信息
@@ -131,6 +139,18 @@ type ProxyJob struct {
 func (job *ProxyJob) Close() {
 	job.doneOnce.Do(func() {
 		if job.Client != nil {
+			// 在关闭前读取该节点消耗的总流量
+			traffic := job.Client.BytesRead.Load() + job.Client.BytesWritten.Load()
+			if traffic > 0 && job.Result.Proxy != nil {
+				if subURL, ok := job.Result.Proxy["sub_url"].(string); ok && subURL != "" {
+					proxyutils.SubStatsMutex.Lock()
+					st := proxyutils.SubStats[subURL]
+					st.Traffic += traffic // 累加流量到订阅统计中
+					proxyutils.SubStats[subURL] = st
+					proxyutils.SubStatsMutex.Unlock()
+				}
+			}
+
 			job.Client.Close()
 			job.Client = nil // 切断对底层资源的引用
 		}
@@ -217,11 +237,14 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 
 		// 设置进度跟踪
 		pt: NewProgressTracker(proxyCount),
+
+		historyChan: make(chan map[string]any, proxyCount), // 缓冲设为最大值防止阻塞
+		HistoryPool: make([]map[string]any, 0),
 	}
 }
 
 // Check 执行代理检测的主函数
-func Check() ([]Result, error) {
+func Check() ([]Result, []map[string]any, error) {
 	proxyutils.ResetRenameCounter()
 	ForceClose.Store(false)
 	Successlimited.Store(false)
@@ -244,14 +267,14 @@ func Check() ([]Result, error) {
 	Fetching.Store(true)
 	CurrentStepName.Store("解析远程列表")
 	// 获取订阅节点和之前成功的节点数量(已前置)
-	proxies, rawCount, subWasSuccedLength, historyLength, err := proxyutils.GetProxies(func(stepName string, done, total, available int) {
+	proxies, rawCount, lastResultLength, historyResultLength, err := proxyutils.GetProxies(func(stepName string, done, total, available int) {
 		CurrentStepName.Store(stepName)
 		Progress.Store(uint32(done))
 		ProxyCount.Store(uint32(total))
 		Available.Store(uint32(available))
 	})
 	if err != nil {
-		return nil, fmt.Errorf("获取节点失败: %w", err)
+		return nil, nil, fmt.Errorf("获取节点失败: %w", err)
 	}
 	slog.Info("已获取节点", "数量", rawCount)
 	slog.Info("去重后节点", "数量", len(proxies))
@@ -264,12 +287,12 @@ func Check() ([]Result, error) {
 	Progress.Store(0)
 	ProxyCount.Store(0)
 
-	if subWasSuccedLength > 0 {
-		slog.Info("已加载上次检测可用节点", "数量", subWasSuccedLength)
+	if lastResultLength > 0 {
+		slog.Info("已加载上次检测可用节点", "数量", lastResultLength)
 	}
 
-	if historyLength > 0 {
-		slog.Info("已加载历次检测可用节点", "数量", historyLength)
+	if historyResultLength > 0 {
+		slog.Info("已加载历次检测可用节点", "数量", historyResultLength)
 	}
 
 	CurrentStepName.Store("节点乱序")
@@ -288,11 +311,8 @@ func Check() ([]Result, error) {
 	// 获取动态映射的 CIDR 和 域名层级 文本
 	cidr, domainLevel := proxyutils.ThresholdToLevel(cfg.Threshold)
 
-	headSize := 0
-	if subWasSuccedLength < 10 {
-		// 设置之前成功的节点顺序在前
-		headSize = subWasSuccedLength
-	}
+	// 设置之前成功的节点顺序在前
+	headSize := lastResultLength
 
 	if len(proxies) > headSize && headSize > 0 {
 		tail := proxies[headSize:]
@@ -309,7 +329,7 @@ func Check() ([]Result, error) {
 	CurrentStepName.Store("获取订阅完成")
 	if len(proxies) == 0 {
 		slog.Info("没有需要检测的节点")
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// 标记订阅获取阶段结束
@@ -318,13 +338,13 @@ func Check() ([]Result, error) {
 
 	checker := NewProxyChecker(len(proxies))
 
-	results, err := checker.run(proxies)
+	results, historyPool, err := checker.run(proxies)
 	checker = nil //nolint:ineffassign
-	return results, err
+	return results, historyPool, err
 }
 
 // Run 运行检测流程
-func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
+func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, []map[string]any, error) {
 	CurrentStepName.Store("初始化检测")
 	// 限速设置
 	limit := config.GlobalConfig.TotalSpeedLimit
@@ -411,8 +431,12 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		)
 	}
 
-	if config.GlobalConfig.KeepSuccessProxies {
-		args = append(args, "keep-success-proxies", config.GlobalConfig.KeepSuccessProxies)
+	if config.GlobalConfig.UseLastResult {
+		args = append(args, "use-last-result", true)
+	}
+
+	if config.GlobalConfig.UseHistoryResult {
+		args = append(args, "use-history-result", true)
 	}
 
 	args = append(args, "analysis", "true")
@@ -429,6 +453,19 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	if config.GlobalConfig.SuccessRate > 0 {
 		r := fmt.Sprintf("%.1f%%", config.GlobalConfig.SuccessRate*100)
 		args = append(args, "success-rate", r)
+	}
+
+	enableIPv6 := config.GlobalConfig.EnableIPv6
+
+	args = append(args, "ipv6", enableIPv6)
+
+	// 设置 mihomo 变量及注入全局自定义 DNS
+	SetupMihomoDNS()
+
+	hasCustomDNS := len(config.GlobalConfig.NameServer) > 0 || len(config.GlobalConfig.ProxyServerNameserver) > 0 || len(config.GlobalConfig.ProxyServerNameserverPolicy) > 0
+
+	if hasCustomDNS {
+		args = append(args, "custom-dns", hasCustomDNS)
 	}
 
 	// 最终日志调用
@@ -479,16 +516,61 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		}
 	}()
 
-	// 启动流水线任务前设置 mihomo 变量
-	resolver.DisableIPv6 = !config.GlobalConfig.EnableIPv6
-
 	CurrentStepName.Store("进度")
+
+	// 启动本机网络健康探针：独立于代理，直连探测本机网络是否被检测流量拖垮。
+	// 使用独立 ctx，不随「达到成功数量限制」的 cancel 提前停止，检测收尾后统一关闭。
+	probeCtx, probeCancel := context.WithCancel(context.Background())
+	defer probeCancel()
+	netGuardOn := config.GlobalConfig.NetGuard
+	// 三个阶段各一个闸门，容量即各自配置的自然并发上限（网络健康时不产生任何额外限制）：
+	//   测活 = 测活并发；测速 = 测速并发；
+	//   媒体 = 媒体并发 × 平台数（每个节点会同时跑多个平台检测，闸门按「单平台任务」计）。
+	// 复核预算 = 总节点数的 5%（至少 20），避免死节点被整体复测拖慢检测。
+	// 由配置项 net-guard 控制，关闭后不启动探针，Acquire/Release/WaitSettled 均为空操作。
+	if netGuardOn {
+		caps := utils.GateCaps{Alive: pc.aliveConcurrent}
+		if speedON {
+			caps.Speed = pc.speedConcurrent
+		}
+		if mediaON {
+			caps.Media = pc.mediaConcurrent * len(config.GlobalConfig.Platforms)
+		}
+		utils.NetGuard.Start(probeCtx, caps, max(20, pc.proxyCount/20))
+	}
+
+	pc.historyWg.Add(1)
+	go func() {
+		defer pc.historyWg.Done()
+		for node := range pc.historyChan {
+			pc.HistoryPool = append(pc.HistoryPool, node)
+		}
+	}()
 
 	// 启动流水线阶段
 	go pc.distributeJobs(proxies, ctx)
 	go pc.runAliveStage(ctx, geoDB)
 	go pc.runSpeedStage(ctx, cancel)
 	pc.runMediaStageAndCollect(geoDB, ctx, cancel)
+
+	// 流水线已结束，停止探针，并输出保护机制是否介入的摘要，便于定位「变慢」是否与保护有关
+	probeCancel()
+	if netGuardOn {
+		if text, intervened := utils.NetGuard.Summary(); intervened {
+			slog.Info(text)
+		}
+	}
+
+	// 关闭历史节点收集并按分数排序
+	close(pc.historyChan)
+	pc.historyWg.Wait()
+
+	sort.Slice(pc.HistoryPool, func(i, j int) bool {
+		scoreI, _ := pc.HistoryPool[i]["history_score"].(int)
+		scoreJ, _ := pc.HistoryPool[j]["history_score"].(int)
+		return scoreI > scoreJ // 降序，最高分的排在前面
+	})
+
 	CurrentStepName.Store("处理结果")
 
 	// 确保进度显示到 100%
@@ -504,9 +586,26 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	// 重置预计剩余时间计算
 	ETASeconds.Store(0)
 
+	// 计算本次检测所有订阅文件的体积
+	var totalSubSize uint64
+	for _, stat := range proxyutils.SubStats {
+		totalSubSize += uint64(stat.Size)
+	}
+
+	totalSubSizeStr := utils.FormatTraffic(totalSubSize)
+
 	slog.Info(fmt.Sprintf("可用节点数量: %d", len(pc.results)))
-	CheckTrafficTotal = utils.FormatTraffic(TotalBytes.Load())
+
+	totalBytes := TotalBytes.Load()
+
+	CheckTrafficTotal = utils.FormatTraffic(totalBytes)
+
+	// 总流量 = 订阅文件大小 + 检测流量
+	totalTraffic := totalSubSize + totalBytes
+	totalTrafficStr := utils.FormatTraffic(totalTraffic)
+
 	slog.Info(fmt.Sprintf("检测消耗流量: %s", CheckTrafficTotal))
+
 	slog.Debug("流量", "UP", UP.Load(), "DOWN", DOWN.Load())
 
 	// 计算检测用时
@@ -516,8 +615,14 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	CurrentStepName.Store("生成检测报告")
 	time.Sleep(10 * time.Second)
 
+	// 仅当本次检测中出现过拥塞，才等本机网络（NAT 连接表 / DNS / 队列）恢复后再保存、上传、通知，
+	// 否则紧随其后的请求容易撞上残余拥塞而超时。没出现过拥塞时立即返回，最多等 15s。
+	utils.NetGuard.WaitSettled(context.Background(), 15*time.Second)
+
 	// 1. 深度分析 (利用上一步的成功率进行排序，生成 analysis yaml)
 	pc.GenerateAnalysisReport()
+
+	slog.Info("消耗流量统计", "总计", totalTrafficStr, "订阅", totalSubSizeStr, "检测", CheckTrafficTotal)
 
 	// 2. 清理元数据 (删除 sub_url 等字段，防止污染最终配置)
 	pc.CleanupMetadata()
@@ -537,7 +642,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	// 标记结束
 	Checking.Store(false)
 
-	return pc.results, nil
+	return pc.results, pc.HistoryPool, nil
 }
 
 // distributeJobs 分发代理任务
@@ -568,7 +673,10 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 				}
 
 				if checkCtxDone(ctx) {
-					return
+					// 收到终止信号，将当前队列未处理的历史节点无伤抢救下来
+					pc.scoreAndRecycle(proxies[index], "untested", 0, nil)
+					proxies[index] = nil
+					continue // 这里用 continue 继续消耗数组完成抢救
 				}
 
 				mapping := proxies[index]
@@ -591,6 +699,8 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 				if cli == nil {
 					// 创建失败：视为 alive 完成（失败），不进入 speed/media
 					pc.pt.CountAlive(false)
+					// 底层生成故障视为死节点
+					pc.scoreAndRecycle(mapping, "alive_fail", 0, nil)
 					continue
 				}
 
@@ -639,17 +749,44 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 					if job.aliveMarked.CompareAndSwap(false, true) {
 						pc.pt.CountAlive(false)
 					}
+					pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil) // 抢救
 					job.Close()
 					continue
 				}
+				// 自适应闸门（net-guard 关闭或网络健康时几乎零开销）：
+				// 仅当本机网络真的连不上外网时才收紧同时在途的测活数（最低保留 1/2），恢复后自动加回。
+				if !utils.NetGuard.Acquire(ctx, utils.GateAlive) {
+					if job.aliveMarked.CompareAndSwap(false, true) {
+						pc.pt.CountAlive(false)
+					}
+					pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil) // 抢救
+					job.Close()
+					continue
+				}
+
 				// 节点测活
 				isAlive := checkAlive(job, ctx)
+
+				// 拥塞期间失败：用有限的预算复核一次，避免把「本来存活」的节点误判为死亡。
+				// 不等待网络恢复，只做一次短暂抖动后重测，且预算用尽后不再复核。
+				if !isAlive && !checkCtxDone(ctx) && utils.NetGuard.TakeRecheck() {
+					slog.Debug("拥塞期间测活失败，复核一次", "Name", job.Client.mProxy.Name())
+					select {
+					case <-ctx.Done():
+					case <-time.After(time.Duration(300+rand.IntN(500)) * time.Millisecond):
+					}
+					if !checkCtxDone(ctx) {
+						isAlive = checkAlive(job, ctx)
+					}
+				}
+				utils.NetGuard.Release(utils.GateAlive)
 
 				if !isAlive {
 					// 记录非存活
 					if job.aliveMarked.CompareAndSwap(false, true) {
 						pc.pt.CountAlive(false)
 					}
+					pc.scoreAndRecycle(job.Result.Proxy, "alive_fail", 0, nil) // 失败打分扣除
 					job.Close()
 					continue // 不进入 speed/media
 				}
@@ -658,17 +795,19 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 				if job.NeedCF {
 					job.IsCfAccessible, job.CfLoc, job.CfIP = platform.CheckCloudflare(job.Client.Client)
 					if config.GlobalConfig.DropBadCfNodes && !job.IsCfAccessible {
-						job.Close()
 						// 记录丢弃
 						if job.aliveMarked.CompareAndSwap(false, true) {
 							pc.pt.CountAlive(false)
 						}
+						pc.scoreAndRecycle(job.Result.Proxy, "alive_fail", 0, nil) // 视为故障
+						job.Close()
 						continue
 					}
 				}
 
 				// 地区过滤
 				if !job.checkJobLocation(db, ctx) {
+					pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil) // 未通过地区过滤，算作无伤丢弃，保留原分数
 					job.Close()
 					continue
 				}
@@ -726,11 +865,22 @@ func (pc *ProxyChecker) runSpeedStage(ctx context.Context, cancel context.Cancel
 					if job.speedMarked.CompareAndSwap(false, true) {
 						pc.pt.CountSpeed(false)
 					}
+					pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil) // 抢救
+					job.Close()
+					continue
+				}
+				// 测速闸门：本机网络拥塞时收紧同时下载的节点数（网络健康时不阻塞）
+				if !utils.NetGuard.Acquire(ctx, utils.GateSpeed) {
+					if job.speedMarked.CompareAndSwap(false, true) {
+						pc.pt.CountSpeed(false)
+					}
+					pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil) // 抢救
 					job.Close()
 					continue
 				}
 				getBytes := func() uint64 { return job.Client.BytesRead.Load() }
 				speed, _, err := platform.CheckSpeed(job.Client.Client, Bucket, getBytes)
+				utils.NetGuard.Release(utils.GateSpeed)
 				success := err == nil && speed >= config.GlobalConfig.MinSpeed
 				if job.speedMarked.CompareAndSwap(false, true) {
 					pc.pt.CountSpeed(success)
@@ -740,6 +890,7 @@ func (pc *ProxyChecker) runSpeedStage(ctx context.Context, cancel context.Cancel
 					}
 				}
 				if !success {
+					pc.scoreAndRecycle(job.Result.Proxy, "speed_fail", 0, nil) // 失败打分扣除
 					job.Close()
 					continue
 				}
@@ -817,6 +968,7 @@ func (pc *ProxyChecker) runMediaStageAndCollect(db *maxminddb.Reader, ctx contex
 						if job.mediaMarked.CompareAndSwap(false, true) {
 							pc.pt.CountMedia()
 						}
+						pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil) // 抢救
 						job.Close()
 						continue
 					}
@@ -846,6 +998,12 @@ func (pc *ProxyChecker) runMediaStageAndCollect(db *maxminddb.Reader, ctx contex
 				}
 
 				pc.updateProxyName(&job.Result, job.Client, job.Speed, db, job.CfLoc, job.CfIP, ctx)
+
+				// 记录节点下载速度
+				job.Result.Speed = job.Speed
+
+				// 成功节点打分并入池
+				pc.scoreAndRecycle(job.Result.Proxy, "success", job.Speed, &job.Result)
 
 				// 将结果发送到 collector
 				pc.resultChan <- job.Result
@@ -927,6 +1085,10 @@ func mediaCheck(job *ProxyJob, db *maxminddb.Reader, ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, plat := range plats {
 		wg.Go(func() {
+			// 媒体闸门：按「单平台任务」限制全局并发。这里刻意用 Background 而不是 ctx：
+			// 达到成功数量上限后 ctx 会被取消，但已进入媒体阶段的节点仍要完整检测完，不能被闸门跳过。
+			utils.NetGuard.Acquire(context.Background(), utils.GateMedia)
+			defer utils.NetGuard.Release(utils.GateMedia)
 			checkOnePlatform(job, plat, mediaClient, db, ctx)
 		})
 	}
@@ -1097,7 +1259,17 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 	// 以节点IP查询位置重命名（如果开启）
 	if config.GlobalConfig.RenameNode {
 		if res.Country == "" {
-			country, _, countryCodeTag, ispTag, _ := proxyutils.GetProxyCountry(httpClient.Client, db, jctx, cfLoc, cfIP)
+			// 使用 MediaCheckTimeout 替换默认的短超时
+			locTimeout := config.GlobalConfig.MediaCheckTimeout
+			if locTimeout <= 0 {
+				locTimeout = 10
+			}
+			renameClient := &http.Client{
+				Transport: httpClient.Transport,
+				Timeout:   time.Duration(locTimeout) * time.Second,
+			}
+
+			country, _, countryCodeTag, ispTag, _ := proxyutils.GetProxyCountry(renameClient, db, jctx, cfLoc, cfIP)
 			res.Country = country
 			res.CountryCodeTag = countryCodeTag
 			res.ISPTag = ispTag
@@ -1245,6 +1417,11 @@ type ProxyClient struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	mProxy        constant.Proxy
+
+	// conns 记录该客户端建立的所有底层连接。
+	// CloseIdleConnections 只能关闭「空闲」连接，仍在使用/被遗弃的连接会一直挂着
+	// （表现为连接数居高不下、路由器连接表被占满），因此 Close 时统一强制关闭。
+	conns sync.Map // map[*countingConn]struct{}
 }
 
 // CreateClient 创建独立的代理客户端
@@ -1312,12 +1489,21 @@ func CreateClient(mapping map[string]any) (client *ProxyClient) {
 				return nil, err
 			}
 
-			return &countingConn{
+			cc := &countingConn{
 				Conn:         rawConn,
 				readCounter:  &pc.BytesRead,
 				writeCounter: &pc.BytesWritten,
 				networkLimit: networkLimitDefault,
-			}, nil
+			}
+			cc.onClose = func() { pc.conns.Delete(cc) }
+			pc.conns.Store(cc, struct{}{})
+
+			// 拨号期间客户端已被关闭：立即回收，避免 Close 之后才建立成功的连接泄漏
+			if clientCtx.Err() != nil {
+				_ = cc.Close()
+				return nil, clientCtx.Err()
+			}
+			return cc, nil
 		},
 		ForceAttemptHTTP2:   true, // 强制尝试 HTTP/2 协议
 		DisableKeepAlives:   false,
@@ -1355,6 +1541,14 @@ func (pc *ProxyClient) Close() {
 		pc.cancel()
 	}
 
+	// 强制关闭所有仍未关闭的底层连接（sync.Map 允许在 Range 中删除）
+	pc.conns.Range(func(k, _ any) bool {
+		if cc, ok := k.(*countingConn); ok {
+			_ = cc.Close()
+		}
+		return true
+	})
+
 	// 关闭mihomo代理实例
 	if pc.mProxy != nil {
 		if err := pc.mProxy.Close(); err != nil {
@@ -1386,6 +1580,19 @@ type countingConn struct {
 	readCounter  *atomic.Uint64
 	writeCounter *atomic.Uint64
 	networkLimit bool
+
+	onClose   func() // 关闭时从 ProxyClient.conns 中注销
+	closeOnce sync.Once
+}
+
+// Close 关闭连接并从所属客户端的连接表中注销（幂等）
+func (c *countingConn) Close() error {
+	c.closeOnce.Do(func() {
+		if c.onClose != nil {
+			c.onClose()
+		}
+	})
+	return c.Conn.Close()
 }
 
 func (c *countingConn) Read(b []byte) (int, error) {
@@ -1440,14 +1647,34 @@ func isRetryable(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
-	if netErr, ok := errors.AsType[net.Error](err); ok {
-		// Timeout() 涵盖 i/o timeout、TLS handshake timeout 等
-		return netErr.Timeout()
-	}
-	// connection reset by peer / unexpected EOF
-	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) {
+
+	// 网络错误
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
 		return true
 	}
+
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	if _, ok := errors.AsType[*net.OpError](err); ok {
+		return true
+	}
+
+	if sysErr, ok := errors.AsType[*os.SyscallError](err); ok {
+		switch {
+		case errors.Is(sysErr.Err, syscall.ECONNRESET):
+			return true
+
+		case errors.Is(sysErr.Err, syscall.EPIPE):
+			return true
+
+		case errors.Is(sysErr.Err, syscall.ETIMEDOUT):
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -1457,7 +1684,8 @@ func withRetry(ctx context.Context, fn func() error) error {
 	for i := range MediaCheckMaxRetries {
 		if i > 0 {
 			// 指数退避，但不超过全局 timeout
-			wait := time.Duration(i*i) * 200 * time.Millisecond
+			// 指数退避 + 随机抖动，避免大量任务同一时刻重试
+			wait := time.Duration(i*i)*200*time.Millisecond + time.Duration(rand.Int64N(int64(300*time.Millisecond)))
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -1509,4 +1737,61 @@ func containsLocation(filterLocs []string, country string) bool {
 	return lo.ContainsBy(filterLocs, func(loc string) bool {
 		return strings.EqualFold(loc, country)
 	})
+}
+
+// scoreAndRecycle 计算节点健康度分数。若分数 > 0，回收至 historyChan 以便后续统一排序保存。
+func (pc *ProxyChecker) scoreAndRecycle(proxy map[string]any, state string, speed int, result *Result) {
+	// 识别是否是历史节点或刚成功的节点
+	tag, _ := proxy["sub_tag"].(string)
+	urlStr, _ := proxy["sub_url"].(string)
+	isHistory := tag == "#History" || tag == "#Succeed" || strings.Contains(urlStr, "/history.yaml") || strings.Contains(urlStr, "/all.yaml")
+
+	// 如果是全新抓取来的节点，且本次检测失败，直接无视不记录入历史
+	if !isHistory && state != "success" {
+		return
+	}
+
+	// 提取当前分数，首次打分赋予初始值 10
+	score := 10
+	if scoreRaw, exists := proxy["history_score"]; exists {
+		switch v := scoreRaw.(type) {
+		case int:
+			score = v
+		case float64:
+			score = int(v) // yaml 反序列化后数值可能是 float64
+		}
+	}
+
+	// 动态调整分值
+	switch state {
+	case "alive_fail":
+		score -= 2 // 连通性彻底断开，重罚 (-2)
+	case "speed_fail":
+		score -= 1 // 速度不达标，轻罚 (-1)
+	case "success":
+		score += 1 // 存活奖励 (+1)
+		// 速度奖励附加
+		if speed > 50*1024*1024 { // > 50MB/s 额外 +2
+			score += 2
+		} else if speed > 20*1024*1024 { // > 20MB/s 额外 +1
+			score += 1
+		}
+		// 流媒体与AI高质量奖励附加
+		if result != nil && (result.Openai || result.OpenaiWeb || result.Netflix || result.Disney || result.Gemini.Region != "") {
+			score += 1
+		}
+	case "untested":
+		// 未测试(例如达到上限提前终止或被地区强行过滤)，不增不减，保留原分数
+	}
+
+	// 锁定最高分限制
+	if score > 20 {
+		score = 20
+	}
+
+	// 如果扣除后大于 0 就能留在历史库中
+	if score > 0 {
+		proxy["history_score"] = score
+		pc.historyChan <- proxy
+	}
 }

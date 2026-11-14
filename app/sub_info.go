@@ -55,7 +55,7 @@ func (app *App) handleSubscriptionInfo(c *gin.Context) {
 // 字段说明：
 //   - upload / download  来自 check.UP / check.DOWN（原子计数器，单位 bytes）
 //   - total              固定 1024 TiB，1 PB
-//   - expire             固定 2077-06-01 UTC Unix 时间戳
+//   - expire             动态计算的下次重置时间 Unix 时间戳（提示客户端获取新数据）
 //   - reset_hour         距下次重置不足 1 天时显示，值为重置时刻的小时数
 //   - reset_day          距下次重置超过 1 天时显示，值为剩余整天数
 //   - next_update        下次重置的格式化时间（始终显示）
@@ -108,7 +108,9 @@ func buildSubscriptionInfo() string {
 	writeKV(&b, "upload", strconv.FormatUint(upload, 10))
 	writeKV(&b, "download", strconv.FormatUint(download, 10))
 	writeKV(&b, "total", strconv.FormatInt(totalBytes, 10))
-	writeKV(&b, "expire", strconv.FormatInt(expireUnix, 10))
+
+	// 将原先写死的 expireUnix 改为 next.Unix()
+	writeKV(&b, "expire", strconv.FormatInt(next.Unix(), 10))
 
 	b.WriteString(resetField)
 	b.WriteString("; ")
@@ -137,7 +139,7 @@ func writeKV(b *strings.Builder, key string, val string) {
 // 优先级：
 //  1. CronExpression 存在 → 从当前时间起求解下一次 cron 触发时刻
 //  2. CheckInterval > 0   → base（CheckEndTime 或 now）+ interval 分钟
-//  3. 兜底               → now + 24h
+//  3. 兜底               → 2077-06-01 UTC（未配置任何自动更新时）
 func calcNextResetTime(now time.Time) time.Time {
 	if expr := strings.TrimSpace(config.GlobalConfig.CronExpression); expr != "" {
 		if next, ok := nextCronTime(expr, now); ok {
@@ -153,7 +155,8 @@ func calcNextResetTime(now time.Time) time.Time {
 		return base.Add(time.Duration(interval) * time.Minute)
 	}
 
-	return now.Add(24 * time.Hour)
+	// 兜底：未配置定时任务，返回赛博朋克儿童节
+	return time.Unix(expireUnix, 0)
 }
 
 // nextCronTime 从 from 时刻起，向前搜索 cron 表达式的下一次触发时间。

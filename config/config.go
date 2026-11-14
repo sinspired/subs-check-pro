@@ -14,6 +14,7 @@ type SingBoxConfig struct {
 type ResolveDomainConfig struct {
 	Enable      bool   `yaml:"enable"`
 	Provider    string `yaml:"provider"`
+	CustomURL   string `mapstructure:"custom-url" yaml:"custom-url"`
 	Type        string `yaml:"type"`
 	Cache       string `yaml:"cache"`
 	CacheTTL    int    `yaml:"cache-ttl"`
@@ -48,13 +49,19 @@ type SubProcessConfig struct {
 }
 
 type Config struct {
-	PrintProgress        bool    `yaml:"print-progress"`
-	ProgressMode         string  `yaml:"progress-mode"`
-	Concurrent           int     `yaml:"concurrent"`
-	AliveConcurrent      int     `yaml:"alive-concurrent"`
-	SpeedConcurrent      int     `yaml:"speed-concurrent"`
-	MediaConcurrent      int     `yaml:"media-concurrent"`
-	EnableIPv6           bool    `yaml:"ipv6"`
+	PrintProgress   bool   `yaml:"print-progress"`
+	ProgressMode    string `yaml:"progress-mode"`
+	Concurrent      int    `yaml:"concurrent"`
+	AliveConcurrent int    `yaml:"alive-concurrent"`
+	SpeedConcurrent int    `yaml:"speed-concurrent"`
+	MediaConcurrent int    `yaml:"media-concurrent"`
+	EnableIPv6      bool   `yaml:"ipv6"`
+	// 节点检测自定义 DNS 配置
+	NameServer            []string `yaml:"nameserver"`
+	ProxyServerNameserver []string `yaml:"proxy-server-nameserver"`
+	// 专用于解析节点域名的策略
+	ProxyServerNameserverPolicy map[string]any `mapstructure:"proxy-server-nameserver-policy" yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
+
 	CheckInterval        int     `yaml:"check-interval"`
 	CronExpression       string  `yaml:"cron-expression"`
 	Timeout              int     `yaml:"timeout"`
@@ -85,6 +92,7 @@ type Config struct {
 	SubUrlsReTry         int     `yaml:"sub-urls-retry"`
 	SubUrlsRetryInterval int     `yaml:"sub-urls-retry-interval"`
 	SubUrlsTimeout       int     `yaml:"sub-urls-timeout"`
+	SubUrlMaxSizeMB      int     `yaml:"sub-url-max-size-mb"`
 
 	// SubsParseBatch 每批次发往去重队列的节点数
 	// 生产者攒够该数量后整批发送，消费者逐批接收处理。
@@ -110,15 +118,17 @@ type Config struct {
 	// 注意：真正防止 OOM 的是 MemoryLimitMB；这个只是日常情况下的内存/CPU 取舍旋钮。
 	GCPercent int `yaml:"gc-percent"`
 
-	SubUrlsRemote      []string `yaml:"sub-urls-remote"`
-	SubUrls            []string `yaml:"sub-urls"`
-	SuccessRate        float64  `yaml:"success-rate"`
-	MihomoAPIURL       string   `yaml:"mihomo-api-url"`
-	MihomoAPISecret    string   `yaml:"mihomo-api-secret"`
-	ListenPort         string   `yaml:"listen-port"`
-	RenameNode         bool     `yaml:"rename-node"`
-	KeepSuccessProxies bool     `yaml:"keep-success-proxies"`
-	OutputDir          string   `yaml:"output-dir"`
+	NetGuard         bool     `yaml:"net-guard"`
+	SubUrlsRemote    []string `yaml:"sub-urls-remote"`
+	SubUrls          []string `yaml:"sub-urls"`
+	SuccessRate      float64  `yaml:"success-rate"`
+	MihomoAPIURL     string   `yaml:"mihomo-api-url"`
+	MihomoAPISecret  string   `yaml:"mihomo-api-secret"`
+	ListenPort       string   `yaml:"listen-port"`
+	RenameNode       bool     `yaml:"rename-node"`
+	UseLastResult    bool     `yaml:"use-last-result"`
+	UseHistoryResult bool     `yaml:"use-history-result"`
+	OutputDir        string   `yaml:"output-dir"`
 	// ConfigDir 运行时由 app.loadConfig 注入，值为当前配置文件所在目录。
 	// 不参与 YAML 序列化，仅供 save/method/local.go 计算默认输出路径使用。
 	ConfigDir            string   `yaml:"-"`
@@ -181,13 +191,14 @@ type Config struct {
 	UpdateOnStartup       bool     `yaml:"update-on-startup"`
 	CronCheckUpdate       string   `yaml:"cron-check-update"`
 	Prerelease            bool     `yaml:"prerelease"`
+	UpgradeToV3           bool     `yaml:"upgrade-to-v3"`
 	UpdateTimeout         int      `yaml:"update-timeout"`
 
 	// Singbox 支持最新版和 iOS 兼容版
 	SingboxLatest SingBoxConfig `yaml:"singbox-latest"`
 
-	// Deprecated: SingboxOld iOS 兼容版本 1.11；sing-box MT 于 2026-08-31 上架 App Store 后将逐步移除
-	SingboxOld SingBoxConfig `yaml:"singbox-old"`
+	// SingboxExtra 由于singbox各个版本配置不同，额外配置很有用
+	SingboxExtra SingBoxConfig `yaml:"singbox-extra"`
 
 	// SubProcess sub 订阅操作配置
 	SubProcess SubProcessConfig `yaml:"sub-process"`
@@ -215,6 +226,13 @@ var OriginDefaultConfig = &Config{
 
 	// 10 万原始节点触发一次；百万量级约 10 次 GC，CPU 开销可忽略
 	SubsDedupeBatch: 100000,
+
+	SubUrlMaxSizeMB: 50,
+
+	NetGuard: false,
+
+	UseLastResult:    false,
+	UseHistoryResult: false,
 
 	// Sub-Store 资源默认每周五更新
 	SubStoreUpdateCron: "14 13 * * 5",

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -143,20 +142,17 @@ func (app *App) CheckPortConflict() (httpPortAvailable bool, subStorePortAvailab
 	}
 
 	if config.GlobalConfig.SubStorePort != "" {
-		if runtime.GOOS == "linux" && runtime.GOARCH == "386" {
-			slog.Warn("Node.js 不支持 Linux 32位架构，Sub-Store 服务未启动")
+		subStoreAddr := normalizeListenAddr(config.GlobalConfig.SubStorePort)
+		// 不再依赖外部 Node 环境，移除 Linux 386 架构限制，直接检查端口
+		if checkPortFree(subStoreAddr) {
 			subStorePortAvailable = true
 		} else {
-			subStoreAddr := normalizeListenAddr(config.GlobalConfig.SubStorePort)
-			if checkPortFree(subStoreAddr) {
-				subStorePortAvailable = true
-			} else {
-				subStorePortAvailable = false
-			}
+			subStorePortAvailable = false
 		}
 	} else {
 		subStorePortAvailable = true
 	}
+
 	return httpPortAvailable, subStorePortAvailable
 }
 

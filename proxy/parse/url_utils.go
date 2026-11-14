@@ -1,9 +1,10 @@
 package parse
 
 import (
-	"github.com/sinspired/subs-check-pro/v2/utils"
 	"net/url"
 	"strings"
+
+	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
 func SsLocalRequest(u *url.URL) bool {
@@ -54,4 +55,32 @@ func CleanURL(raw string) string {
 
 	// 3. 循环移除尾部所有属于 cutset 的字符，直到遇到非 cutset 字符为止
 	return strings.TrimRight(s, cutset)
+}
+
+// IsIgnoredURL 判断是否为不应被当作订阅的 URL（过滤 DoH、常见 DNS 地址等）
+func IsIgnoredURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return true // 连基本解析都失败的视为无效
+	}
+
+	// 1. 检查路径特征 (常见的 DoH 请求路径)
+	path := strings.ToLower(parsed.Path)
+	if path == "/dns-query" || path == "/dns-message" || path == "/resolve" {
+		return true
+	}
+
+	// 2. 检查 Host 特征 (常见的公共 DNS 域名)
+	host := strings.ToLower(parsed.Host)
+	if host == "dns.google" ||
+		host == "doh.pub" ||
+		host == "cloudflare-dns.com" ||
+		host == "dns.alidns.com" ||
+		host == "1.1.1.1" ||
+		host == "8.8.8.8" ||
+		host == "223.5.5.5" {
+		return true
+	}
+
+	return false
 }

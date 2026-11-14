@@ -42,6 +42,27 @@ media-concurrent: 100
 # 是否启用IPv6，默认禁用
 ipv6: false
 
+# 节点检测自定义 DNS 配置
+# 留空表示使用默认系统解析
+nameserver:
+  - 114.114.114.114 # default value
+  - 8.8.8.8 # default value
+  - tls://223.5.5.5:853 # DNS over TLS
+  - https://doh.pub/dns-query # DNS over HTTPS
+  - https://dns.alidns.com/dns-query#h3=true
+
+# 专用于节点域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
+proxy-server-nameserver:
+  - https://dns.alidns.com/dns-query
+  - 8.8.8.8
+
+proxy-server-nameserver-policy:
+  +.local: system
+  +.baidu.com: 223.5.5.5
+  +.cloudflre.com: 1.1.1.1
+  +.github.com: 223.5.5.5
+  +.githubusercontent.com: 223.5.5.5
+
 # 超时时间(毫秒)(节点的最大延迟)，主要影响测活任务
 timeout: 6000
 
@@ -54,12 +75,11 @@ concurrent: 10
 # success-limit <= success <= success-limit+concurrent
 success-limit: 100
 
-# 此选项将保存并加载 {上次检测成功的节点} 和 {历次检测成功的节点}
-# 如果为true，则保留之前测试成功的节点
-# 避免因为上游链接更新，导致可用节点丢失
-# 本项目已移除未经验证的 /all.yaml /sub/all.yaml访问
-# 可放心设置CF Tunnel隧道,在外网访问、修改配置、分享订阅
-keep-success-proxies: true
+# 是否加载上次检测结果(all.yaml)
+use-last-result: false
+
+# 是否加载并保存历史检测结果(history.yaml)
+use-history-result: false
 
 # -----------下载参数-----------
 # 注意: 节点可能被测速测死(暂时或永久), 经过多次测试, 不用怀疑!
@@ -109,6 +129,9 @@ update-on-startup: true
 cron-check-update: '0 9-23/1,0,2-7/3 * * *'
 # 使用预发布版本
 prerelease: false
+# 是否允许从 v2 跨大版本升级到 v3（默认 false，仅检测 v2 更新）
+# 注意：v3 与 v2 使用不同的 Sub-Store 方案，升级前建议备份配置
+upgrade-to-v3: false
 # 下载新版本超时时间(分钟)(默认2分钟)
 # 如系统代理和github代理不稳定,可适当调大即可
 # 请输入整数
@@ -182,8 +205,11 @@ sub-process:
     cache: enable
     # 缓存时长(秒)
     cache-ttl: 3600
+    custom-url: ''
+
   # 开启节点裂变（将多 IP 展开为独立节点）
   node-split: false
+
   # 注入订阅流量信息节点
   sub-info: false
 
@@ -207,18 +233,15 @@ sub-process:
 # json文件为分流规则
 # js脚本用来根据规则对节点进行处理
 # singbox每个版本规则不兼容，须根据客户端版本选择合适的规则
-# singbox 最新版 1.14.x
 singbox-latest:
   version: 1.14
   json: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.json'
   js: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.js'
 
-# singbox-old iOS 支持同时生成旧版 singbox 配置
-# ⚠️ sing-box MT 于 2026-08-31 上架 App Store 后，iOS 用户可使用最新 singbox 版本，将逐步移除该项配置
-singbox-old:
-  version: 1.11
-  json: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.json'
-  js: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.11.x/sing-box.js'
+singbox-extra:
+  version: 1.15-pre
+  json: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.json'
+  js: 'https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.15.x/sing-box.js'
 
 # 以下配置查看sub-store相关的教程：https://hub.docker.com/r/xream/sub-store
 # sub-store同步gist定时任务
@@ -442,6 +465,14 @@ ghproxy-group:
 sub-urls-retry: 3
 # 网络实在太差，就调高一点，比如 15
 sub-urls-timeout: 10
+
+# 每个订阅的大小上限
+sub-url-max-size-mb: 50
+
+# 网络拥塞保护：检测时自动探测本机网络，仅在连不上网时才收紧测活并发，恢复后自动加回
+# 如果觉得影响检测速度，可设为 false 完全关闭，如果网络和硬件设备不好，可设为 true，同时调整其他并发参数
+net-guard: false
+
 # 订阅成功率提醒阈值
 # 低于此值会将订阅链接打印出来，用于排查质量差的订阅，使用小于1的小数，比如：0.001
 success-rate: 0
@@ -499,9 +530,6 @@ sub-urls:
   # - 'https://example.com/sub2.txt'
   # - 'https://example.com/sub?token=43fa8f0dc9bb00dcfec2afb21b14378a'
   # - 'https://example.com/sub?token=43fa8f0dc9bb00dcfec2afb21b14378a?flag=clash.meta'
-  # - 'https://raw.githubusercontent.com/example/repo/main/config/{Ymd}.yaml'
-  # - 'https://raw.githubusercontent.com/example/repo/main/daily/daily-{Y}-{mm}-{d}.yaml'
-  # - 'https://example.com/sub.txt#我是备注'
   - 'https://free.datiya.com/uploads/{Ymd}-clash.yaml'
   - 'https://node.freeclashnode.com/uploads/{Y}/{mm}/0-{Ymd}.yaml'
   - 'https://node.freeclashnode.com/uploads/{Y}/{mm}/1-{Ymd}.yaml'

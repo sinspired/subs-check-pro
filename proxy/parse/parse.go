@@ -3,6 +3,7 @@ package parse
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -167,10 +168,56 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 
 // parseRawLines 读取纯文本行并交给统一解析器
 func parseRawLines(data []byte, subURL string) ([]map[string]any, int) {
+	return parseRawLinesOpt(data, subURL, false)
+}
+
+// coveredByStdConvert 判断一行是否已被 convert.ConvertsV2Ray(整份数据) 处理过，
+// 且在 ParseProxyLinksAndConvert 中也只会走同一个 convert.ConvertsV2Ray：
+//
+//   - 必须以字母开头、紧跟合法的 scheme:// —— 带前导空白/短横线（"- vless://…"）的行，
+//     整体转换认不出来，只有逐行路径会去掉前缀，所以不算；
+//   - wireguard/wg/ssr 由专用解析器处理，mieru 由 ConvertsV2RayExtra 处理，
+//     hy/hy2 会被 FixupProxyLink 改写头部，这些都不算。
+func coveredByStdConvert(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	if c := raw[0]; !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') {
+		return false
+	}
+	i := strings.Index(raw, "://")
+	if i <= 0 {
+		return false
+	}
+	for j := 0; j < i; j++ {
+		c := raw[j]
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '+' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	switch strings.ToLower(raw[:i]) {
+	case "wireguard", "wg", "ssr", "mieru", "hy", "hy2":
+		return false
+	}
+	return true
+}
+
+// parseRawLinesOpt 是 parseRawLines 的可选优化版本。
+//
+// skipStd=true 表示调用方刚刚已对「整份数据」成功执行过 convert.ConvertsV2Ray：
+// 其中标准 scheme:// 的行已经转换过了，这里再转换一遍只会产出相同的节点，
+// 被调用方的跨解析器去重丢弃，纯属重复劳动（对逐行链接订阅，CPU 与内存开销都翻倍）。
+// 因此只保留 ConvertsV2Ray 处理不了的行：无协议头（ip:port、base64 片段）、
+// 带前导前缀、wg/ssr/mieru/hy 等非标写法。
+func parseRawLinesOpt(data []byte, subURL string, skipStd bool) ([]map[string]any, int) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	var lines []string
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		raw := scanner.Text()
+		if skipStd && coveredByStdConvert(raw) {
+			continue
+		}
+		line := strings.TrimSpace(raw)
 		if line != "" && !strings.HasPrefix(line, "#") {
 			lines = append(lines, strings.TrimLeft(line, "- "))
 		}
@@ -184,7 +231,10 @@ func parseRawLines(data []byte, subURL string) ([]map[string]any, int) {
 // FallbackExtractV2Ray 正则提取兜底
 func FallbackExtractV2Ray(data []byte, subURL string) []map[string]any {
 	decodedData := TryDecodeBase64(data)
-	slog.Debug("base64解码", "decode", string(decodedData))
+	// string(decodedData) 会整份拷贝一次；日志级别不是 Debug 时不要白白分配
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		slog.Debug("base64解码", "decode", string(decodedData))
+	}
 	links := ExtractV2RayLinks(decodedData)
 	if len(links) == 0 {
 		return nil
@@ -217,7 +267,8 @@ func ExtractClashProviderURLs(m map[string]any) []string {
 			}
 			if u, ok := pm["url"].(string); ok {
 				u = strings.TrimSpace(u)
-				if u != "" {
+				// -> 增加 DoH / DNS 过滤逻辑 <-
+				if u != "" && !IsIgnoredURL(u) {
 					out = append(out, u)
 				}
 			}

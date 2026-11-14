@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -17,12 +18,24 @@ import (
 	"github.com/sinspired/subs-check-pro/v2/utils"
 )
 
+const targetMajorVersion uint64 = 2
+
+type releaseCandidate struct {
+	tag string
+	ver *semver.Version
+}
+
 var (
 	originExePath string                                                        // exe路径,避免linux syscall路径错误
 	repo          = selfupdate.NewRepositorySlug("sinspired", "subs-check-pro") // 更新仓库
 	arch          = getArch()                                                   // 架构映射
 	isSysProxy    bool                                                          // 系统代理是否可用
 )
+
+var lastNotify struct {
+	version string
+	time    time.Time
+}
 
 // 获取当前架构映射,和GitHub release对应
 func getArch() string {
@@ -75,12 +88,18 @@ func (app *App) InitUpdateInfo() {
 
 // detectSuccessNotify 发送新版本通知
 func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
+	// 检查是否一周内已提醒过同版本
+	if lastNotify.version == latest.Version() &&
+		time.Since(lastNotify.time) < 7*24*time.Hour {
+		return
+	}
+
 	isGUI := os.Getenv("START_FROM_GUI") != ""
 	isDockerEnv := isDocker()
 	autoUpdate := config.GlobalConfig.EnableSelfUpdate
 
 	// 是否需要提示（任一条件满足）
-	needNotify := !autoUpdate || isDockerEnv || isGUI
+	needNotify := !autoUpdate || isDockerEnv
 
 	if needNotify {
 		slog.Warn("发现新版本",
@@ -101,10 +120,8 @@ func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
 		switch {
 		case isDockerEnv:
 			updateHint = fmt.Sprintf("docker pull sinspired/subs-check-pro:%s", latest.Version())
-
 		case isGUI:
 			updateHint = "GUI内核: " + latest.AssetURL
-
 		default:
 			updateHint = latest.AssetURL
 		}
@@ -119,6 +136,10 @@ func detectSuccessNotify(currentVersion string, latest *selfupdate.Release) {
 			updateHint,
 		)
 	}
+
+	// 更新提醒状态
+	lastNotify.version = latest.Version()
+	lastNotify.time = time.Now()
 }
 
 // updateSuccess 更新成功处理
@@ -245,7 +266,7 @@ func tryUpdateOnce(parentCtx context.Context, latest *selfupdate.Release,
 	}
 }
 
-// detectLatestRelease 探测最新版本并判断是否需要更新
+// detectLatestRelease 探测最新版本并判断是否需要更新（仅检查 v2 大版本）
 func (app *App) detectLatestRelease() (*selfupdate.Release, bool, error) {
 	token := config.GlobalConfig.GithubToken
 	hasValidToken := utils.IsValidGitHubToken(token)
@@ -258,52 +279,116 @@ func (app *App) detectLatestRelease() (*selfupdate.Release, bool, error) {
 	}
 
 	ctx := context.Background()
-	// Detect 调用的是 GitHub 官方 API 接口，强制使用 Token 以防止限流
+	// 调用 GitHub 官方 API 接口，使用 Token 以防止限流
 	client, err := newGitHubClient(hasValidToken)
 	if err != nil {
 		return nil, false, fmt.Errorf("创建 GitHub 客户端失败: %w", err)
 	}
+
+	// 拉取 Release 列表并仅筛选 v2.x.x（避免跨大版本检测到 v3）
+	releases, err := client.ListReleases(ctx, repo)
+	if err != nil {
+		return nil, false, fmt.Errorf("检查更新失败: %w", err)
+	}
+
+	var candidates []releaseCandidate
+	for _, r := range releases {
+		if r.GetDraft() {
+			continue
+		}
+		if r.GetPrerelease() && !config.GlobalConfig.Prerelease {
+			continue
+		}
+		if len(r.GetAssets()) == 0 {
+			continue
+		}
+
+		tag := r.GetTagName()
+		ver, parseErr := semver.NewVersion(tag)
+		if parseErr != nil {
+			continue
+		}
+		// 默认仅保留 v2；开启 upgrade-to-v3 后允许检测 >= v2（含 v3）
+		if config.GlobalConfig.UpgradeToV3 {
+			if ver.Major() < targetMajorVersion {
+				continue
+			}
+		} else if ver.Major() != targetMajorVersion {
+			continue
+		}
+
+		candidates = append(candidates, releaseCandidate{
+			tag: tag,
+			ver: ver,
+		})
+	}
+
+	if len(candidates) == 0 {
+		return nil, false, nil
+	}
+
+	// 按语义化版本号从高到低排序
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].ver.GreaterThan(candidates[j].ver)
+	})
 
 	updaterProbe, err := newUpdater(client, "", false)
 	if err != nil {
 		return nil, false, fmt.Errorf("创建探测用 updater 失败: %w", err)
 	}
 
-	latest, found, err := updaterProbe.DetectLatest(ctx, repo)
-	if err != nil {
-		return nil, false, fmt.Errorf("检查更新失败: %w", err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-
-	// 此时探测到了 latest 版本，重新创建带验证器的 updater 获取包含 ValidationAssetID 信息的 Release 对象
-	// 否则 go-selfupdate 在后续下载时 ValidationAssetID 为 0，触发 404 或下载到无效 HTML
-	checksumFile := "subs-check-pro_" + latest.Version() + "_checksums.txt"
-	updaterWithVal, err := newUpdater(client, checksumFile, true)
-	if err == nil {
-		if valLatest, valFound, valErr := updaterWithVal.DetectLatest(ctx, repo); valErr == nil && valFound {
-			latest = valLatest
-		} else {
-			slog.Warn("尝试获取校验文件信息失败，请检查 checksum 文件是否存在", slog.Any("err", valErr))
-		}
-	}
-
-	if strings.HasPrefix(app.version, "dev-") {
+	// 开发/调试版本仅提示最新 v2 版本，不执行自动更新
+	if strings.HasPrefix(app.version, "dev") {
 		slog.Warn("当前为开发/调试版本，不执行自动更新")
-		slog.Info("最新版本", slog.String("version", latest.Version()))
-		slog.Info("手动更新", slog.String("url", latest.AssetURL))
+		for _, cand := range candidates {
+			if rel, found, detErr := updaterProbe.DetectVersion(ctx, repo, cand.tag); detErr == nil && found {
+				slog.Info("最新版本", slog.String("version", rel.Version()))
+				slog.Info("手动更新", slog.String("url", rel.AssetURL))
+				break
+			}
+		}
 		return nil, false, nil
 	}
 
 	currentVersion := app.originVersion
-
 	curVer, err := semver.NewVersion(currentVersion)
 	if err != nil {
 		return nil, false, fmt.Errorf("版本号解析失败: %w", err)
 	}
-	if !latest.GreaterThan(curVer.String()) {
+
+	// 最高 v2 版本不大于当前版本，直接返回
+	if !candidates[0].ver.GreaterThan(curVer) {
 		slog.Debug("已是最新版本", slog.String("version", currentVersion))
+		return nil, false, nil
+	}
+
+	// 从高到低匹配当前 OS/Arch 资产及校验文件
+	var latest *selfupdate.Release
+	for _, cand := range candidates {
+		if !cand.ver.GreaterThan(curVer) {
+			break
+		}
+
+		checksumFile := "subs-check-pro_" + cand.ver.String() + "_checksums.txt"
+		updaterWithVal, valInitErr := newUpdater(client, checksumFile, true)
+		if valInitErr == nil {
+			if valLatest, valFound, valErr := updaterWithVal.DetectVersion(ctx, repo, cand.tag); valErr == nil && valFound {
+				latest = valLatest
+				break
+			} else {
+				slog.Warn("尝试获取校验文件信息失败，请检查 checksum 文件是否存在",
+					slog.String("version", cand.tag), slog.Any("err", valErr))
+			}
+		}
+
+		// 兜底：不带校验器获取一次 Release 对象
+		if probeLatest, found, probeErr := updaterProbe.DetectVersion(ctx, repo, cand.tag); probeErr == nil && found {
+			latest = probeLatest
+			break
+		}
+	}
+
+	if latest == nil {
 		return nil, false, nil
 	}
 

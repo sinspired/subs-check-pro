@@ -18,7 +18,6 @@ import (
 	"github.com/goccy/go-json"
 
 	"github.com/sinspired/subs-check-pro/v2/config"
-	"golang.org/x/net/http2"
 )
 
 // NotifyKind 表示通知类型
@@ -40,14 +39,17 @@ const (
 )
 
 const (
-	notifyTimeout = 15 * time.Second       // 通知请求超时时间
-	maxRetries    = 3                      // 最大重试次数（包含首次）
-	retryDelay    = 500 * time.Millisecond // 重试等待间隔
+	notifyTimeout = 30 * time.Second // 通知请求超时时间
+	maxRetries    = 4                // 最大重试次数（包含首次）
+	retryDelay    = 2 * time.Second  // 重试基础等待间隔，按 2s、4s、8s 指数退避
 
 	FallbackProxy = ""                                                                                                     // 兜底代理
 	RepoURL       = "https://github.com/sinspired/subs-check-pro"                                                          // 仓库地址
 	IconURL       = "https://raw.githubusercontent.com/sinspired/subs-check-pro-webui/main/webui/static/icon/icon-512.png" // 通用图标 URL
 )
+
+// 全局级别的 TLS 会话缓存池，用于跨连接/跨请求复用 TLS 会话，减少握手耗时
+var globalTLSClientSessionCache = tls.NewLRUClientSessionCache(64)
 
 // NotifyRequest 表示通知请求体
 type NotifyRequest struct {
@@ -101,7 +103,7 @@ func decorateURL(raw string, kind NotifyKind, downloadURL string) string {
 		return raw
 	}
 
-	q.Set("format", "markdown")
+	// q.Set("format", "markdown")
 
 	switch scheme {
 	case "bark", "barks":
@@ -183,22 +185,24 @@ func getClient(proxyURL string) *http.Client {
 	}
 
 	dialer := &net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:       15 * time.Second, // 从 10s 放宽到 15s
+		KeepAlive:     30 * time.Second,
+		FallbackDelay: 150 * time.Millisecond, // 从默认 300ms 降至 150ms。加速 IPv4/IPv6 双栈失败回退，防止 IPv6 路由黑洞死等
 	}
 
 	tr := &http.Transport{
 		DialContext:           dialer.DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Second,
+		TLSHandshakeTimeout:   20 * time.Second, // 放宽到 20s，给予握手更充足的时间
+		ResponseHeaderTimeout: notifyTimeout,
+		ExpectContinueTimeout: 2 * time.Second, // 防止客户端发送大 Body 时死等服务端的 100-continue 响应
 		MaxIdleConns:          20,
 		MaxIdleConnsPerHost:   5,
 		IdleConnTimeout:       90 * time.Second,
 		// 直连客户端：Proxy 显式设为 nil
 		Proxy: nil,
 		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{"h2", "http/1.1"}, // 优先协商 HTTP/2
+			MinVersion:         tls.VersionTLS12,
+			ClientSessionCache: globalTLSClientSessionCache, // 利用 LRU 缓存复用 TLS 握手状态
 		},
 	}
 
@@ -211,9 +215,17 @@ func getClient(proxyURL string) *http.Client {
 		tr.Proxy = http.ProxyURL(p)
 	}
 
-	// HTTP/2：自定义 Transport 后 Go 不会自动启用 HTTP/2，需显式配置。
-	if err := http2.ConfigureTransport(tr); err != nil {
-		slog.Debug("HTTP/2 配置失败，降级到 HTTP/1.1", "err", err)
+	// HTTP/2：自定义 Transport 后 Go 不会自动启用 HTTP/2，需通过 Protocols 显式开启（Go 1.24+，取代已弃用的 x/net/http2 ConfigureTransports）。
+	var protocols http.Protocols
+	protocols.SetHTTP1(true)
+	protocols.SetHTTP2(true)
+	tr.Protocols = &protocols
+
+	// 连接健康检查：连接空闲 15s 后发送 PING，5s 无响应即判定连接已死并摘除。
+	// 默认不做健康检查，若连接被路由器 NAT 静默丢弃，后续请求会一直复用这条死连接直到超时。
+	tr.HTTP2 = &http.HTTP2Config{
+		SendPingTimeout: 15 * time.Second,
+		PingTimeout:     5 * time.Second,
 	}
 
 	client := &http.Client{
@@ -224,6 +236,16 @@ func getClient(proxyURL string) *http.Client {
 	// LoadOrStore：并发时以先存入的为准，避免重复创建
 	actual, _ := clientCache.LoadOrStore(proxyURL, client)
 	return actual.(*http.Client)
+}
+
+// evictClient 淘汰指定代理对应的缓存客户端并关闭其空闲连接。
+// 发送失败后调用，保证下一次重试使用全新连接，而不是继续复用可能已失效的连接。
+func evictClient(proxyURL string) {
+	if v, ok := clientCache.LoadAndDelete(proxyURL); ok {
+		if c, ok := v.(*http.Client); ok {
+			c.CloseIdleConnections()
+		}
+	}
 }
 
 // doNotify 用指定客户端向 apiServer 发送 POST 请求
@@ -282,32 +304,49 @@ func buildProxyList() []string {
 	return proxies
 }
 
-// sendWithRetry 带重试逻辑的通知发送，按 proxies 列表依次尝试
-func sendWithRetry(req NotifyRequest, name string, proxies []string) {
+// retryBackoff 返回第 attempt 次（从 0 开始）失败后的等待时间：2s、4s、8s...
+func retryBackoff(attempt int) time.Duration {
+	return retryDelay << attempt
+}
+
+// notifyWithRetry 按 proxies 列表轮换、指数退避地发送通知，返回成功时使用的方式。
+// 每次失败都会淘汰缓存客户端，避免复用已失效的连接。
+func notifyWithRetry(req NotifyRequest, name string, proxies []string, attempts int) (string, error) {
 	var lastErr error
 
-	for attempt := range maxRetries {
+	for attempt := range attempts {
 		p := proxies[attempt%len(proxies)]
 		method := "直连"
 		if p != "" {
 			method = "代理(" + p + ")"
 		}
 
-		if err := Notify(req, p); err == nil {
-			slog.Info("通知发送成功", "目标", name, "方法", method)
-			return
-		} else {
-			lastErr = err
-			slog.Debug("通知发送失败", "目标", name, "方法", method, "次数", attempt+1, "错误", err.Error())
+		err := Notify(req, p)
+		if err == nil {
+			return method, nil
 		}
+		lastErr = err
+		slog.Debug("通知发送失败", "目标", name, "方法", method, "次数", attempt+1, "错误", err.Error())
 
-		if attempt < maxRetries-1 {
-			slog.Debug("准备重试通知", "目标", name, "已尝试", attempt+1, "等待", retryDelay)
-			time.Sleep(retryDelay)
+		evictClient(p)
+
+		if attempt < attempts-1 {
+			wait := retryBackoff(attempt)
+			slog.Debug("准备重试通知", "目标", name, "已尝试", attempt+1, "等待", wait)
+			time.Sleep(wait)
 		}
 	}
+	return "", lastErr
+}
 
-	slog.Error("通知发送最终失败", "目标", name, "错误", lastErr)
+// sendWithRetry 带重试逻辑的通知发送，按 proxies 列表依次尝试
+func sendWithRetry(req NotifyRequest, name string, proxies []string) {
+	method, err := notifyWithRetry(req, name, proxies, maxRetries)
+	if err != nil {
+		slog.Error("通知发送最终失败", "目标", name, "错误", err)
+		return
+	}
+	slog.Info("通知发送成功", "目标", name, "方法", method)
 }
 
 // broadcastNotify 广播通知到所有接收者
@@ -323,6 +362,10 @@ func broadcastNotify(kind NotifyKind, title, body, downloadURL string) {
 
 	format := "markdown"
 
+	// 检测刚结束时，本机网络（NAT 连接表 / DNS / 队列）往往还没恢复，此时直接发送容易超时。
+	// 先等网络恢复（正常时几乎立即返回，最多等 45s）。
+	NetGuard.WaitSettled(context.Background(), 45*time.Second)
+
 	// 构建 proxy 列表
 	proxies := buildProxyList()
 
@@ -331,16 +374,11 @@ func broadcastNotify(kind NotifyKind, title, body, downloadURL string) {
 	for _, u := range config.GlobalConfig.RecipientURL {
 		wg.Go(func() {
 			name, _, _ := strings.Cut(u, "://")
-			localTitle := title // 防止 Telegram 修改影响其他并发接收者
-
-			if strings.Contains(name, "tgram") {
-				localTitle = "*" + localTitle + "*"
-			}
 
 			notifyReq := NotifyRequest{
 				URLs:   decorateURL(u, kind, downloadURL),
 				Body:   body,
-				Title:  localTitle,
+				Title:  title,
 				Format: format,
 			}
 			sendWithRetry(notifyReq, name, proxies)
@@ -398,6 +436,11 @@ func SendNotifySubStoreAssets(frontendUpdated bool, frontendVer string, backendU
 	lines = append(lines, "🕒 "+GetCurrentTime())
 
 	body := strings.Join(lines, "  \n")
+
+	// GUI 系统通知（Wails3 NotificationService）
+	if OSNotifyHook != nil {
+		OSNotifyHook(title, body)
+	}
 
 	// 发送通知
 	broadcastNotify(NotifySubStoreAssetsUpdate, title, body, "")
@@ -471,24 +514,12 @@ func SendNotifyTestTo(recipients []string) []NotifyTestResult {
 				Title:  title,
 				Format: "markdown",
 			}
-			var lastErr error
-			for attempt := range maxRetries {
-				p := proxies[attempt%len(proxies)]
-				if err := Notify(req, p); err == nil {
-					ch <- item{idx, NotifyTestResult{Name: name, OK: true}}
-					return
-				} else {
-					lastErr = err
-				}
-				if attempt < maxRetries-1 {
-					time.Sleep(retryDelay)
-				}
+			// 测试通知需要尽快给出结果，只尝试 2 次
+			if _, err := notifyWithRetry(req, name, proxies, 2); err != nil {
+				ch <- item{idx, NotifyTestResult{Name: name, OK: false, Error: err.Error()}}
+				return
 			}
-			ch <- item{idx, NotifyTestResult{
-				Name:  name,
-				OK:    false,
-				Error: lastErr.Error(),
-			}}
+			ch <- item{idx, NotifyTestResult{Name: name, OK: true}}
 		}(i, u)
 	}
 
