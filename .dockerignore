@@ -1,4 +1,13 @@
-.git
+# 忽略前端依赖和构建产物
+node_modules/
+**/node_modules/
+.pnpm-store/
+docs-site/
+
+# 忽略 Git 记录
+.git/
+.github/
+
 .gitignore
 README.md
 Dockerfile
@@ -21,16 +30,42 @@ openipdb.ipdb
 config.yaml
 mihomo.yaml
 .golangci-lint.yml
+test
+
+dist/*
+output/*
+mihomo-check*
+
+.idea
+.vscode
 
 .DS_Store
 
+*.ps1
+*.bak
+*.zip
+*.gz
+*.tar
+bin/
+dist/
+test_*.*
 test_*/
-*.csv
+speed_*.csv
 
 *.old
 *.new
 
 *.exe
 *.syso
+*.test
 .wiki/
-!bin/Linux_arm/*
+
+
+# 忽略 IDE 缓存
+.idea/
+.vscode/
+
+# 忽略无关文档
+*.md
+
+!Subs-Check-PRO_OG.png
