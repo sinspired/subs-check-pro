@@ -1,0 +1,7 @@
+formatter:
+  type: basic
+  indent: 2
+  force_array_style: block
+  retain_line_breaks_single: true
+  trim_trailing_whitespace: true
+  force_quote_style: single
