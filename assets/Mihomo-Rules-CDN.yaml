@@ -1,4 +1,4 @@
-# update: 2026-09-02 23:36:13
+# update: 2026-11-12 14:35:33
 # repo: https://github.com/sinspired/subs-check-pro 内置规则
 
 log-level: error # 日志等级 silent/error/warning/info/debug
@@ -58,7 +58,7 @@ profile:
 # Tun 配置
 tun:
   enable: false
-  stack: system # gvisor/mixed
+  stack: mips # gvisor / mixed / system
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
 
@@ -568,6 +568,15 @@ dns:
     - quic://223.5.5.5:853
     - https://dns.alidns.com/dns-query#h3=true
     - https://doh.pub/dns-query#h3=true
+
+  proxy-server-nameserver-policy:
+    +.local: system
+    +.baidu.com: 223.5.5.5
+    +.cloudflre.com: 1.1.1.1
+    +.github.com: 223.5.5.5
+    +.githubusercontent.com: 223.5.5.5
+    +.node.daacc.org: https://ddhjiadji6959dadaa.daacc.org/dns-query
+
   direct-nameserver:
     - quic://223.5.5.5:853
     - quic://223.6.6.6:853
@@ -618,7 +627,7 @@ rule-providers:
     format: yaml
     type: http
   extra-direct:
-    url: https://testingcf.jsdelivr.net/gh/sinspired/proxy-rules@main/extra-rules/mihomo/direct.list
+    url: https://testingcf.jsdelivr.net/gh/sinspired/proxy-rules@main/extra-rules/mihomo/direct.yaml
     path: ./ruleset/extra-direct.yaml
     behavior: classical
     interval: 86400
@@ -802,11 +811,11 @@ proxy-groups:
       - 'PROXY'
   - icon: https://testingcf.jsdelivr.net/gh/Orz-3/mini@master/Color/Google.png
     name: Google
-    type: fallback
+    type: select
     proxies:
+      - 'YouTube'
       - 'PROXY'
       - 'Gemini'
-      - 'YouTube'
       - 'AUTO'
       - 'HK-AUTO'
       - 'JP-AUTO'
@@ -817,9 +826,10 @@ proxy-groups:
     interval: 300
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
     name: YouTube
-    type: fallback
+    type: select
     proxies:
       - 'YouTube-AUTO'
+      - 'YouTube-CN'
       - 'Gemini'
       - 'AUTO'
       - 'HK-AUTO'
@@ -1015,7 +1025,7 @@ proxy-groups:
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png
     include-all: true
     exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
-    filter: (?i)(?=.*\bOpenai\b|openai|chatgpt|gpt|GPT)(?=.*\bGemini\b|gemini|GEMINI|\bGM\b)
+    filter: (?i)(?=.*(?:openai|chatgpt|gpt|GPT⁺))(?=.*(?:gemini|GM))
     name: AI-AUTO
     type: url-test
     interval: 600
@@ -1074,9 +1084,21 @@ proxy-groups:
     expected-status: 204
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
     include-all: true
-    exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
+    exclude-filter: (?i)(Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置|-(CN|RU)(\||$))
     filter: (?i)(?=.*\bYoutube\b|youtube|YT|YouTube|流媒体)
     name: YouTube-AUTO
+    type: url-test
+    interval: 600
+    tolerance: 100
+    url: https://www.gstatic.com/generate_204
+    lazy: false
+    max-failed-times: 3
+    expected-status: 204
+  - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
+    include-all: true
+    exclude-filter: '(?i)(Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置)'
+    filter: '(?i)(?=.*(?:YouTube|YT|流媒体))(?=.*-CN(\||$))'
+    name: YouTube-CN
     type: url-test
     interval: 600
     tolerance: 100
