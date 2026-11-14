@@ -1,5 +1,3 @@
-const MIRROR_URL = 'https://christianai.pages.dev';
-
 const createResponse = (data, status = 200, contentType = 'application/json') => {
     const body = contentType === 'application/json' ? JSON.stringify(data) : data;
     return new Response(body, {
@@ -106,9 +104,13 @@ const routeHandlers = {
             }
 
             const speedTestUrl = `https://speed.cloudflare.com/__down?bytes=${bytes}`;
+            // speed.cloudflare.com 对 bytes >= 1e8 (约 95.37 MiB) 的请求会做来源校验：
+            const headers = new Headers(request.headers);
+            headers.set('Referer', 'https://speed.cloudflare.com/');
+
             const response = await fetch(speedTestUrl, {
                 method: request.method,
-                headers: request.headers
+                headers
             });
 
             return new Response(response.body, {
@@ -131,7 +133,7 @@ const routeHandlers = {
             if (!inputPath || inputPath == '/') {
                 return handleError('请提供 GitHub 相关路径', 400);
             }
-    
+
             let targetUrl;
             // 判断是否包含域名部分
             if (inputPath.includes('raw.githubusercontent.com')) {
@@ -157,21 +159,21 @@ const routeHandlers = {
                     targetUrl = `https://raw.githubusercontent.com${path}`;
                 }
             }
-    
+
             // 设置请求头
             const headers = new Headers(request.headers);
             headers.set('User-Agent', 'Cloudflare-Worker');
-    
+
             // 通过 Cloudflare 代理下载
             const response = await fetch(targetUrl, {
                 method: 'GET',
                 headers
             });
-    
+
             if (!response.ok) {
                 return handleError('GitHub 下载失败', response.status);
             }
-    
+
             const contentType = response.headers.get('Content-Type') || 'application/octet-stream';
             return new Response(response.body, {
                 status: response.status,
@@ -191,27 +193,6 @@ const routeHandlers = {
 async function validateToken(url, env) {
     const token = url.searchParams.get('token');
     return token === env.AUTH_TOKEN;
-}
-
-async function handleMirrorRequest(request, url) {
-    try {
-        const clockieUrl = new URL(url.pathname + url.search, MIRROR_URL);
-        const response = await fetch(clockieUrl.toString(), {
-            method: request.method,
-            headers: request.headers,
-            body: request.method !== 'GET' ? await request.clone().text() : undefined
-        });
-
-        const responseHeaders = new Headers(response.headers);
-        responseHeaders.set('Access-Control-Allow-Origin', '*');
-
-        return new Response(await response.text(), {
-            status: response.status,
-            headers: responseHeaders
-        });
-    } catch (error) {
-        return handleError('镜像请求失败: ' + error.message);
-    }
 }
 
 export default {
@@ -234,7 +215,7 @@ export default {
                 }
             }
 
-            return await handleMirrorRequest(request, url);
+            return handleError('未找到该路径', 404);
         } catch (error) {
             return handleError('服务器错误: ' + error.message);
         }

@@ -64,7 +64,8 @@ threshold:  0.75
 
 ```powershell
 # 保存并加载 "上次检测成功的节点" 和 "历次检测成功的节点"
-# keep-success-proxies: true
+# use-last-result: true
+# use-history-result: true
 2025-09-25 15:52:25 INF 已获取节点数量: 15872
 2025-09-25 15:52:25 INF 去重后节点数量: 11788
 2025-09-25 15:52:25 INF 已加载上次检测可用节点，数量: 110

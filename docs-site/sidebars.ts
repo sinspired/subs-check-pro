@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
         { type: 'doc', id: 'File-Service', label: '内置文件服务' },
         { type: 'doc', id: 'System-Proxy', label: '系统与 GitHub 代理' },
         { type: 'doc', id: 'Storage', label: '保存方法' },
+        { type: 'doc', id: 'android', label: '安卓手机 CLI（Termux）运行' },
       ],
       className: 'sidebar-icon sidebar-icon-settings',
     },
