@@ -341,11 +341,11 @@ func FetchSubsData(rawURL string) ([]byte, error) {
 
 	// UA 列表池
 	uaList := []string{
-		"mihomo/1.19.27",
+		"clash-verge/v2.5.10",
+		"Shadowrocket/3131 Darwin/25.4.0",
+		"v2rayN/7.25.6",
+		"SFA/1.14.4 (500; sing-box 1.14.4; language zh_Hans_CN)",
 		convert.RandUserAgent(),
-		"v2ray",
-		"sing-box/1.13.0",
-		"ClashMetaForAndroid/2.11.30",
 	}
 
 	// GitHub 地址使用浏览器 ua 和curl
