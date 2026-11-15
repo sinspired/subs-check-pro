@@ -11,6 +11,106 @@
 
 // Web API Polyfill
 (function (g) {
+    const _b64c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const _b64d = new Uint8Array(256);
+    _b64d.fill(255);
+    for (let i = 0; i < _b64c.length; i++) _b64d[_b64c.charCodeAt(i)] = i;
+
+    function _bytesToLatin1(u8) {
+        const len = u8.length;
+        if (len === 0) return "";
+        if (len <= 16384) return String.fromCharCode.apply(null, u8);
+        const parts = [];
+        for (let i = 0; i < len; i += 16384) {
+            parts.push(String.fromCharCode.apply(null, u8.subarray(i, Math.min(i + 16384, len))));
+        }
+        return parts.join("");
+    }
+
+    function _toTightUint8Array(arr) {
+        if (arr instanceof Uint8Array) {
+            if (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength) return arr;
+            return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength).slice();
+        }
+        if (arr instanceof ArrayBuffer) return new Uint8Array(arr);
+        if (ArrayBuffer.isView(arr)) return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength).slice();
+        return new Uint8Array(arr);
+    }
+
+    if (!g.btoa) {
+        g.btoa = function btoa(str) {
+            str = String(str);
+            const len = str.length;
+            if (len === 0) return "";
+            if (len > 256 && typeof __go_b64_encode === 'function') {
+                const u8 = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    const c = str.charCodeAt(i);
+                    if (c > 0xff) throw new Error("InvalidCharacterError: btoa failed");
+                    u8[i] = c;
+                }
+                return __go_b64_encode(u8);
+            }
+            const out = [];
+            let i = 0;
+            const limit = len - (len % 3);
+            while (i < limit) {
+                const c1 = str.charCodeAt(i++);
+                const c2 = str.charCodeAt(i++);
+                const c3 = str.charCodeAt(i++);
+                if ((c1 | c2 | c3) > 0xff) throw new Error("InvalidCharacterError: btoa failed");
+                const p = (c1 << 16) | (c2 << 8) | c3;
+                out.push(_b64c.charAt((p >> 18) & 63), _b64c.charAt((p >> 12) & 63), _b64c.charAt((p >> 6) & 63), _b64c.charAt(p & 63));
+            }
+            if (i < len) {
+                const c1 = str.charCodeAt(i++);
+                if (c1 > 0xff) throw new Error("InvalidCharacterError: btoa failed");
+                if (i < len) {
+                    const c2 = str.charCodeAt(i);
+                    if (c2 > 0xff) throw new Error("InvalidCharacterError: btoa failed");
+                    const p = (c1 << 16) | (c2 << 8);
+                    out.push(_b64c.charAt((p >> 18) & 63), _b64c.charAt((p >> 12) & 63), _b64c.charAt((p >> 6) & 63), "=");
+                } else {
+                    const p = c1 << 16;
+                    out.push(_b64c.charAt((p >> 18) & 63), _b64c.charAt((p >> 12) & 63), "==", "");
+                }
+            }
+            return out.join("");
+        };
+    }
+
+    if (!g.atob) {
+        g.atob = function atob(b64) {
+            b64 = String(b64);
+            if (b64.length === 0) return "";
+            if (b64.length > 256 && typeof __go_b64_decode === 'function') {
+                const u8 = __go_b64_decode(b64);
+                if (u8 instanceof Uint8Array) return _bytesToLatin1(u8);
+            }
+            const clean = b64.replace(/[\t\n\f\r ]+/g, '');
+            const len = clean.length;
+            if (len === 0) return "";
+            let bufLen = (len * 3) >> 2;
+            if (clean.charCodeAt(len - 1) === 61) bufLen--;
+            if (len > 1 && clean.charCodeAt(len - 2) === 61) bufLen--;
+            const u8 = new Uint8Array(bufLen);
+            let i = 0, j = 0;
+            while (i < len) {
+                const c1 = _b64d[clean.charCodeAt(i++)];
+                const c2 = _b64d[clean.charCodeAt(i++)];
+                const ch3 = clean.charCodeAt(i++);
+                const ch4 = clean.charCodeAt(i++);
+                const c3 = ch3 === 61 ? 0 : _b64d[ch3];
+                const c4 = ch4 === 61 ? 0 : _b64d[ch4];
+                const p = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
+                u8[j++] = (p >> 16) & 255;
+                if (j < bufLen) u8[j++] = (p >> 8) & 255;
+                if (j < bufLen) u8[j++] = p & 255;
+            }
+            return _bytesToLatin1(u8);
+        };
+    }
+
     if (!g.TextEncoder) {
         g.TextEncoder = class TextEncoder {
             encode(str) {
@@ -54,6 +154,7 @@
             }
         };
     }
+
     if (!g.TextDecoder) {
         g.TextDecoder = class TextDecoder {
             decode(arr) {
@@ -74,13 +175,7 @@
 
                 // 长数据直接走 Go 层 UTF-8 解码（无 Base64 开销）
                 if (len > 256 && typeof __go_utf8_to_string === 'function') {
-                    let view = u8;
-                    if (!(view instanceof Uint8Array)) {
-                        view = new Uint8Array(u8);
-                    } else if (view.constructor !== Uint8Array || view.byteOffset !== 0 || view.byteLength !== view.buffer.byteLength) {
-                        view = new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice();
-                    }
-                    const s = __go_utf8_to_string(view);
+                    const s = __go_utf8_to_string(_toTightUint8Array(u8));
                     if (typeof s === 'string') return s;
                 }
 
@@ -93,7 +188,7 @@
                     }
                 }
                 if (isAscii) {
-                    return String.fromCharCode.apply(null, u8);
+                    return _bytesToLatin1(u8);
                 }
 
                 const out = [];
@@ -113,6 +208,7 @@
             }
         };
     }
+
     if (!g.crypto) g.crypto = {};
     if (!g.crypto.getRandomValues) {
         g.crypto.getRandomValues = function (arr) {
@@ -130,9 +226,204 @@
             return arr;
         };
     }
-    if (!g.ReadableStream) g.ReadableStream = class ReadableStream { };
-    if (!g.TransformStream) g.TransformStream = class TransformStream { };
-    if (!g.Response) g.Response = class Response { };
+
+    function _concatChunks(chunks) {
+        if (chunks.length === 0) return new Uint8Array(0);
+        if (chunks.length === 1) return chunks[0];
+        let total = 0;
+        for (let i = 0; i < chunks.length; i++) total += chunks[i].length;
+        const out = new Uint8Array(total);
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            out.set(chunks[i], offset);
+            offset += chunks[i].length;
+        }
+        return out;
+    }
+
+    if (!g.ReadableStream) {
+        g.ReadableStream = class ReadableStream {
+            constructor(underlyingSource = {}) {
+                this._chunks = [];
+                this._closed = false;
+                const controller = {
+                    enqueue: (chunk) => {
+                        this._chunks.push(chunk instanceof Uint8Array ? chunk : _toTightUint8Array(chunk));
+                    },
+                    close: () => {
+                        this._closed = true;
+                    }
+                };
+                if (typeof underlyingSource.start === 'function') {
+                    underlyingSource.start(controller);
+                }
+            }
+            getReader() {
+                let idx = 0;
+                const self = this;
+                return {
+                    async read() {
+                        if (idx < self._chunks.length) {
+                            return { value: self._chunks[idx++], done: false };
+                        }
+                        return { value: undefined, done: true };
+                    },
+                    releaseLock() { }
+                };
+            }
+            async pipeTo(writable) {
+                const writer = writable.getWriter();
+                for (let i = 0; i < this._chunks.length; i++) {
+                    await writer.write(this._chunks[i]);
+                }
+                await writer.close();
+            }
+            pipeThrough(transform) {
+                const promise = this.pipeTo(transform.writable);
+                if (transform.readable) {
+                    transform.readable._pendingPipe = promise;
+                }
+                return transform.readable;
+            }
+        };
+    }
+
+    if (!g.TransformStream) {
+        g.TransformStream = class TransformStream {
+            constructor() {
+                const chunks = [];
+                this.readable = new g.ReadableStream({
+                    start: (ctrl) => { this._ctrl = ctrl; }
+                });
+                this.writable = {
+                    getWriter: () => ({
+                        write: async (chunk) => { chunks.push(_toTightUint8Array(chunk)); },
+                        close: async () => { this._ctrl.enqueue(_concatChunks(chunks)); this._ctrl.close(); }
+                    })
+                };
+            }
+        };
+    }
+
+    if (!g.CompressionStream) {
+        g.CompressionStream = class CompressionStream {
+            constructor(format) {
+                const chunks = [];
+                let ctrl;
+                this.readable = new g.ReadableStream({
+                    start: (c) => { ctrl = c; }
+                });
+                this.writable = {
+                    getWriter: () => ({
+                        write: async (chunk) => {
+                            if (typeof chunk === 'string') {
+                                chunks.push(new g.TextEncoder().encode(chunk));
+                            } else {
+                                chunks.push(_toTightUint8Array(chunk));
+                            }
+                        },
+                        close: async () => {
+                            const merged = _concatChunks(chunks);
+                            const out = typeof __go_compress === 'function' ? __go_compress(String(format), merged) : merged;
+                            ctrl.enqueue(out);
+                            ctrl.close();
+                        }
+                    })
+                };
+            }
+        };
+    }
+
+    if (!g.DecompressionStream) {
+        g.DecompressionStream = class DecompressionStream {
+            constructor(format) {
+                const chunks = [];
+                let ctrl;
+                this.readable = new g.ReadableStream({
+                    start: (c) => { ctrl = c; }
+                });
+                this.writable = {
+                    getWriter: () => ({
+                        write: async (chunk) => {
+                            chunks.push(_toTightUint8Array(chunk));
+                        },
+                        close: async () => {
+                            const merged = _concatChunks(chunks);
+                            const out = typeof __go_decompress === 'function' ? __go_decompress(String(format), merged) : merged;
+                            ctrl.enqueue(out);
+                            ctrl.close();
+                        }
+                    })
+                };
+            }
+        };
+    }
+
+    if (!g.Blob) {
+        g.Blob = class Blob {
+            constructor(parts = []) {
+                const encoder = new g.TextEncoder();
+                const chunks = [];
+                for (let i = 0; i < parts.length; i++) {
+                    const p = parts[i];
+                    if (typeof p === 'string') chunks.push(encoder.encode(p));
+                    else chunks.push(_toTightUint8Array(p));
+                }
+                this._data = _concatChunks(chunks);
+            }
+            stream() {
+                const data = this._data;
+                return new g.ReadableStream({
+                    start(ctrl) {
+                        if (data.length > 0) ctrl.enqueue(data);
+                        ctrl.close();
+                    }
+                });
+            }
+            async arrayBuffer() {
+                return this._data.buffer.slice(this._data.byteOffset, this._data.byteOffset + this._data.byteLength);
+            }
+            async text() {
+                return new g.TextDecoder().decode(this._data);
+            }
+        };
+    }
+
+    if (!g.Response) {
+        g.Response = class Response {
+            constructor(body = null) {
+                this.body = body;
+            }
+            async bytes() {
+                if (!this.body) return new Uint8Array(0);
+                if (this.body instanceof Uint8Array) return this.body;
+                if (typeof this.body === 'string') return new g.TextEncoder().encode(this.body);
+                if (this.body._pendingPipe) await this.body._pendingPipe;
+                if (typeof this.body.getReader === 'function') {
+                    const reader = this.body.getReader();
+                    const chunks = [];
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        if (value) chunks.push(_toTightUint8Array(value));
+                    }
+                    return _concatChunks(chunks);
+                }
+                return _toTightUint8Array(this.body);
+            }
+            async arrayBuffer() {
+                const u8 = await this.bytes();
+                return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+            }
+            async text() {
+                const u8 = await this.bytes();
+                return new g.TextDecoder().decode(u8);
+            }
+            async json() {
+                return JSON.parse(await this.text());
+            }
+        };
+    }
 })(globalThis);
 
 // 缓存无状态 RegExp（不含 g/y 标志），消除 RegexFilter 在节点循环中重复编译同一正则的开销
@@ -346,22 +637,27 @@ function __base64_to_uint8array(b64) {
     const len = b64.length;
     if (len === 0) return new Uint8Array(0);
 
-    let bufLen = (len * 3) / 4;
-    if (b64.charAt(len - 1) === '=') bufLen--;
-    if (len > 1 && b64.charAt(len - 2) === '=') bufLen--;
+    let u8;
+    if (len > 256 && typeof __go_b64_decode === 'function') {
+        u8 = __go_b64_decode(b64);
+    } else {
+        let bufLen = (len * 3) / 4;
+        if (b64.charAt(len - 1) === '=') bufLen--;
+        if (len > 1 && b64.charAt(len - 2) === '=') bufLen--;
 
-    const u8 = new Uint8Array(bufLen);
-    let i = 0, j = 0;
-    while (i < len) {
-        const c1 = _b64tab[b64.charCodeAt(i++)];
-        const c2 = _b64tab[b64.charCodeAt(i++)];
-        const c3 = _b64tab[b64.charCodeAt(i++)];
-        const c4 = _b64tab[b64.charCodeAt(i++)];
+        u8 = new Uint8Array(bufLen);
+        let i = 0, j = 0;
+        while (i < len) {
+            const c1 = _b64tab[b64.charCodeAt(i++)];
+            const c2 = _b64tab[b64.charCodeAt(i++)];
+            const c3 = _b64tab[b64.charCodeAt(i++)];
+            const c4 = _b64tab[b64.charCodeAt(i++)];
 
-        const p = (c1 << 18) | (c2 << 12) | ((c3 !== undefined ? c3 : 0) << 6) | (c4 !== undefined ? c4 : 0);
-        u8[j++] = (p >> 16) & 255;
-        if (j < bufLen) u8[j++] = (p >> 8) & 255;
-        if (j < bufLen) u8[j++] = p & 255;
+            const p = (c1 << 18) | (c2 << 12) | ((c3 !== undefined ? c3 : 0) << 6) | (c4 !== undefined ? c4 : 0);
+            u8[j++] = (p >> 16) & 255;
+            if (j < bufLen) u8[j++] = (p >> 8) & 255;
+            if (j < bufLen) u8[j++] = p & 255;
+        }
     }
 
     const res = typeof Buffer !== 'undefined' ? Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength) : u8;
@@ -372,6 +668,12 @@ function __base64_to_uint8array(b64) {
 function __uint8array_to_base64(u8) {
     const len = u8.length;
     if (len === 0) return "";
+    if (len > 256 && typeof __go_b64_encode === 'function') {
+        const view = (u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength)
+            ? u8
+            : new Uint8Array(u8.buffer, u8.byteOffset, u8.byteLength).slice();
+        return __go_b64_encode(view);
+    }
     const out = [];
     let i = 0;
     const limit = len - (len % 3);
@@ -574,7 +876,7 @@ function __dispatch_http_response(reqId, resMetaJson, body) {
     cb(err, resp, resp ? resp.body : null);
 }
 
-// 原生的 UDP DNS 解析能力
+// 原生的 UDP / DoH3 / DoQ / DoT DNS 解析能力
 const $dns = {
     query: function (options, callback) {
         const reqId = "dns_" + (++__http_req_id);
@@ -625,7 +927,7 @@ globalThis.__fire_timer = function (id) {
     }
 };
 
-// 终极优化：在 JS 侧剥离巨型 Body 绕过 JSON 序列化
+// 在 JS 侧剥离巨型 Body 绕过 JSON 序列化
 const $done = function (val) {
     let bodyStr = undefined;
     if (val && typeof val === 'object') {

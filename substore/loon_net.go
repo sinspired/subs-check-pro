@@ -422,8 +422,7 @@ var loonClient = sync.OnceValue(func() *http.Client {
 // loonHTTPClient 返回脚本请求共用的客户端；总超时由每个请求自己的 context 决定。
 func loonHTTPClient() *http.Client { return loonClient() }
 
-// QUIC / HTTP3 客户端与连接池
-
+// 真实 QUIC / HTTP3 客户端与连接池
 var loonH3Once = sync.OnceValue(func() *http.Client {
 	return &http.Client{
 		Transport: &http3.Transport{
@@ -623,9 +622,66 @@ func (p *doqPool) evict(addr, serverName string, bad *quic.Conn) {
 	}
 }
 
-// 多协议自定义 DNS 解析（h3 / quic / https / tls / tcp / udp）
+// DoT (tls://) 连接池
 
-var dotSessionCache = tls.NewLRUClientSessionCache(64)
+type idleDotConn struct {
+	conn     *tls.Conn
+	lastUsed time.Time
+}
+
+type dotPool struct {
+	mu           sync.Mutex
+	idle         map[string][]idleDotConn
+	sessionCache tls.ClientSessionCache
+}
+
+var sharedDoTPool = &dotPool{
+	idle:         make(map[string][]idleDotConn),
+	sessionCache: tls.NewLRUClientSessionCache(64),
+}
+
+func (p *dotPool) checkout(key string) *tls.Conn {
+	now := time.Now()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	list := p.idle[key]
+	for len(list) > 0 {
+		last := list[len(list)-1]
+		list = list[:len(list)-1]
+		if now.Sub(last.lastUsed) <= 55*time.Second {
+			p.idle[key] = list
+			return last.conn
+		}
+		_ = last.conn.Close()
+	}
+	delete(p.idle, key)
+	return nil
+}
+
+func (p *dotPool) checkin(key string, c *tls.Conn) {
+	_ = c.SetDeadline(time.Time{})
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	list := p.idle[key]
+	if len(list) >= 16 {
+		_ = c.Close()
+		return
+	}
+	p.idle[key] = append(list, idleDotConn{conn: c, lastUsed: time.Now()})
+}
+
+// 多协议自定义 DNS 解析（带并发 Singleflight 去重）
+
+type customDNSFlight struct {
+	mu       sync.Mutex
+	inflight map[string]*lookupCall
+}
+
+var sharedCustomDNSFlight = &customDNSFlight{
+	inflight: make(map[string]*lookupCall),
+}
 
 func resolveCustomDNS(ctx context.Context, domain, rawServer string, httpClient *http.Client) ([]netip.Addr, error) {
 	if ip, err := netip.ParseAddr(strings.Trim(domain, "[]")); err == nil {
@@ -638,6 +694,33 @@ func resolveCustomDNS(ctx context.Context, domain, rawServer string, httpClient 
 		return addrs, err
 	}
 
+	flightKey := hostKey(domain) + "|" + server
+	sharedCustomDNSFlight.mu.Lock()
+	call, ok := sharedCustomDNSFlight.inflight[flightKey]
+	if !ok {
+		call = &lookupCall{done: make(chan struct{})}
+		sharedCustomDNSFlight.inflight[flightKey] = call
+		go func() {
+			qctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			defer cancel()
+			call.addrs, call.err = resolveCustomDNSDirect(qctx, domain, server, httpClient)
+			sharedCustomDNSFlight.mu.Lock()
+			delete(sharedCustomDNSFlight.inflight, flightKey)
+			sharedCustomDNSFlight.mu.Unlock()
+			close(call.done)
+		}()
+	}
+	sharedCustomDNSFlight.mu.Unlock()
+
+	select {
+	case <-call.done:
+		return call.addrs, call.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func resolveCustomDNSDirect(ctx context.Context, domain, server string, httpClient *http.Client) ([]netip.Addr, error) {
 	if !strings.Contains(server, "://") {
 		if idx := strings.IndexByte(server, '/'); idx != -1 {
 			server = server[:idx]
@@ -654,7 +737,7 @@ func resolveCustomDNS(ctx context.Context, domain, rawServer string, httpClient 
 
 	u, err := url.Parse(server)
 	if err != nil || u.Hostname() == "" {
-		return nil, fmt.Errorf("invalid custom DNS server: %s", rawServer)
+		return nil, fmt.Errorf("invalid custom DNS server: %s", server)
 	}
 
 	scheme := strings.ToLower(u.Scheme)
@@ -800,27 +883,39 @@ func queryWireDual(ctx context.Context, domain string, exchange func(context.Con
 }
 
 func exchangeDoH(ctx context.Context, client *http.Client, endpoint string, query []byte) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(query))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/dns-message")
-	req.Header.Set("Accept", "application/dns-message")
+	var lastErr error
+	for attempt := range 2 {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(query))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/dns-message")
+		req.Header.Set("Accept", "application/dns-message")
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt == 0 && ctx.Err() == nil && isTransient(err) {
+				continue
+			}
+			return nil, err
+		}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, err
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			if attempt == 0 && ctx.Err() == nil && isTransient(readErr) {
+				continue
+			}
+			return nil, readErr
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("DoH %s returned status %d", endpoint, resp.StatusCode)
+		}
+		return body, nil
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("DoH %s returned status %d", endpoint, resp.StatusCode)
-	}
-	return body, nil
+	return nil, lastErr
 }
 
 func exchangeDoQ(ctx context.Context, addr, serverName string, query []byte) ([]byte, error) {
@@ -889,45 +984,72 @@ func exchangeDoQ(ctx context.Context, addr, serverName string, query []byte) ([]
 }
 
 func exchangeDoT(ctx context.Context, addr, serverName string, query []byte) ([]byte, error) {
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	if dl, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(dl)
-	}
-
-	tlsCfg := &tls.Config{
-		ClientSessionCache: dotSessionCache,
-		ServerName:         serverName,
-	}
-	tlsConn := tls.Client(conn, tlsCfg)
-	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		return nil, err
-	}
-
+	key := addr + "|" + serverName
 	frame := make([]byte, 2+len(query))
 	binary.BigEndian.PutUint16(frame[:2], uint16(len(query)))
 	copy(frame[2:], query)
-	if _, err := tlsConn.Write(frame); err != nil {
-		return nil, err
-	}
 
-	var lenBuf [2]byte
-	if _, err := io.ReadFull(tlsConn, lenBuf[:]); err != nil {
-		return nil, err
+	var lastErr error
+	for attempt := range 2 {
+		tlsConn := sharedDoTPool.checkout(key)
+		reused := tlsConn != nil
+		if tlsConn == nil {
+			rawConn, err := dialer.DialContext(ctx, "tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			tlsConn = tls.Client(rawConn, &tls.Config{
+				ClientSessionCache: sharedDoTPool.sessionCache,
+				ServerName:         serverName,
+			})
+			if dl, ok := ctx.Deadline(); ok {
+				_ = tlsConn.SetDeadline(dl)
+			}
+			if err := tlsConn.HandshakeContext(ctx); err != nil {
+				_ = tlsConn.Close()
+				return nil, err
+			}
+		} else if dl, ok := ctx.Deadline(); ok {
+			_ = tlsConn.SetDeadline(dl)
+		}
+
+		if _, err := tlsConn.Write(frame); err != nil {
+			_ = tlsConn.Close()
+			lastErr = err
+			if reused && attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+
+		var lenBuf [2]byte
+		if _, err := io.ReadFull(tlsConn, lenBuf[:]); err != nil {
+			_ = tlsConn.Close()
+			lastErr = err
+			if reused && attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+		respLen := int(binary.BigEndian.Uint16(lenBuf[:]))
+		if respLen < 12 {
+			_ = tlsConn.Close()
+			return nil, fmt.Errorf("invalid DoT response length: %d", respLen)
+		}
+		resp := make([]byte, respLen)
+		if _, err := io.ReadFull(tlsConn, resp); err != nil {
+			_ = tlsConn.Close()
+			lastErr = err
+			if reused && attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+
+		sharedDoTPool.checkin(key, tlsConn)
+		return resp, nil
 	}
-	respLen := int(binary.BigEndian.Uint16(lenBuf[:]))
-	if respLen < 12 {
-		return nil, fmt.Errorf("invalid DoT response length: %d", respLen)
-	}
-	resp := make([]byte, respLen)
-	if _, err := io.ReadFull(tlsConn, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return nil, lastErr
 }
 
 func encodeDNSQuery(domain string, qtype uint16) ([]byte, error) {
@@ -1078,6 +1200,9 @@ func isTransient(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) {
 		return false
 	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
 	var de *net.DNSError
 	if errors.As(err, &de) {
 		return !de.IsNotFound
@@ -1087,7 +1212,12 @@ func isTransient(err error) bool {
 		return true
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "connection reset") || strings.Contains(msg, "unexpected eof")
+	return strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "unexpected eof") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "use of closed network connection") ||
+		strings.Contains(msg, "no recent network activity") ||
+		strings.Contains(msg, "application error 0x0")
 }
 
 // doWithRetry 仅对幂等请求在遇到瞬时网络错误时重试；拿到任何 HTTP 响应都原样返回。

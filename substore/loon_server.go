@@ -2,6 +2,7 @@
 package substore
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -67,7 +68,11 @@ func NewLoonServer(addr string, engine *LoonEngine, frontendDir, backendPath str
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handle)
-	s.httpServer = &http.Server{Addr: addr, Handler: mux}
+	s.httpServer = &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
 	return s
 }
 
@@ -221,10 +226,12 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bodyOut := resp.Body
+
 	// 环境变量注入
 	if strings.HasPrefix(strippedPath, "/api/utils/env") {
 		var envData map[string]any
-		if err := json.Unmarshal([]byte(resp.Body), &envData); err == nil {
+		if err := json.Unmarshal([]byte(bodyOut), &envData); err == nil {
 			if data, ok := envData["data"].(map[string]any); ok {
 				meta, _ := data["meta"].(map[string]any)
 				if meta == nil {
@@ -261,24 +268,56 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 				envMap["SUB_STORE_CORS_ALLOWED_ORIGINS"] = "*"
 
 				if modifiedBody, err := json.Marshal(envData); err == nil {
-					resp.Body = string(modifiedBody)
+					bodyOut = string(modifiedBody)
 				}
 			}
 		}
 	}
 
+	var hasContentEncoding bool
+	var contentType string
 	for k, v := range resp.Headers {
 		if strings.EqualFold(k, "Content-Length") || strings.EqualFold(k, "Transfer-Encoding") {
 			continue
 		}
+		if strings.EqualFold(k, "Content-Encoding") {
+			hasContentEncoding = true
+		}
+		if strings.EqualFold(k, "Content-Type") {
+			contentType = strings.ToLower(v)
+		}
 		w.Header().Set(k, v)
 	}
+
 	status := resp.Status
 	if status == 0 {
 		status = http.StatusOK
 	}
+
+	// 大体积文本/配置响应走 Gzip（跳过本地 cron 回调与已压缩内容）
+	shouldGzip := r.Method != http.MethodHead &&
+		!hasContentEncoding &&
+		len(bodyOut) > 4096 &&
+		strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") &&
+		!strings.Contains(r.UserAgent(), "Subs-Check-Pro-Cron") &&
+		!strings.HasPrefix(contentType, "image/") &&
+		!strings.HasPrefix(contentType, "video/") &&
+		!strings.Contains(contentType, "gzip")
+
+	if shouldGzip {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.WriteHeader(status)
+		gz := gzip.NewWriter(w)
+		_, _ = io.WriteString(gz, bodyOut)
+		_ = gz.Close()
+		return
+	}
+
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(resp.Body))
+	if r.Method != http.MethodHead {
+		_, _ = io.WriteString(w, bodyOut)
+	}
 }
 
 func (s *LoonServer) handleFrontend(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +330,12 @@ func (s *LoonServer) handleFrontend(w http.ResponseWriter, r *http.Request) {
 	rel := strings.TrimPrefix(r.URL.Path, "/")
 	requested := filepath.Join(root, filepath.FromSlash(rel))
 	absRequested, err := filepath.Abs(requested)
-	if err != nil || !strings.HasPrefix(absRequested, root) {
+	if err != nil {
+		http.Error(w, "非法路径", http.StatusForbidden)
+		return
+	}
+	relCheck, err := filepath.Rel(root, absRequested)
+	if err != nil || relCheck == ".." || strings.HasPrefix(relCheck, ".."+string(filepath.Separator)) {
 		http.Error(w, "非法路径", http.StatusForbidden)
 		return
 	}

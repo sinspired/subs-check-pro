@@ -3,6 +3,9 @@ package substore
 
 import (
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -136,8 +139,8 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 	bLoon, _ := json.Marshal(map[string]any{
 		"deviceName":     "iPhone 16 Pro",
 		"systemVersion":  "18.0",
-		"loonVersion":    "3.2.1(750)",
-		"build":          "750",
+		"loonVersion":    "3.5.3(1014)",
+		"build":          "1014",
 		"isSubsCheckPro": true,
 		"backendName":    "Subs Check Pro",
 	})
@@ -223,6 +226,41 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 	return resp, retErr
 }
 
+func decodeBase64Flexible(b64 string) ([]byte, error) {
+	// 优先走标准零清理快路径
+	if data, err := base64.StdEncoding.DecodeString(b64); err == nil {
+		return data, nil
+	}
+	b64 = strings.Map(func(r rune) rune {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '+' || r == '/' {
+			return r
+		}
+		if r == '-' {
+			return '+'
+		}
+		if r == '_' {
+			return '/'
+		}
+		return -1
+	}, b64)
+	if pad := len(b64) % 4; pad > 0 {
+		b64 += strings.Repeat("=", 4-pad)
+	}
+	return base64.StdEncoding.DecodeString(b64)
+}
+
+func decompressDeflate(data []byte) ([]byte, error) {
+	if zr, err := zlib.NewReader(bytes.NewReader(data)); err == nil {
+		defer zr.Close()
+		if out, err := io.ReadAll(io.LimitReader(zr, 64<<20)); err == nil {
+			return out, nil
+		}
+	}
+	fr := flate.NewReader(bytes.NewReader(data))
+	defer fr.Close()
+	return io.ReadAll(io.LimitReader(fr, 64<<20))
+}
+
 func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest, argument string, doneCh chan<- loonResult, failCh chan<- error) {
 	runCtx, runCancel := context.WithTimeout(execCtx, e.timeout)
 	defer runCancel()
@@ -267,22 +305,33 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 		if len(args) == 0 {
 			return ctx.String("")
 		}
-		b64 := args[0].String()
-		b64 = strings.Map(func(r rune) rune {
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '+' || r == '/' || r == '=' {
-				return r
-			}
-			return -1
-		}, b64)
-		pad := len(b64) % 4
-		if pad > 0 {
-			b64 += strings.Repeat("=", 4-pad)
-		}
-		data, err := base64.StdEncoding.DecodeString(b64)
+		data, err := decodeBase64Flexible(args[0].String())
 		if err != nil {
 			return ctx.String("")
 		}
 		return ctx.String(string(data))
+	}))
+
+	globals.Set("__go_b64_encode", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
+		}
+		data, err := args[0].ToUint8Array()
+		if err != nil {
+			return ctx.String(base64.StdEncoding.EncodeToString([]byte(args[0].String())))
+		}
+		return ctx.String(base64.StdEncoding.EncodeToString(data))
+	}))
+
+	globals.Set("__go_b64_decode", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.Undefined()
+		}
+		data, err := decodeBase64Flexible(args[0].String())
+		if err != nil {
+			return ctx.Undefined()
+		}
+		return ctx.NewUint8Array(data)
 	}))
 
 	// 零 Base64 直传 Uint8Array 的 UTF-8 编解码桥接
@@ -306,6 +355,80 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			return ctx.Undefined()
 		}
 		return ctx.String(string(data))
+	}))
+
+	globals.Set("__go_compress", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 2 {
+			return ctx.ThrowError(fmt.Errorf("compress requires format and data"))
+		}
+		format := strings.ToLower(strings.TrimSpace(args[0].String()))
+		data, err := args[1].ToUint8Array()
+		if err != nil {
+			return ctx.ThrowError(err)
+		}
+		var out bytes.Buffer
+		switch format {
+		case "gzip":
+			gw := gzip.NewWriter(&out)
+			_, err = gw.Write(data)
+			if closeErr := gw.Close(); err == nil {
+				err = closeErr
+			}
+		case "deflate":
+			zw := zlib.NewWriter(&out)
+			_, err = zw.Write(data)
+			if closeErr := zw.Close(); err == nil {
+				err = closeErr
+			}
+		case "deflate-raw":
+			fw, wErr := flate.NewWriter(&out, flate.DefaultCompression)
+			if wErr != nil {
+				return ctx.ThrowError(wErr)
+			}
+			_, err = fw.Write(data)
+			if closeErr := fw.Close(); err == nil {
+				err = closeErr
+			}
+		default:
+			return ctx.ThrowError(fmt.Errorf("unsupported compression format: %s", format))
+		}
+		if err != nil {
+			return ctx.ThrowError(err)
+		}
+		return ctx.NewUint8Array(out.Bytes())
+	}))
+
+	globals.Set("__go_decompress", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 2 {
+			return ctx.ThrowError(fmt.Errorf("decompress requires format and data"))
+		}
+		format := strings.ToLower(strings.TrimSpace(args[0].String()))
+		data, err := args[1].ToUint8Array()
+		if err != nil {
+			return ctx.ThrowError(err)
+		}
+		var res []byte
+		switch format {
+		case "gzip":
+			gr, rErr := gzip.NewReader(bytes.NewReader(data))
+			if rErr != nil {
+				return ctx.ThrowError(rErr)
+			}
+			res, err = io.ReadAll(io.LimitReader(gr, 64<<20))
+			_ = gr.Close()
+		case "deflate":
+			res, err = decompressDeflate(data)
+		case "deflate-raw":
+			fr := flate.NewReader(bytes.NewReader(data))
+			res, err = io.ReadAll(io.LimitReader(fr, 64<<20))
+			_ = fr.Close()
+		default:
+			return ctx.ThrowError(fmt.Errorf("unsupported decompression format: %s", format))
+		}
+		if err != nil {
+			return ctx.ThrowError(err)
+		}
+		return ctx.NewUint8Array(res)
 	}))
 
 	// 零 Base64 直传加密级安全随机字节
@@ -560,10 +683,12 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 
 			var httpReq *http.Request
 			var httpResp *http.Response
+			var bodyBytes []byte
 			var timing *netTiming
 			var err error
+			hasBody := false
 
-			// 统一重试循环（网络瞬时错误 + DoH 429/50x），总尝试次数严格不超过 3 次
+			// 包含响应体读取的完整重试循环，防止流传输中途断线导致截断或失败
 			delay := retryDelay
 			for attempt := range maxAttempts {
 				if attempt > 0 {
@@ -627,8 +752,26 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 						if attempt+1 < maxAttempts && reqCtx.Err() == nil {
 							continue
 						}
+						break
 					}
 				}
+
+				bodyBytes, err = io.ReadAll(io.LimitReader(httpResp.Body, 64<<20))
+				httpResp.Body.Close()
+				if err != nil {
+					if canRetry && attempt+1 < maxAttempts && reqCtx.Err() == nil && isTransient(err) {
+						continue
+					}
+					break
+				}
+
+				if strings.EqualFold(httpResp.Header.Get("Content-Encoding"), "deflate") {
+					if dec, dErr := decompressDeflate(bodyBytes); dErr == nil {
+						bodyBytes = dec
+						httpResp.Header.Del("Content-Encoding")
+					}
+				}
+				hasBody = true
 				break
 			}
 
@@ -645,59 +788,47 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 				}
 			}
 
-			var bodyBytes []byte
-			hasBody := false
 			if err != nil {
 				errStr := err.Error()
 				res.Error = &errStr
+				hasBody = false
 				slog.Debug("脚本底层网络请求失败", "method", method, "url", opts.URL, "err", errStr)
-			} else {
-				var readErr error
-				bodyBytes, readErr = io.ReadAll(io.LimitReader(httpResp.Body, 64<<20))
-				httpResp.Body.Close()
-				if readErr != nil {
-					errStr := readErr.Error()
-					res.Error = &errStr
-					slog.Debug("脚本底层读取响应体失败", "method", method, "url", opts.URL, "err", errStr)
-				} else {
-					if httpResp.StatusCode >= 400 {
-						snippet := string(bodyBytes)
-						if len(snippet) > 200 {
-							snippet = snippet[:200] + "..."
-						}
-						slog.Debug("API 请求被拒绝", "status", httpResp.StatusCode, "response", snippet)
-						e.logger.Error("API 请求被拒绝", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+			} else if hasBody {
+				if httpResp.StatusCode >= 400 {
+					snippet := string(bodyBytes)
+					if len(snippet) > 200 {
+						snippet = snippet[:200] + "..."
 					}
+					slog.Debug("API 请求被拒绝", "status", httpResp.StatusCode, "response", snippet)
+					e.logger.Error("API 请求被拒绝", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+				}
 
-					res.Response = &ResponseObject{
-						Status:  httpResp.StatusCode,
-						Headers: make(map[string]string, len(httpResp.Header)),
-					}
-					for k, v := range httpResp.Header {
-						res.Response.Headers[strings.ToLower(k)] = v[0]
-					}
+				res.Response = &ResponseObject{
+					Status:  httpResp.StatusCode,
+					Headers: make(map[string]string, len(httpResp.Header)),
+				}
+				for k, v := range httpResp.Header {
+					res.Response.Headers[strings.ToLower(k)] = v[0]
+				}
 
-					isBinary := opts.BinaryMode || opts.BodyB64 || opts.BodyBase64
-					if !isBinary {
-						accept := strings.ToLower(httpReq.Header.Get("Accept"))
-						if strings.Contains(accept, "application/dns-message") {
-							isBinary = true
-						} else {
-							for _, v := range httpResp.Header["Content-Type"] {
-								lowerV := strings.ToLower(v)
-								if strings.Contains(lowerV, "application/dns-message") ||
-									strings.Contains(lowerV, "application/octet-stream") ||
-									strings.Contains(lowerV, "application/x-protobuf") {
-									isBinary = true
-									break
-								}
+				isBinary := opts.BinaryMode || opts.BodyB64 || opts.BodyBase64
+				if !isBinary {
+					accept := strings.ToLower(httpReq.Header.Get("Accept"))
+					if strings.Contains(accept, "application/dns-message") {
+						isBinary = true
+					} else {
+						for _, v := range httpResp.Header["Content-Type"] {
+							lowerV := strings.ToLower(v)
+							if strings.Contains(lowerV, "application/dns-message") ||
+								strings.Contains(lowerV, "application/octet-stream") ||
+								strings.Contains(lowerV, "application/x-protobuf") {
+								isBinary = true
+								break
 							}
 						}
 					}
-
-					res.IsBinary = isBinary
-					hasBody = true
 				}
+				res.IsBinary = isBinary
 			}
 
 			if execStopped.Load() {
