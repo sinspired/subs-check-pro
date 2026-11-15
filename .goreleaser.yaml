@@ -16,7 +16,7 @@ release:
     ---
     ![GitHub Downloads (all assets, specific tag)](https://img.shields.io/github/downloads/sinspired/subs-check-pro/{{ .Tag }}/total?style=flat&logo=github&label=当前版本下载次数&labelColor=black&color=0ea5a0)
 
-    - 🧪 v{{.Major}} 移除 Node，支持 Android，大幅压缩体积！
+    - 🧪 v{{.Major}} 移除 Node，支持 Android 手机，大幅压缩体积！
     - 💡 **变更日志**: [{{ .PreviousTag }}...{{ .Tag }}]({{ .GitURL }}/compare/{{ .PreviousTag }}...{{ .Tag }})
     - 🐳 Docker 镜像 `docker pull sinspired/subs-check-pro:{{ .Version }}`
     - 💬 反馈方式
