@@ -360,7 +360,7 @@ callback-script: ''
 # 填写搭建的apprise API server 地址
 # 示例：https://notify.xxxx.us.kg/notify
 # 内置apprise服务，不想搭建仅需填写 recipient-url 即可
-apprise-api-server: 'https://apprise.linkpc.dpdns.org/notify'
+apprise-api-server: 'https://apprise-phi-sepia.vercel.app/notify'
 # 通知渠道
 # 支持100+ 个通知渠道，详细格式请参照 https://github.com/caronc/apprise
 # 格式参考：
