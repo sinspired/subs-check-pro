@@ -157,7 +157,6 @@ async function operator(proxies = [], targetPlatform, context) {
     return result
   }
 
-
   /**
    * 格式化重置提示文案。
    *
@@ -187,7 +186,6 @@ async function operator(proxies = [], targetPlatform, context) {
       }
     }
 
-
     // 2. reset_day：剩余整天数（服务端 remaining ≥ 24h 时写入）
     if (resetDayStr != null && resetDayStr !== '') {
       const days = parseInt(resetDayStr, 10)
@@ -215,12 +213,13 @@ async function operator(proxies = [], targetPlatform, context) {
     return ''
   }
 
-  // 解析单节点质量：解锁数 -> 下载速度 -> 完整解锁质量 -> 丢包率
+  // 解析单节点质量：有效指标 -> 非裂变IP(|+N) -> 解锁数 -> 下载速度 -> 完整解锁质量 -> 丢包率
   const RE_TAG_SPEED = /^([\d.]+)\s*(MB|KB)\/s$/i
   const RE_TAG_LOSS = /^([\d.]+)%$/
   const RE_TAG_YT = /^YT(?:⁻|-[A-Za-z0-9]+)?$/i
   const RE_TAG_GM = /^GM(?:⁻)?(?:-[A-Za-z0-9]+)?$/i
   const RE_TAG_TK = /^TK(?:-[A-Za-z0-9]+)?$/i
+  const RE_TAG_SPLIT_IP = /^\+\d+$/
 
   function evaluateNode(name = '') {
     const segments = String(name).split('|')
@@ -228,10 +227,16 @@ async function operator(proxies = [], targetPlatform, context) {
     let speed = 0
     let quality = 0
     let loss = 999
+    let isSplitIp = false
 
     for (let i = 1; i < segments.length; i++) {
       const tok = segments[i].trim()
       if (!tok) continue
+
+      if (RE_TAG_SPLIT_IP.test(tok)) {
+        isSplitIp = true
+        continue
+      }
 
       const speedMatch = RE_TAG_SPEED.exec(tok)
       if (speedMatch) {
@@ -277,11 +282,16 @@ async function operator(proxies = [], targetPlatform, context) {
       }
     }
 
-    return { unlockCount: unlocked.size, speed, quality, loss }
+    return { unlockCount: unlocked.size, speed, quality, loss, isSplitIp }
   }
 
   function isBetterScore(a, b) {
     if (!b) return true
+    const aHasMetrics = a.unlockCount > 0 || a.speed > 0
+    const bHasMetrics = b.unlockCount > 0 || b.speed > 0
+    if (aHasMetrics !== bHasMetrics) return aHasMetrics
+    // 避开 |+N 裂变 IP 节点；|已裂变 属于原始节点，与未裂变节点平等竞争
+    if (a.isSplitIp !== b.isSplitIp) return !a.isSplitIp
     if (a.unlockCount !== b.unlockCount) return a.unlockCount > b.unlockCount
     if (a.speed !== b.speed) return a.speed > b.speed
     if (a.quality !== b.quality) return a.quality > b.quality
@@ -386,10 +396,11 @@ async function operator(proxies = [], targetPlatform, context) {
     name: finalName,
   })
 
+  const splitHint = bestScore?.isSplitIp ? '（仅裂变IP节点可用）' : ''
   const templateDesc = bestProxy
     ? (bestScore.unlockCount > 0 || bestScore.speed > 0
-      ? `检测到最优 ${bestProxy.type} 节点：${bestProxy.name || '未命名'} ➟ [解锁 ${bestScore.unlockCount}/8 | ${bestScore.speed.toFixed(1)}MB/s]`
-      : `复用 ${bestProxy.type} 节点：「${bestProxy.name || '未命名'}」`)
+      ? `检测到最优 ${bestProxy.type} 节点：${bestProxy.name || '未命名'} ➟ [解锁 ${bestScore.unlockCount}/8 | ${bestScore.speed.toFixed(1)}MB/s]${splitHint}`
+      : `复用 ${bestProxy.type} 节点：「${bestProxy.name || '未命名'}」${splitHint}`)
     : '兜底虚拟 ss'
 
   log(`订阅「${sub.name}」共 ${proxies.length} 个节点，${templateDesc}`)
