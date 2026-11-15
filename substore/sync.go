@@ -90,6 +90,9 @@ const (
 	// 差量合并时：有此前缀 → 按类型决策；无此前缀 → 用户操作，原样保留。
 	scpIDPrefix = "SCP."
 
+	// officialTemplateRepoPrefix 官方模板仓库路径前缀（用户名/仓库名）
+	officialTemplateRepoPrefix = "sinspired/sub-store-template/"
+
 	defaultLatestVer  = "1.14"
 	latestSingboxJSON = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.json"
 	latestSingboxJS   = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.js"
@@ -470,28 +473,49 @@ func canonicalURL(u string) string {
 	return utils.NormalizeGitHubRawURL(u)
 }
 
+// isOfficialTemplateURL 判断 URL 是否指向官方模板仓库（sinspired/sub-store-template）
+func isOfficialTemplateURL(u string) bool {
+	if base, _, ok := strings.Cut(u, "#"); ok {
+		u = base
+	}
+	if base, _, ok := strings.Cut(u, "?"); ok {
+		u = base
+	}
+	u = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(u), config.GlobalConfig.GithubProxy))
+	return strings.Contains(u, "raw.githubusercontent.com/"+officialTemplateRepoPrefix) ||
+		strings.Contains(u, "github.com/"+officialTemplateRepoPrefix) ||
+		strings.Contains(u, "cdn.jsdelivr.net/gh/sinspired/sub-store-template@") ||
+		strings.Contains(u, "cdn.jsdelivr.net/gh/"+officialTemplateRepoPrefix)
+}
+
 func isSameScpOp(raw json.RawMessage, op ScriptOperator) bool {
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
+	var m struct {
+		Type string `json:"type"`
+		Args *struct {
+			Content string `json:"content"`
+			Mode    string `json:"mode"`
+		} `json:"args"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil || m.Type != op.Type || m.Args == nil {
 		return false
 	}
-	if t, _ := m["type"].(string); t != op.Type {
-		return false
-	}
-	args, _ := m["args"].(map[string]any)
-	if args == nil {
-		return false
-	}
-
-	rawContent := canonicalURL(args["content"].(string))
-	newContent := canonicalURL(fmt.Sprint(op.Args["content"]))
-	if rawContent != newContent {
+	if m.Args.Mode != fmt.Sprint(op.Args["mode"]) {
 		return false
 	}
 
-	rawMode, _ := args["mode"].(string)
-	newMode := fmt.Sprint(op.Args["mode"])
-	return rawMode == newMode
+	rawCanon := canonicalURL(m.Args.Content)
+	newCanon := canonicalURL(fmt.Sprint(op.Args["content"]))
+	if rawCanon == newCanon {
+		return true
+	}
+
+	// 无 SCP 前缀的旧操作：仅在同为官方模板仓库且旧参数为空或默认 #name=sub&type=0 时原地升级，
+	// 避免覆盖用户自定义的脚本或参数。
+	rawBase, rawFrag, _ := strings.Cut(rawCanon, "#")
+	newBase, _, _ := strings.Cut(newCanon, "#")
+	return rawBase == newBase &&
+		isOfficialTemplateURL(newBase) &&
+		(rawFrag == "" || rawFrag == "name=sub&type=0")
 }
 
 // mergeFileProcess file 资源的差量合并：
@@ -669,15 +693,81 @@ func newMihomoFile() file {
 	}
 }
 
+// extractMajorMinor 从版本号中提取 "major.minor"（如 v1.14.3 / 1.14-lite / 1.14_lite / 1.14-beta.1 → 1.14）
+func extractMajorMinor(ver string) string {
+	s := strings.TrimSpace(ver)
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			continue
+		}
+		if i > 0 && s[i-1] == '.' {
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j < len(s) && s[j] == '.' {
+			k := j + 1
+			for k < len(s) && s[k] >= '0' && s[k] <= '9' {
+				k++
+			}
+			if k > j+1 {
+				return s[i:k]
+			}
+		}
+		i = j - 1
+	}
+	return ""
+}
+
 // newSingboxFile 返回 singbox 文件
 func newSingboxFile(name, jsURL, jsonURL string) file {
-	jsURL = utils.WarpURL(jsURL, IsGithubProxy) + "#name=sub&type=0"
+	rawVersion := strings.TrimPrefix(name, SingboxName+"-")
+	if rawVersion == name {
+		rawVersion = ""
+	}
+	majorMinor := extractMajorMinor(rawVersion)
+
+	// 仅当 JS 与 JSON 地址均属于官方模板仓库（sinspired/sub-store-template）时，
+	// 才自动注入版本参数，避免破坏用户自定义的脚本或参数。
+	isOfficial := isOfficialTemplateURL(jsURL) && isOfficialTemplateURL(jsonURL)
+	jsURL = utils.WarpURL(jsURL, IsGithubProxy)
 	jsonURL = utils.WarpURL(jsonURL, IsGithubProxy)
 
-	version := strings.Split(name, "-")[1]
+	arguments := Args{}
+	if isOfficial {
+		arguments["name"] = "sub"
+		arguments["type"] = "0"
+		if majorMinor != "" {
+			arguments["version"] = majorMinor
+		}
+
+		if _, frag, hasFrag := strings.Cut(jsURL, "#"); !hasFrag {
+			if majorMinor != "" {
+				jsURL += "#name=sub&type=0&version=" + majorMinor
+			} else {
+				jsURL += "#name=sub&type=0"
+			}
+		} else if majorMinor != "" &&
+			!strings.Contains(frag, "version=") &&
+			!strings.Contains(frag, "ver=") &&
+			!strings.Contains(frag, "sbVersion=") &&
+			!strings.Contains(frag, "sb_version=") {
+			if frag != "" && !strings.HasSuffix(jsURL, "&") {
+				jsURL += "&"
+			}
+			jsURL += "version=" + majorMinor
+		}
+	} else if !strings.Contains(jsURL, "#") {
+		jsURL += "#name=sub&type=0"
+		arguments["name"] = "sub"
+		arguments["type"] = "0"
+	}
+
 	remark := "默认 Sing-Box 订阅 (带分流规则)"
-	if version != "" {
-		remark = "默认 Sing-Box-" + version + " 订阅 (带分流规则)"
+	if rawVersion != "" {
+		remark = "默认 Sing-Box-" + rawVersion + " 订阅 (带分流规则)"
 	}
 
 	icon := "/scp/sing-box.svg"
@@ -696,12 +786,9 @@ func newSingboxFile(name, jsURL, jsonURL string) file {
 				Type: "Script Operator",
 				ID:   newOperatorID(),
 				Args: Args{
-					"content": jsURL,
-					"mode":    "link",
-					"arguments": Args{
-						"name": "sub",
-						"type": "0",
-					},
+					"content":   jsURL,
+					"mode":      "link",
+					"arguments": arguments,
 				},
 			},
 		},
@@ -969,7 +1056,7 @@ func SyncSubStorePartial(yamlData []byte, doSub, doMihomo, doSbLatest, doSbOld b
 
 	if doSbLatest {
 		if err := processSingboxFile(&config.GlobalConfig.SingboxLatest, latestSingboxJS, latestSingboxJSON, LatestSingboxVersion); err != nil {
-			name := SingboxName + "-" + latestSingboxJSON
+			name := SingboxName + "-" + LatestSingboxVersion
 			slog.Warn(name+"订阅同步失败", "error", err)
 		}
 	}

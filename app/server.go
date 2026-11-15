@@ -520,10 +520,10 @@ func (app *App) updateConfig(c *gin.Context) {
 					targets = append(targets, substore.MihomoName)
 				}
 				if doLatest {
-					targets = append(targets, substore.SingboxName+newConfig.SingboxLatest.Version)
+					targets = append(targets, substore.SingboxName+"-"+newConfig.SingboxLatest.Version)
 				}
 				if doOld {
-					targets = append(targets, substore.SingboxName+newConfig.SingboxExtra.Version)
+					targets = append(targets, substore.SingboxName+"-"+newConfig.SingboxExtra.Version)
 				}
 
 				// 打印日志，格式如: msg="已触发 Sub-Store 后台同步" name="sub丨mihomo"
