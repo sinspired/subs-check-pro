@@ -75,11 +75,60 @@ type LoonEngine struct {
 	subStoreBytecode []byte
 }
 
+type loonResult struct {
+	meta string
+	body string
+}
+
+type jsTask struct {
+	engine   *LoonEngine
+	execCtx  context.Context
+	req      *LoonHTTPRequest
+	argument string
+	doneCh   chan loonResult
+	failCh   chan error
+}
+
+var (
+	jsPoolOnce sync.Once
+	jsTaskCh   chan jsTask
+)
+
+// 全局常驻固定 OS 线程 Worker 池：避免并发峰值引发 OOM，同时不随 UpdateEngine 泄漏协程
+func initJSPool() {
+	jsPoolOnce.Do(func() {
+		workers := max(4, min(runtime.NumCPU(), 8))
+		if runtime.GOOS == "android" {
+			workers = max(2, min(runtime.NumCPU(), 4))
+		}
+		jsTaskCh = make(chan jsTask, workers*4)
+		for range workers {
+			go jsWorkerLoop()
+		}
+	})
+}
+
+func jsWorkerLoop() {
+	// 常驻绑定固定 OS 线程，满足 QuickJS 栈边界检测且消除线程反复销毁创建开销
+	runtime.LockOSThread()
+	for task := range jsTaskCh {
+		if task.execCtx.Err() != nil {
+			select {
+			case task.failCh <- task.execCtx.Err():
+			default:
+			}
+			continue
+		}
+		task.engine.runInQuickJS(task.execCtx, task.req, task.argument, task.doneCh, task.failCh)
+	}
+}
+
 func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logger *slog.Logger) (*LoonEngine, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
+	initJSPool()
 	httpClient := loonHTTPClient()
 
 	rt := quickjs.NewRuntime()
@@ -130,422 +179,489 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 	return engine, nil
 }
 
-type loonResult struct {
-	meta string
-	body string
-}
-
 func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argument string) (*LoonHTTPResponse, error) {
 	execStart := time.Now()
+	initJSPool()
 
 	doneCh := make(chan loonResult, 1)
 	failCh := make(chan error, 1)
 
-	go func() {
-		// 必须将此 Goroutine 绑定到固定的 OS 线程！
-		// 否则 Go 调度器进行线程迁移时，会破坏 QuickJS 的 C 层栈边界检测，导致引擎卡死或崩溃。
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
+	task := jsTask{
+		engine:   e,
+		execCtx:  execCtx,
+		req:      req,
+		argument: argument,
+		doneCh:   doneCh,
+		failCh:   failCh,
+	}
 
-		rt := quickjs.NewRuntime()
-		memLimit, stackSize := jsRuntimeLimits()
-		rt.SetMemoryLimit(memLimit)
-		rt.SetMaxStackSize(stackSize)
-		defer rt.Close()
+	select {
+	case jsTaskCh <- task:
+	case <-execCtx.Done():
+		return nil, execCtx.Err()
+	}
 
-		ctx := rt.NewContext()
-		defer ctx.Close()
+	var resp *LoonHTTPResponse
+	var retErr error
 
-		defer func() {
-			if r := recover(); r != nil {
-				failCh <- fmt.Errorf("QuickJS 引擎崩溃 (已拦截): %v", r)
-			}
-		}()
+	timer := time.NewTimer(e.timeout)
+	defer timer.Stop()
 
-		httpBodies := make(map[string]string)
-		var httpBodiesMu sync.Mutex
-		reqIdCounter := 0
+	select {
+	case res := <-doneCh:
+		resp = parseLoonResponse(res.meta, res.body)
+	case err := <-failCh:
+		retErr = err
+	case <-execCtx.Done():
+		retErr = execCtx.Err()
+	case <-timer.C:
+		retErr = fmt.Errorf("Sub-Store 脚本执行超时 (%v)", e.timeout)
+	}
 
-		globals := ctx.Globals()
+	if e.netDebug {
+		e.logger.Info("请求端到端耗时诊断", "url", req.URL, "totalMs", time.Since(execStart).Milliseconds())
+	}
 
-		// 注入 Go 层 Base64 编解码器，提高 QuickJS 下纯 JS TextDecoder 性能
-		globals.Set("__go_base64_to_string", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) == 0 {
-				return ctx.String("")
-			}
-			b64 := args[0].String()
+	return resp, retErr
+}
 
-			// 快速清洗非标准字符
-			b64 = strings.Map(func(r rune) rune {
-				if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '+' || r == '/' || r == '=' {
-					return r
-				}
-				return -1
-			}, b64)
+func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest, argument string, doneCh chan<- loonResult, failCh chan<- error) {
+	runCtx, runCancel := context.WithTimeout(execCtx, e.timeout)
+	defer runCancel()
 
-			// 自动补齐 Padding，防 Go 严格解析崩溃
-			pad := len(b64) % 4
-			if pad > 0 {
-				b64 += strings.Repeat("=", 4-pad)
-			}
+	rt := quickjs.NewRuntime()
+	memLimit, stackSize := jsRuntimeLimits()
+	rt.SetMemoryLimit(memLimit)
+	rt.SetMaxStackSize(stackSize)
+	defer rt.Close()
 
-			data, err := base64.StdEncoding.DecodeString(b64)
-			if err != nil {
-				return ctx.String("")
-			}
-			return ctx.String(string(data))
-		}))
+	ctx := rt.NewContext()
+	defer ctx.Close()
 
-		globals.Set("__go_string_to_base64", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) == 0 {
-				return ctx.String("")
-			}
-			str := args[0].String()
-			return ctx.String(base64.StdEncoding.EncodeToString([]byte(str)))
-		}))
-
-		// 注入 Go 原生的加密级安全随机数，供 QuickJS 的 crypto.getRandomValues 使用
-		globals.Set("__go_crypto_get_random_values", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) == 0 {
-				return ctx.String("")
-			}
-			length := args[0].Int32()
-			if length <= 0 {
-				return ctx.String("")
-			}
-			buf := make([]byte, length)
-			if _, err := rand.Read(buf); err != nil {
-				return ctx.String("")
-			}
-			return ctx.String(base64.StdEncoding.EncodeToString(buf))
-		}))
-
-		globals.Set("__done", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			metaJson := "{}"
-			if len(args) > 0 && !args[0].IsNull() && !args[0].IsUndefined() {
-				metaJson = args[0].String()
-			}
-			bodyStr := ""
-			if len(args) > 1 && !args[1].IsNull() && !args[1].IsUndefined() {
-				bodyStr = args[1].String()
-			}
-
+	defer func() {
+		if r := recover(); r != nil {
 			select {
-			case doneCh <- loonResult{meta: metaJson, body: bodyStr}:
+			case failCh <- fmt.Errorf("QuickJS 引擎崩溃 (已拦截): %v", r):
 			default:
 			}
+		}
+	}()
 
-			ctx.Eval(`if(globalThis.__resolve_done) globalThis.__resolve_done();`).Free()
+	var execStopped atomic.Bool
+	defer execStopped.Store(true)
+
+	var timersMu sync.Mutex
+	goTimers := make(map[string]*time.Timer)
+	defer func() {
+		timersMu.Lock()
+		for _, t := range goTimers {
+			t.Stop()
+		}
+		clear(goTimers)
+		timersMu.Unlock()
+	}()
+
+	globals := ctx.Globals()
+	defer globals.Free()
+
+	// 兼容 __orig_b64 快速解码路径
+	globals.Set("__go_base64_to_string", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
+		}
+		b64 := args[0].String()
+		b64 = strings.Map(func(r rune) rune {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '+' || r == '/' || r == '=' {
+				return r
+			}
+			return -1
+		}, b64)
+		pad := len(b64) % 4
+		if pad > 0 {
+			b64 += strings.Repeat("=", 4-pad)
+		}
+		data, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			return ctx.String("")
+		}
+		return ctx.String(string(data))
+	}))
+
+	// 零 Base64 直传 Uint8Array 的 UTF-8 编解码桥接
+	globals.Set("__go_string_to_utf8", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
 			return ctx.Undefined()
-		}))
-
-		globals.Set("__ps_read", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) == 0 {
-				return ctx.Undefined()
-			}
-			val := e.store.Read(args[0].String())
-			if val == nil {
-				return ctx.Undefined()
-			}
-			str := fmt.Sprint(val)
-			if str == "undefined" || str == "null" {
-				return ctx.Undefined()
-			}
-			return ctx.String(str)
-		}))
-
-		globals.Set("__ps_write", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) < 2 {
-				return ctx.Undefined()
-			}
-			valArg := args[0]
-			key := args[1].String()
-			var valPtr *string
-			str := valArg.String()
-			if valArg.IsNull() || valArg.IsUndefined() || str == "undefined" || str == "null" {
-				valPtr = nil
-			} else {
-				valPtr = &str
-			}
-			e.store.Write(valPtr, key)
+		}
+		b := []byte(args[0].String())
+		if len(b) == 0 {
 			return ctx.Undefined()
-		}))
+		}
+		return ctx.NewUint8Array(b)
+	}))
 
-		globals.Set("__notify_post", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			// 接管通知逻辑，将重要报错推送到日志面板
-			if len(args) >= 3 {
-				title := args[0].String()
-				subtitle := args[1].String()
-				content := args[2].String()
-				e.logger.Info("🔔 [通知] "+title, "subtitle", subtitle, "content", content)
+	globals.Set("__go_utf8_to_string", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.Undefined()
+		}
+		data, err := args[0].ToUint8Array()
+		if err != nil {
+			return ctx.Undefined()
+		}
+		return ctx.String(string(data))
+	}))
 
-				// 接管推送逻辑
-				pushConfig := config.GlobalConfig.SubStorePushService
-				if pushConfig != "" {
-					go func(cfg, t, st, c string) {
-						// 拼接副标题和内容
-						pushMsg := c
-						if st != "" {
-							pushMsg = st + "  \n" + c
-						}
+	// 零 Base64 直传加密级安全随机字节
+	globals.Set("__go_crypto_random_bytes", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.Undefined()
+		}
+		length := args[0].Int32()
+		if length <= 0 || length > 1<<20 {
+			return ctx.Undefined()
+		}
+		buf := make([]byte, length)
+		if _, err := rand.Read(buf); err != nil {
+			return ctx.Undefined()
+		}
+		return ctx.NewUint8Array(buf)
+	}))
 
-						// 1. 兼容原版 GET 替换模式 (如: https://api.day.app/XXX/[推送标题]/[推送内容])
-						if strings.Contains(cfg, "[推送内容]") {
-							finalURL := strings.Replace(cfg, "[推送标题]", url.PathEscape(t), 1)
-							finalURL = strings.Replace(finalURL, "[推送内容]", url.PathEscape(pushMsg), 1)
-							pushCtx, pushCancel := context.WithTimeout(context.Background(), 15*time.Second)
-							defer pushCancel()
-							pushReq, err := http.NewRequestWithContext(pushCtx, http.MethodGet, finalURL, nil)
-							if err == nil {
-								var resp *http.Response
-								if resp, err = e.httpClient.Do(pushReq); err == nil {
-									_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-									resp.Body.Close()
-								}
+	globals.Set("__done", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		metaJson := "{}"
+		if len(args) > 0 && !args[0].IsNull() && !args[0].IsUndefined() {
+			metaJson = args[0].String()
+		}
+		bodyStr := ""
+		if len(args) > 1 && !args[1].IsNull() && !args[1].IsUndefined() {
+			bodyStr = args[1].String()
+		}
+
+		select {
+		case doneCh <- loonResult{meta: metaJson, body: bodyStr}:
+		default:
+		}
+		return ctx.Undefined()
+	}))
+
+	globals.Set("__ps_read", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.Undefined()
+		}
+		val := e.store.Read(args[0].String())
+		if val == nil {
+			return ctx.Undefined()
+		}
+		str := fmt.Sprint(val)
+		if str == "undefined" || str == "null" {
+			return ctx.Undefined()
+		}
+		return ctx.String(str)
+	}))
+
+	globals.Set("__ps_write", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 2 {
+			return ctx.Undefined()
+		}
+		valArg := args[0]
+		key := args[1].String()
+		var valPtr *string
+		str := valArg.String()
+		if valArg.IsNull() || valArg.IsUndefined() || str == "undefined" || str == "null" {
+			valPtr = nil
+		} else {
+			valPtr = &str
+		}
+		e.store.Write(valPtr, key)
+		return ctx.Undefined()
+	}))
+
+	globals.Set("__notify_post", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) >= 3 {
+			title := args[0].String()
+			subtitle := args[1].String()
+			content := args[2].String()
+			e.logger.Info("🔔 [通知] "+title, "subtitle", subtitle, "content", content)
+
+			pushConfig := config.GlobalConfig.SubStorePushService
+			if pushConfig != "" {
+				go func(cfg, t, st, c string) {
+					pushMsg := c
+					if st != "" {
+						pushMsg = st + "  \n" + c
+					}
+
+					if strings.Contains(cfg, "[推送内容]") {
+						finalURL := strings.Replace(cfg, "[推送标题]", url.PathEscape(t), 1)
+						finalURL = strings.Replace(finalURL, "[推送内容]", url.PathEscape(pushMsg), 1)
+						pushCtx, pushCancel := context.WithTimeout(context.Background(), 15*time.Second)
+						defer pushCancel()
+						pushReq, err := http.NewRequestWithContext(pushCtx, http.MethodGet, finalURL, nil)
+						if err == nil {
+							var resp *http.Response
+							if resp, err = e.httpClient.Do(pushReq); err == nil {
+								_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+								resp.Body.Close()
 							}
-							if err != nil {
-								e.logger.Warn("Sub-Store HTTP 推送失败", "err", err)
-							}
-							return
 						}
+						if err != nil {
+							e.logger.Warn("Sub-Store HTTP 推送失败", "err", err)
+						}
+						return
+					}
 
-						// 2. Apprise 模式
-						var targetURLs string
-						if strings.ToLower(strings.TrimSpace(cfg)) == "apprise" {
-							// 填了 "apprise"，直接复用主程序中配好的接收渠道
-							targetURLs = strings.Join(config.GlobalConfig.RecipientURL, ",")
-						} else {
-							// 填了单独的 Apprise URI (如 bark://xxx, tgram://xxx)
-							targetURLs = cfg
-						}
+					var targetURLs string
+					if strings.ToLower(strings.TrimSpace(cfg)) == "apprise" {
+						targetURLs = strings.Join(config.GlobalConfig.RecipientURL, ",")
+					} else {
+						targetURLs = cfg
+					}
 
-						if targetURLs == "" {
-							return
-						}
+					if targetURLs == "" {
+						return
+					}
 
-						// 组装 Apprise 请求并交由 utils 处理
-						req := utils.NotifyRequest{
-							URLs:   targetURLs,
-							Body:   pushMsg,
-							Title:  t,
-							Format: "markdown",
-						}
+					req := utils.NotifyRequest{
+						URLs:   targetURLs,
+						Body:   pushMsg,
+						Title:  t,
+						Format: "markdown",
+					}
 
-						// 直接调用 Notify 模块
-						if err := utils.Notify(req, ""); err != nil {
-							e.logger.Warn("Sub-Store Apprise 推送失败", "err", err)
-						} else {
-							e.logger.Debug("Sub-Store Apprise 推送成功")
-						}
-					}(pushConfig, title, subtitle, content)
-				}
+					if err := utils.Notify(req, ""); err != nil {
+						e.logger.Warn("Sub-Store Apprise 推送失败", "err", err)
+					} else {
+						e.logger.Debug("Sub-Store Apprise 推送成功")
+					}
+				}(pushConfig, title, subtitle, content)
 			}
+		}
+		return ctx.Undefined()
+	}))
+
+	globals.Set("__console_log", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 2 {
 			return ctx.Undefined()
-		}))
-
-		globals.Set("__console_log", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) < 2 {
-				return ctx.Undefined()
-			}
-			level, msg := args[0].String(), args[1].String()
-			if strings.Contains(msg, "┅┅┅┅") || strings.Contains(msg, "Sub-Store -- v") {
-				if e.bannerPrinted.CompareAndSwap(false, true) {
-					e.logger.Info(msg)
-				}
-				return ctx.Undefined()
-			}
-			if strings.Contains(msg, "[CORS] allowed origins:") {
-				return ctx.Undefined()
-			}
-			switch level {
-			case "info":
+		}
+		level, msg := args[0].String(), args[1].String()
+		if strings.Contains(msg, "┅┅┅┅") || strings.Contains(msg, "Sub-Store -- v") {
+			if e.bannerPrinted.CompareAndSwap(false, true) {
 				e.logger.Info(msg)
-			case "warn":
-				e.logger.Warn(msg)
-			case "error":
-				e.logger.Error(msg)
-			default:
-				e.logger.Debug(msg)
 			}
 			return ctx.Undefined()
-		}))
+		}
+		if strings.Contains(msg, "[CORS] allowed origins:") {
+			return ctx.Undefined()
+		}
+		switch level {
+		case "info":
+			e.logger.Info(msg)
+		case "warn":
+			e.logger.Warn(msg)
+		case "error":
+			e.logger.Error(msg)
+		default:
+			e.logger.Debug(msg)
+		}
+		return ctx.Undefined()
+	}))
 
-		globals.Set("__go_http_request_async", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) < 3 {
-				return ctx.Undefined()
-			}
-			method, reqOptsJSON, jsReqId := args[0].String(), args[1].String(), args[2].String()
+	globals.Set("__go_http_request_async", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 3 {
+			return ctx.Undefined()
+		}
+		method, reqOptsJSON, jsReqId := args[0].String(), args[1].String(), args[2].String()
 
-			type RequestOpts struct {
-				URL          string            `json:"url"`
-				Headers      map[string]string `json:"headers"`
-				Body         any               `json:"body"` // 兼容 JS 传递的对象/数组
-				BodyB64      bool              `json:"body-base64"`
-				BodyBase64   bool              `json:"bodyBase64"`
-				Timeout      int               `json:"timeout"`
-				AutoRedirect *bool             `json:"auto-redirect"`
-				Redirection  *bool             `json:"redirection"`
-				BinaryMode   bool              `json:"binary-mode"`
+		var rawReqBody []byte
+		hasRawReqBody := false
+		if len(args) >= 4 && !args[3].IsNull() && !args[3].IsUndefined() {
+			if b, err := args[3].ToUint8Array(); err == nil {
+				rawReqBody = bytes.Clone(b)
+				hasRawReqBody = true
+			}
+		}
+
+		type RequestOpts struct {
+			URL          string            `json:"url"`
+			Headers      map[string]string `json:"headers"`
+			Body         any               `json:"body"`
+			BodyB64      bool              `json:"body-base64"`
+			BodyBase64   bool              `json:"bodyBase64"`
+			Timeout      int               `json:"timeout"`
+			AutoRedirect *bool             `json:"auto-redirect"`
+			Redirection  *bool             `json:"redirection"`
+			BinaryMode   bool              `json:"binary-mode"`
+		}
+
+		type ResponseObject struct {
+			Status  int               `json:"status"`
+			Headers map[string]string `json:"headers"`
+		}
+		type GoResult struct {
+			Error    *string         `json:"error"`
+			Response *ResponseObject `json:"response"`
+			IsBinary bool            `json:"isBinary,omitempty"`
+		}
+
+		var opts RequestOpts
+		if err := json.Unmarshal([]byte(reqOptsJSON), &opts); err != nil {
+			slog.Debug("脚本底层解析 HTTP 参数失败", "err", err, "reqId", jsReqId)
+			e.logger.Error("脚本底层解析 HTTP 参数失败", "err", err, "reqId", jsReqId)
+		}
+
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Debug("脚本底层网络协程崩溃 (已拦截)", "url", opts.URL, "panic", r)
+					e.logger.Error("脚本底层网络协程崩溃 (已拦截)", "url", opts.URL, "panic", r)
+				}
+			}()
+
+			res := GoResult{}
+
+			var bodyStr string
+			if !hasRawReqBody && opts.Body != nil {
+				switch v := opts.Body.(type) {
+				case string:
+					bodyStr = v
+				default:
+					b, _ := json.Marshal(v)
+					bodyStr = string(b)
+				}
 			}
 
-			type ResponseObject struct {
-				Status  int               `json:"status"`
-				Headers map[string]string `json:"headers"`
-			}
-			type GoResult struct {
-				Error    *string         `json:"error"`
-				Response *ResponseObject `json:"response"`
-				ReqId    string          `json:"reqId,omitempty"`
+			timeoutMs := 60000
+			if opts.Timeout > 0 {
+				timeoutMs = min(opts.Timeout, 300000)
 			}
 
-			var opts RequestOpts
-			if err := json.Unmarshal([]byte(reqOptsJSON), &opts); err != nil {
-				slog.Debug("脚本底层解析 HTTP 参数失败", "err", err, "reqId", jsReqId)
-				e.logger.Error("脚本底层解析 HTTP 参数失败", "err", err, "reqId", jsReqId)
+			isDnsReq := strings.Contains(opts.URL, "dns-query") ||
+				strings.Contains(opts.URL, "resolve") ||
+				strings.Contains(opts.URL, "119.28.28.28/d")
+			if isDnsReq && timeoutMs < 8000 {
+				timeoutMs = 8000
+			}
+			reqCtx, cancel := context.WithTimeout(runCtx, time.Duration(timeoutMs)*time.Millisecond)
+			defer cancel()
+
+			client := e.httpClient
+			shouldRedirect := true
+			if opts.AutoRedirect != nil {
+				shouldRedirect = *opts.AutoRedirect
+			} else if opts.Redirection != nil {
+				shouldRedirect = *opts.Redirection
+			}
+			if !shouldRedirect {
+				clientCopy := *client
+				clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse
+				}
+				client = &clientCopy
 			}
 
-			go func() {
-				// 防范底层 Panic 导致任务静默死亡
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Debug("脚本底层网络协程崩溃 (已拦截)", "url", opts.URL, "panic", r)
-						e.logger.Error("脚本底层网络协程崩溃 (已拦截)", "url", opts.URL, "panic", r)
+			canRetry := (strings.EqualFold(method, "GET") && !hasRawReqBody && bodyStr == "") || isDnsReq
+
+			var httpReq *http.Request
+			var httpResp *http.Response
+			var timing *netTiming
+			var err error
+
+			// 统一重试循环（网络瞬时错误 + DoH 429/50x），总尝试次数严格不超过 3 次
+			delay := retryDelay
+			for attempt := range maxAttempts {
+				if attempt > 0 {
+					select {
+					case <-time.After(delay):
+					case <-reqCtx.Done():
 					}
-				}()
-
-				res := GoResult{}
-
-				var bodyStr string
-				if opts.Body != nil {
-					switch v := opts.Body.(type) {
-					case string:
-						bodyStr = v
-					default:
-						// 将 Object/Array 回退为 JSON 字符串
-						b, _ := json.Marshal(v)
-						bodyStr = string(b)
+					if reqCtx.Err() != nil {
+						break
 					}
+					delay *= 3
 				}
 
-				// 提升默认超时时间以应对 Gist 备份大文件
-				timeoutMs := 60000
-				if opts.Timeout > 0 {
-					timeoutMs = min(opts.Timeout, 300000)
-				}
-
-				// 针对 DNS 请求强行保底 8 秒
-				isDnsReq := strings.Contains(opts.URL, "dns-query") || strings.Contains(opts.URL, "resolve")
-				if isDnsReq && timeoutMs < 8000 {
-					timeoutMs = 8000
-				}
-				reqCtx, cancel := context.WithTimeout(execCtx, time.Duration(timeoutMs)*time.Millisecond)
-				defer cancel()
-
-				client := e.httpClient
-				shouldRedirect := true
-				if opts.AutoRedirect != nil {
-					shouldRedirect = *opts.AutoRedirect
-				} else if opts.Redirection != nil {
-					shouldRedirect = *opts.Redirection
-				}
-				if !shouldRedirect {
-					clientCopy := *client
-					clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-						return http.ErrUseLastResponse
-					}
-					client = &clientCopy
-				}
-
-				canRetry := strings.EqualFold(method, "GET") && bodyStr == ""
-				if isDnsReq {
-					canRetry = true
-				}
-
-				// 提前声明变量，避免 for 循环内部作用域和赋值报错
-				var httpReq *http.Request
-				var httpResp *http.Response
-				var timing *netTiming
-				var err error
-
-				// 支持自动拦截 429/50x 错误并退避重试
-				for attempt := range 3 {
-					if attempt > 0 {
-						select {
-						case <-time.After(time.Duration(attempt*500) * time.Millisecond):
-						case <-reqCtx.Done():
-						}
-						if reqCtx.Err() != nil {
-							break
-						}
-					}
-
-					var currentReader io.Reader
-					if bodyStr != "" {
-						if opts.BodyB64 || opts.BodyBase64 {
-							if decoded, e := base64.StdEncoding.DecodeString(bodyStr); e == nil {
-								currentReader = bytes.NewReader(decoded)
-							} else {
-								currentReader = strings.NewReader(bodyStr)
-							}
+				var currentReader io.Reader
+				if hasRawReqBody {
+					currentReader = bytes.NewReader(rawReqBody)
+				} else if bodyStr != "" {
+					if opts.BodyB64 || opts.BodyBase64 {
+						if decoded, e := base64.StdEncoding.DecodeString(bodyStr); e == nil {
+							currentReader = bytes.NewReader(decoded)
 						} else {
 							currentReader = strings.NewReader(bodyStr)
 						}
+					} else {
+						currentReader = strings.NewReader(bodyStr)
 					}
+				}
 
-					httpReq, err = http.NewRequestWithContext(reqCtx, method, opts.URL, currentReader)
-					if err != nil {
-						break
+				httpReq, err = http.NewRequestWithContext(reqCtx, method, opts.URL, currentReader)
+				if err != nil {
+					break
+				}
+				httpReq.Method = strings.ToUpper(method)
+
+				for k, v := range opts.Headers {
+					if strings.EqualFold(k, "Accept-Encoding") || strings.EqualFold(k, "Content-Length") {
+						continue
 					}
-					httpReq.Method = strings.ToUpper(method)
+					httpReq.Header.Set(k, v)
+				}
 
-					for k, v := range opts.Headers {
-						if strings.EqualFold(k, "Accept-Encoding") || strings.EqualFold(k, "Content-Length") {
-							continue
-						}
-						httpReq.Header.Set(k, v)
-					}
+				if e.netDebug {
+					timing = &netTiming{start: time.Now()}
+					httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), timing.trace()))
+				}
 
-					if e.netDebug {
-						timing = &netTiming{start: time.Now()}
-						httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), timing.trace()))
-					}
-
-					httpResp, err = doWithRetry(reqCtx, client, httpReq, canRetry)
-
-					// 如果请求成功但被限流或网关报错，主动拦截并重试
-					if err == nil && httpResp != nil && isDnsReq {
-						code := httpResp.StatusCode
-						if code == 429 || code == 500 || code == 502 || code == 503 || code == 504 {
-							io.Copy(io.Discard, io.LimitReader(httpResp.Body, 4096))
-							httpResp.Body.Close()
-							err = fmt.Errorf("upstream rejected with status %d", code)
-							continue
-						}
+				httpResp, err = client.Do(httpReq)
+				if err != nil {
+					if canRetry && attempt+1 < maxAttempts && reqCtx.Err() == nil && isTransient(err) {
+						continue
 					}
 					break
 				}
 
-				if timing != nil && timing.start.Unix() > 0 {
-					timing.total = time.Since(timing.start)
-					if e.netDebug {
-						e.logger.Info("底层HTTP分段耗时",
-							"url", opts.URL,
-							"dnsMs", timing.dnsDone.Sub(timing.dnsStart).Milliseconds(),
-							"tcpMs", timing.connectDone.Sub(timing.connectStart).Milliseconds(),
-							"ttfbMs", timing.gotFirstByte.Sub(timing.start).Milliseconds(),
-							"totalMs", timing.total.Milliseconds(),
-						)
+				if isDnsReq {
+					code := httpResp.StatusCode
+					if code == 429 || code == 500 || code == 502 || code == 503 || code == 504 {
+						_, _ = io.Copy(io.Discard, io.LimitReader(httpResp.Body, 4096))
+						httpResp.Body.Close()
+						err = fmt.Errorf("upstream rejected with status %d", code)
+						if attempt+1 < maxAttempts && reqCtx.Err() == nil {
+							continue
+						}
 					}
 				}
+				break
+			}
 
-				if err != nil {
-					errStr := err.Error()
+			if timing != nil && timing.start.Unix() > 0 {
+				timing.total = time.Since(timing.start)
+				if e.netDebug {
+					e.logger.Info("底层HTTP分段耗时",
+						"url", opts.URL,
+						"dnsMs", timing.dnsDone.Sub(timing.dnsStart).Milliseconds(),
+						"tcpMs", timing.connectDone.Sub(timing.connectStart).Milliseconds(),
+						"ttfbMs", timing.gotFirstByte.Sub(timing.start).Milliseconds(),
+						"totalMs", timing.total.Milliseconds(),
+					)
+				}
+			}
+
+			var bodyBytes []byte
+			hasBody := false
+			if err != nil {
+				errStr := err.Error()
+				res.Error = &errStr
+				slog.Debug("脚本底层网络请求失败", "method", method, "url", opts.URL, "err", errStr)
+			} else {
+				var readErr error
+				bodyBytes, readErr = io.ReadAll(io.LimitReader(httpResp.Body, 64<<20))
+				httpResp.Body.Close()
+				if readErr != nil {
+					errStr := readErr.Error()
 					res.Error = &errStr
-					slog.Debug("脚本底层网络请求失败", "method", method, "url", opts.URL, "err", errStr)
+					slog.Debug("脚本底层读取响应体失败", "method", method, "url", opts.URL, "err", errStr)
 				} else {
-					defer httpResp.Body.Close()
-					bodyBytes, _ := io.ReadAll(io.LimitReader(httpResp.Body, 64<<20))
-
 					if httpResp.StatusCode >= 400 {
 						snippet := string(bodyBytes)
 						if len(snippet) > 200 {
@@ -557,13 +673,12 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 
 					res.Response = &ResponseObject{
 						Status:  httpResp.StatusCode,
-						Headers: make(map[string]string),
+						Headers: make(map[string]string, len(httpResp.Header)),
 					}
 					for k, v := range httpResp.Header {
 						res.Response.Headers[strings.ToLower(k)] = v[0]
 					}
 
-					// 只有明确指定或响应了 DNS/二进制 类型才走 Base64
 					isBinary := opts.BinaryMode || opts.BodyB64 || opts.BodyBase64
 					if !isBinary {
 						accept := strings.ToLower(httpReq.Header.Get("Accept"))
@@ -582,299 +697,312 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 						}
 					}
 
-					var storeBodyStr string
-					if isBinary {
-						storeBodyStr = base64.StdEncoding.EncodeToString(bodyBytes)
-						res.Response.Headers["__is_binary__"] = "true"
+					res.IsBinary = isBinary
+					hasBody = true
+				}
+			}
+
+			if execStopped.Load() {
+				return
+			}
+			resBytes, _ := json.Marshal(res)
+			ctx.Schedule(func(inner *quickjs.Context) {
+				if execStopped.Load() {
+					return
+				}
+				idVal := inner.String(jsReqId)
+				metaVal := inner.String(string(resBytes))
+				var bodyVal *quickjs.Value
+				if !hasBody {
+					bodyVal = inner.Null()
+				} else if res.IsBinary {
+					if len(bodyBytes) == 0 {
+						bodyVal = inner.Null()
 					} else {
-						storeBodyStr = string(bodyBytes)
+						bodyVal = inner.NewUint8Array(bodyBytes)
 					}
-
-					httpBodiesMu.Lock()
-					reqIdCounter++
-					reqId := fmt.Sprintf("req-%d", reqIdCounter)
-					httpBodies[reqId] = storeBodyStr
-					httpBodiesMu.Unlock()
-
-					res.ReqId = reqId
-				}
-
-				resBytes, _ := json.Marshal(res)
-				resLiteral, _ := json.Marshal(string(resBytes))
-				ctx.Schedule(func(inner *quickjs.Context) {
-					dispatchCode := fmt.Sprintf(`__dispatch_http_response("%s", %s);`, jsReqId, resLiteral)
-					inner.Eval(dispatchCode).Free()
-				})
-			}()
-			return ctx.Undefined()
-		}))
-
-		globals.Set("__go_dns_query_async", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) < 2 {
-				return ctx.Undefined()
-			}
-			optsJson, jsReqId := args[0].String(), args[1].String()
-
-			type DnsOptions struct {
-				Domain  string `json:"domain"`
-				Server  string `json:"server"`
-				Timeout int    `json:"timeout"`
-			}
-			var opts DnsOptions
-			if err := json.Unmarshal([]byte(optsJson), &opts); err != nil {
-				slog.Debug("脚本底层解析 DNS 参数失败", "err", err, "reqId", jsReqId)
-				e.logger.Error("脚本底层解析 DNS 参数失败", "err", err, "reqId", jsReqId)
-			}
-
-			go func() {
-				// 防范底层网络崩溃
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Debug("脚本底层 DNS 网络协程崩溃 (已拦截)", "domain", opts.Domain, "panic", r)
-						e.logger.Error("脚本底层 DNS 网络协程崩溃 (已拦截)", "domain", opts.Domain, "panic", r)
-					}
-				}()
-
-				timeoutMs := 8000
-				if opts.Timeout > 0 {
-					timeoutMs = opts.Timeout
-				}
-				reqCtx, cancel := context.WithTimeout(execCtx, time.Duration(timeoutMs)*time.Millisecond)
-				defer cancel()
-
-				var addrs []netip.Addr
-				var err error
-
-				server := strings.TrimSpace(opts.Server)
-				// 如果未指定或者指定为当前环境默认，直接复用 loon_net.go 中健壮的 sharedResolver
-				if server == "" || strings.EqualFold(server, "system") || strings.EqualFold(server, "auto") {
-					addrs, _, err = sharedResolver.lookup(reqCtx, opts.Domain)
 				} else {
-					// 剥离可能传下来的协议前缀，兼容直接传入特殊 Custom DNS 的情况
-					server = strings.TrimPrefix(server, "quic://")
-					server = strings.TrimPrefix(server, "h3://")
-					server = strings.TrimPrefix(server, "udp://")
-					server = strings.TrimPrefix(server, "tcp://")
-					server = strings.TrimPrefix(server, "tls://")
-
-					// 确保具备端口信息
-					if _, _, e := net.SplitHostPort(server); e != nil {
-						if ip, e := netip.ParseAddr(server); e == nil {
-							server = netip.AddrPortFrom(ip, 53).String()
-						} else {
-							server = net.JoinHostPort(server, "53")
+					bodyVal = inner.String(string(bodyBytes))
+				}
+				ret := globals.Call("__dispatch_http_response", idVal, metaVal, bodyVal)
+				idVal.Free()
+				metaVal.Free()
+				bodyVal.Free()
+				if ret != nil {
+					if ret.IsException() {
+						if err := inner.Exception(); err != nil {
+							e.logger.Debug("HTTP 回调执行异常", "err", err)
 						}
 					}
-
-					// 构造针对特定自定义服务器的 Resolver (直接复用 loon_net.go 中定义好的 dialer 和 lookupDual)
-					res := &net.Resolver{
-						PreferGo: true,
-						Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-							return dialer.DialContext(ctx, network, server)
-						},
-					}
-					addrs, err = lookupDual(reqCtx, res, opts.Domain)
+					ret.Free()
 				}
+			})
+		}()
+		return ctx.Undefined()
+	}))
 
-				// 定义完全符合 Sub-Store JS (Loon 接口格式) 要求的响应体格式
-				type DnsAnswer struct {
-					Type  string `json:"type"`
-					Value string `json:"value"`
-				}
-				type DnsResponse struct {
-					Answers []DnsAnswer `json:"answers"`
-				}
-				type DnsResult struct {
-					Error    *string      `json:"error"`
-					Response *DnsResponse `json:"response"`
-				}
-
-				resObj := DnsResult{}
-				if err != nil {
-					errStr := err.Error()
-					resObj.Error = &errStr
-					slog.Debug("脚本底层 DNS 解析失败", "domain", opts.Domain, "server", opts.Server, "err", errStr)
-				} else {
-					var answers []DnsAnswer
-					var ipv4Addrs []string
-					hasIPv6 := false
-
-					for _, a := range addrs {
-						typ := "A"
-						if a.Is6() {
-							typ = "AAAA"
-							hasIPv6 = true
-						} else {
-							// 收集所有 IPv4 地址，为后续的降级兼容做准备
-							ipv4Addrs = append(ipv4Addrs, a.String())
-						}
-						answers = append(answers, DnsAnswer{Type: typ, Value: a.String()})
-					}
-
-					// 兼容 NATMap IP4P 场景：
-					// 用户为了开启 IP4P 转换，会在 Sub-Store 中将解析类型强制设为 IPv6。
-					// 此时为了防止普通的纯 IPv4 节点因为找不到 AAAA 记录而解析报错，
-					// 主动将得到的 IPv4 结果伪装成 AAAA 记录追加到末尾，作为 Fallback 让 JS 顺利提取。
-					if !hasIPv6 {
-						for _, ip := range ipv4Addrs {
-							answers = append(answers, DnsAnswer{Type: "AAAA", Value: ip})
-						}
-					}
-
-					resObj.Response = &DnsResponse{Answers: answers}
-				}
-
-				resBytes, _ := json.Marshal(resObj)
-				resLiteral, _ := json.Marshal(string(resBytes))
-
-				ctx.Schedule(func(inner *quickjs.Context) {
-					dispatchCode := fmt.Sprintf(`__dispatch_dns_response("%s", %s);`, jsReqId, resLiteral)
-					inner.Eval(dispatchCode).Free()
-				})
-			}()
+	globals.Set("__go_dns_query_async", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 2 {
 			return ctx.Undefined()
-		}))
-
-		globals.Set("__go_http_request_body", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) == 0 {
-				return ctx.Undefined()
-			}
-			reqId := args[0].String()
-			httpBodiesMu.Lock()
-			bodyStr, exists := httpBodies[reqId]
-			if exists {
-				delete(httpBodies, reqId)
-			}
-			httpBodiesMu.Unlock()
-			if exists {
-				return ctx.String(bodyStr)
-			}
-			return ctx.Null()
-		}))
-
-		globals.Set("__go_set_timeout", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-			if len(args) < 2 {
-				return ctx.Undefined()
-			}
-			id := args[0].String()
-			delay := args[1].Int32()
-
-			// 启动 Go 语言级高精度休眠协程，休眠结束后通过 Schedule 唤醒 JS 上下文
-			go func() {
-				if delay > 0 {
-					time.Sleep(time.Duration(delay) * time.Millisecond)
-				}
-				ctx.Schedule(func(inner *quickjs.Context) {
-					fireCode := fmt.Sprintf(`__fire_timer("%s");`, id)
-					inner.Eval(fireCode).Free()
-				})
-			}()
-			return ctx.Undefined()
-		}))
-
-		reqMap := map[string]any{"url": req.URL, "method": req.Method, "headers": req.Headers}
-		if req.Body != "" {
-			reqMap["body"] = req.Body
 		}
-		bReq, _ := json.Marshal(reqMap)
+		optsJson, jsReqId := args[0].String(), args[1].String()
 
-		globals.Set("__req_json", ctx.String(string(bReq)))
-		globals.Set("__arg_str", ctx.String(argument))
+		type DnsOptions struct {
+			Domain  string `json:"domain"`
+			Server  string `json:"server"`
+			Timeout int    `json:"timeout"`
+		}
+		var opts DnsOptions
+		if err := json.Unmarshal([]byte(optsJson), &opts); err != nil {
+			slog.Debug("脚本底层解析 DNS 参数失败", "err", err, "reqId", jsReqId)
+			e.logger.Error("脚本底层解析 DNS 参数失败", "err", err, "reqId", jsReqId)
+		}
 
-		scriptStart := time.Now()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Debug("脚本底层 DNS 网络协程崩溃 (已拦截)", "domain", opts.Domain, "panic", r)
+					e.logger.Error("脚本底层 DNS 网络协程崩溃 (已拦截)", "domain", opts.Domain, "panic", r)
+				}
+			}()
 
-		bytecodeVal := ctx.EvalBytecode(e.subStoreBytecode)
-		if bytecodeVal.IsException() {
-			err := ctx.Exception()
-			failCh <- fmt.Errorf("执行字节码异常: %w", err)
-			bytecodeVal.Free()
+			timeoutMs := 8000
+			if opts.Timeout > 0 {
+				timeoutMs = opts.Timeout
+			}
+			reqCtx, cancel := context.WithTimeout(runCtx, time.Duration(timeoutMs)*time.Millisecond)
+			defer cancel()
+
+			var addrs []netip.Addr
+			var err error
+
+			server := strings.TrimSpace(opts.Server)
+			if server == "" || strings.EqualFold(server, "system") || strings.EqualFold(server, "auto") {
+				addrs, _, err = sharedResolver.lookup(reqCtx, opts.Domain)
+			} else {
+				server = strings.TrimPrefix(server, "quic://")
+				server = strings.TrimPrefix(server, "h3://")
+				server = strings.TrimPrefix(server, "udp://")
+				server = strings.TrimPrefix(server, "tcp://")
+				server = strings.TrimPrefix(server, "tls://")
+
+				if _, _, e := net.SplitHostPort(server); e != nil {
+					if ip, e := netip.ParseAddr(server); e == nil {
+						server = netip.AddrPortFrom(ip, 53).String()
+					} else {
+						server = net.JoinHostPort(server, "53")
+					}
+				}
+
+				res := &net.Resolver{
+					PreferGo: true,
+					Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+						return dialer.DialContext(ctx, network, server)
+					},
+				}
+				addrs, err = lookupDual(reqCtx, res, opts.Domain)
+			}
+
+			type DnsAnswer struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			}
+			type DnsResponse struct {
+				Answers []DnsAnswer `json:"answers"`
+			}
+			type DnsResult struct {
+				Error    *string      `json:"error"`
+				Response *DnsResponse `json:"response"`
+			}
+
+			resObj := DnsResult{}
+			if err != nil {
+				errStr := err.Error()
+				resObj.Error = &errStr
+				slog.Debug("脚本底层 DNS 解析失败", "domain", opts.Domain, "server", opts.Server, "err", errStr)
+			} else {
+				answers := make([]DnsAnswer, 0, len(addrs)*2)
+				var ipv4Addrs []string
+				hasIPv6 := false
+
+				for _, a := range addrs {
+					typ := "A"
+					if a.Is6() {
+						typ = "AAAA"
+						hasIPv6 = true
+					} else {
+						ipv4Addrs = append(ipv4Addrs, a.String())
+					}
+					answers = append(answers, DnsAnswer{Type: typ, Value: a.String()})
+				}
+
+				// 兼容 NATMap IP4P 场景：纯 IPv4 时补充 AAAA 降级记录
+				if !hasIPv6 {
+					for _, ip := range ipv4Addrs {
+						answers = append(answers, DnsAnswer{Type: "AAAA", Value: ip})
+					}
+				}
+
+				resObj.Response = &DnsResponse{Answers: answers}
+			}
+
+			if execStopped.Load() {
+				return
+			}
+			resBytes, _ := json.Marshal(resObj)
+			ctx.Schedule(func(inner *quickjs.Context) {
+				if execStopped.Load() {
+					return
+				}
+				idVal := inner.String(jsReqId)
+				resVal := inner.String(string(resBytes))
+				ret := globals.Call("__dispatch_dns_response", idVal, resVal)
+				idVal.Free()
+				resVal.Free()
+				if ret != nil {
+					if ret.IsException() {
+						if err := inner.Exception(); err != nil {
+							e.logger.Debug("DNS 回调执行异常", "err", err)
+						}
+					}
+					ret.Free()
+				}
+			})
+		}()
+		return ctx.Undefined()
+	}))
+
+	// 使用 time.AfterFunc（零休眠协程开销），并支持 clearTimeout 主动取消
+	globals.Set("__go_set_timeout", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) < 2 {
+			return ctx.Undefined()
+		}
+		id := args[0].String()
+		delay := max(args[1].Int32(), 0)
+
+		var t *time.Timer
+		t = time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
+			timersMu.Lock()
+			delete(goTimers, id)
+			timersMu.Unlock()
+			if execStopped.Load() {
+				return
+			}
+			ctx.Schedule(func(inner *quickjs.Context) {
+				if execStopped.Load() {
+					return
+				}
+				idVal := inner.String(id)
+				ret := globals.Call("__fire_timer", idVal)
+				idVal.Free()
+				if ret != nil {
+					ret.Free()
+				}
+			})
+		})
+
+		timersMu.Lock()
+		goTimers[id] = t
+		timersMu.Unlock()
+		return ctx.Undefined()
+	}))
+
+	globals.Set("__go_clear_timeout", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) > 0 {
+			id := args[0].String()
+			timersMu.Lock()
+			if t, ok := goTimers[id]; ok {
+				t.Stop()
+				delete(goTimers, id)
+			}
+			timersMu.Unlock()
+		}
+		return ctx.Undefined()
+	}))
+
+	// 当外部 Context 取消或引擎超时时，立即唤醒阻塞在 ctx.Await 上的 Worker 释放线程
+	stopAfter := context.AfterFunc(runCtx, func() {
+		if execStopped.Load() {
 			return
+		}
+		ctx.Schedule(func(inner *quickjs.Context) {
+			if execStopped.Load() {
+				return
+			}
+			reason := "Sub-Store script aborted"
+			if err := runCtx.Err(); err != nil {
+				reason = err.Error()
+			}
+			reasonVal := inner.String(reason)
+			ret := globals.Call("__abort_done", reasonVal)
+			reasonVal.Free()
+			if ret != nil {
+				ret.Free()
+			}
+		})
+	})
+	defer stopAfter()
+
+	reqMap := map[string]any{"url": req.URL, "method": req.Method, "headers": req.Headers}
+	if req.Body != "" {
+		reqMap["body"] = req.Body
+	}
+	bReq, _ := json.Marshal(reqMap)
+
+	scriptStart := time.Now()
+
+	bytecodeVal := ctx.EvalBytecode(e.subStoreBytecode)
+	if bytecodeVal.IsException() {
+		err := ctx.Exception()
+		select {
+		case failCh <- fmt.Errorf("执行字节码异常: %w", err):
+		default:
 		}
 		bytecodeVal.Free()
+		return
+	}
+	bytecodeVal.Free()
 
-		runScript := `
-		// --- 注入事件循环：解决 QuickJS 原生定时器挂起问题 ---
-		globalThis.__timer_id = 0;
-		globalThis.__timers = {};
-		globalThis.setTimeout = function(fn, delay) {
-			let id = String(++globalThis.__timer_id);
-			globalThis.__timers[id] = fn;
-			__go_set_timeout(id, Number(delay) || 0);
-			return id;
-		};
-		globalThis.clearTimeout = function(id) {
-			delete globalThis.__timers[id];
-		};
-		// Sub-Store 安全降级
-		globalThis.setInterval = function(fn, delay) {
-			return setTimeout(fn, delay);
-		};
-		globalThis.clearInterval = globalThis.clearTimeout;
+	reqVal := ctx.String(string(bReq))
+	argVal := ctx.String(argument)
+	promiseVal := globals.Call("__start_sub_store", reqVal, argVal)
+	reqVal.Free()
+	argVal.Free()
 
-		globalThis.__fire_timer = function(id) {
-			if (globalThis.__timers[id]) {
-				let fn = globalThis.__timers[id];
-				delete globalThis.__timers[id]; // 执行前立刻删除，防止阻塞复用
-				try { fn(); } catch(e) { __console_log("error", "Timer Exception: " + String(e)); }
-			}
-		};
-
-		new Promise((resolve, reject) => {
-			globalThis.__resolve_done = resolve;
-			// 设置 JS 上下文内部的执行超时防卡死机制
-			setTimeout(() => { reject(new Error("Sub-Store script timeout inside QuickJS")); }, 179000);
-			try {
-				$request = JSON.parse(__req_json);
-				$argument = __arg_str;
-				__run_sub_store_script();
-			} catch (e) {
-				reject(e);
-			}
-		});
-		`
-		promiseVal := ctx.Eval(runScript)
-		if promiseVal.IsException() {
-			err := ctx.Exception()
-			failCh <- fmt.Errorf("执行入口脚本失败: %w", err)
-			promiseVal.Free()
-			return
+	if promiseVal == nil {
+		select {
+		case failCh <- fmt.Errorf("启动入口脚本失败: 空返回值"):
+		default:
 		}
-
-		resVal := ctx.Await(promiseVal)
+		return
+	}
+	if promiseVal.IsException() {
+		err := ctx.Exception()
+		select {
+		case failCh <- fmt.Errorf("执行入口脚本失败: %w", err):
+		default:
+		}
 		promiseVal.Free()
+		return
+	}
 
-		if resVal.IsException() {
-			err := ctx.Exception()
-			failCh <- fmt.Errorf("脚本执行或回调崩溃: %w", err)
-			resVal.Free()
-			return
+	resVal := ctx.Await(promiseVal)
+	promiseVal.Free()
+
+	if resVal.IsException() {
+		err := ctx.Exception()
+		select {
+		case failCh <- fmt.Errorf("脚本执行或回调崩溃: %w", err):
+		default:
 		}
 		resVal.Free()
-
-		if e.netDebug {
-			e.logger.Info("脚本内部执行耗时分析", "scriptMs", time.Since(scriptStart).Milliseconds())
-		}
-	}()
-
-	var resp *LoonHTTPResponse
-	var retErr error
-
-	select {
-	case res := <-doneCh:
-		resp = parseLoonResponse(res.meta, res.body)
-	case err := <-failCh:
-		retErr = err
-	case <-execCtx.Done():
-		retErr = execCtx.Err()
-	case <-time.After(e.timeout):
-		retErr = fmt.Errorf("Sub-Store 脚本执行超时 (%v)", e.timeout)
+		return
 	}
+	resVal.Free()
 
 	if e.netDebug {
-		e.logger.Info("请求端到端耗时诊断", "url", req.URL, "totalMs", time.Since(execStart).Milliseconds())
+		e.logger.Info("脚本内部执行耗时分析", "scriptMs", time.Since(scriptStart).Milliseconds())
 	}
-
-	return resp, retErr
 }
 
 func parseLoonResponse(metaJson string, bodyStr string) *LoonHTTPResponse {

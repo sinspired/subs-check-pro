@@ -3,6 +3,7 @@ package substore
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,8 +13,12 @@ import (
 )
 
 type LoonKVStore struct {
-	mu        sync.RWMutex
-	mainPath  string // 核心配置：sub-store.json
+	mu          sync.RWMutex
+	mainPath    string // 核心配置：sub-store.json
+	mainData    string
+	hasMain     bool
+	mainModTime time.Time
+
 	cachePath string // 缓存文件：sub-store-cache.json
 	cacheData map[string]string
 
@@ -32,6 +37,15 @@ func NewLoonKVStore(mainPath string) (*LoonKVStore, error) {
 		return nil, fmt.Errorf("创建持久化存储目录失败: %w", err)
 	}
 
+	// 预加载核心配置至内存
+	if info, err := os.Stat(mainPath); err == nil {
+		if b, err := os.ReadFile(mainPath); err == nil {
+			s.mainData = string(b)
+			s.hasMain = true
+			s.mainModTime = info.ModTime()
+		}
+	}
+
 	// 加载缓存
 	if b, err := os.ReadFile(cachePath); err == nil {
 		_ = json.Unmarshal(b, &s.cacheData)
@@ -40,60 +54,106 @@ func NewLoonKVStore(mainPath string) (*LoonKVStore, error) {
 }
 
 func (s *LoonKVStore) Read(key string) any {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// 核心配置直接读取原版 JSON
 	if key == "sub-store" {
-		if b, err := os.ReadFile(s.mainPath); err == nil {
-			return string(b)
+		info, err := os.Stat(s.mainPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				s.mu.Lock()
+				s.mainData = ""
+				s.hasMain = false
+				s.mainModTime = time.Time{}
+				s.mu.Unlock()
+			}
+			return nil
 		}
-		return nil
+
+		s.mu.RLock()
+		if s.hasMain && info.ModTime().Equal(s.mainModTime) {
+			data := s.mainData
+			s.mu.RUnlock()
+			return data
+		}
+		s.mu.RUnlock()
+
+		// 仅在首次加载或外部手动修改过文件时回源读盘
+		b, err := os.ReadFile(s.mainPath)
+		if err != nil {
+			return nil
+		}
+		data := string(b)
+		s.mu.Lock()
+		s.mainData = data
+		s.hasMain = true
+		s.mainModTime = info.ModTime()
+		s.mu.Unlock()
+		return data
 	}
 
-	// 缓存数据从内存秒读
-	if v, ok := s.cacheData[key]; ok {
+	s.mu.RLock()
+	v, ok := s.cacheData[key]
+	s.mu.RUnlock()
+	if ok {
 		return v
 	}
 	return nil
 }
 
 func (s *LoonKVStore) Write(value *string, key string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// 1. 核心配置同步落盘，并做漂亮的美化
+	// 1. 核心配置在锁外完成 JSON 格式化，减少锁持有时间
 	if key == "sub-store" {
 		if value == nil {
-			os.Remove(s.mainPath)
+			s.mu.Lock()
+			_ = os.Remove(s.mainPath)
+			s.mainData = ""
+			s.hasMain = false
+			s.mainModTime = time.Time{}
+			s.mu.Unlock()
 			return true
 		}
+
+		content := *value
 		var obj any
-		if err := json.Unmarshal([]byte(*value), &obj); err == nil {
+		if err := json.Unmarshal([]byte(content), &obj); err == nil {
 			if pretty, err := json.MarshalIndent(obj, "", "  "); err == nil {
-				*value = string(pretty)
+				content = string(pretty)
 			}
 		}
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
 		tmp := s.mainPath + ".tmp"
-		if err := os.WriteFile(tmp, []byte(*value), 0o644); err != nil {
+		if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
 			return false
 		}
-		return os.Rename(tmp, s.mainPath) == nil
+		if os.Rename(tmp, s.mainPath) != nil {
+			return false
+		}
+
+		s.mainData = content
+		s.hasMain = true
+		if info, err := os.Stat(s.mainPath); err == nil {
+			s.mainModTime = info.ModTime()
+		} else {
+			s.mainModTime = time.Now()
+		}
+		return true
 	}
 
-	// 2. 缓存数据仅操作内存，解决 Ubuntu IO 严重阻塞问题
+	// 2. 缓存数据仅操作内存
+	s.mu.Lock()
 	if value == nil {
 		delete(s.cacheData, key)
 	} else {
 		s.cacheData[key] = *value
 	}
+	s.mu.Unlock()
 
-	// 触发异步防抖落盘
 	s.scheduleCacheSave()
 	return true
 }
 
-// scheduleCacheSave 防抖机制：2秒内没有新的写入才会真正刷入磁盘
+// scheduleCacheSave 防抖落盘：仅在 RLock 内做浅拷贝快照，锁外执行 json.Marshal 与写盘
 func (s *LoonKVStore) scheduleCacheSave() {
 	s.saveMu.Lock()
 	defer s.saveMu.Unlock()
@@ -102,12 +162,14 @@ func (s *LoonKVStore) scheduleCacheSave() {
 	}
 	s.saveTimer = time.AfterFunc(2*time.Second, func() {
 		s.mu.RLock()
-		b, err := json.Marshal(s.cacheData)
+		snapshot := maps.Clone(s.cacheData)
 		s.mu.RUnlock()
+
+		b, err := json.Marshal(snapshot)
 		if err == nil {
 			tmp := s.cachePath + ".tmp"
 			if err := os.WriteFile(tmp, b, 0o644); err == nil {
-				os.Rename(tmp, s.cachePath)
+				_ = os.Rename(tmp, s.cachePath)
 			}
 		}
 	})
