@@ -2,18 +2,26 @@
 package substore
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 )
 
 const (
@@ -21,6 +29,7 @@ const (
 	systemTimeout = 2500 * time.Millisecond
 	hedgeStagger  = 150 * time.Millisecond
 	v6Grace       = 30 * time.Millisecond
+	wireV6Grace   = 500 * time.Millisecond
 	dialStagger   = 250 * time.Millisecond
 	dnsCacheTTL   = 10 * time.Minute
 )
@@ -34,6 +43,11 @@ var (
 )
 
 func init() {
+	// 抑制容器/Android 下 UDP 接收缓冲区大小警告刷屏
+	if _, ok := os.LookupEnv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING"); !ok {
+		_ = os.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "true")
+	}
+
 	servers := parseDNSList(os.Getenv("SUBSTORE_DNS"))
 	if len(servers) == 0 {
 		servers = append(servers, defaultPublicDNS...)
@@ -407,6 +421,618 @@ var loonClient = sync.OnceValue(func() *http.Client {
 
 // loonHTTPClient 返回脚本请求共用的客户端；总超时由每个请求自己的 context 决定。
 func loonHTTPClient() *http.Client { return loonClient() }
+
+// QUIC / HTTP3 客户端与连接池
+
+var loonH3Once = sync.OnceValue(func() *http.Client {
+	return &http.Client{
+		Transport: &http3.Transport{
+			TLSClientConfig: &tls.Config{
+				ClientSessionCache: tls.NewLRUClientSessionCache(128),
+			},
+			QUICConfig: &quic.Config{
+				KeepAlivePeriod:      30 * time.Second,
+				MaxIdleTimeout:       90 * time.Second,
+				HandshakeIdleTimeout: 5 * time.Second,
+				Allow0RTT:            true,
+			},
+			Dial: dialQUICAddr,
+		},
+	}
+})
+
+func loonH3Client() *http.Client { return loonH3Once() }
+
+func dialQUICAddr(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return quic.DialAddr(ctx, addr, tlsCfg, cfg)
+	}
+	if tlsCfg == nil {
+		tlsCfg = &tls.Config{ServerName: host}
+	} else if tlsCfg.ServerName == "" {
+		tlsCfg = tlsCfg.Clone()
+		tlsCfg.ServerName = host
+	}
+
+	addrs, cached, err := sharedResolver.lookup(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return quic.DialAddr(ctx, addr, tlsCfg, cfg)
+	}
+
+	conn, err := raceDialQUIC(ctx, addrs, port, tlsCfg, cfg)
+	if err == nil || ctx.Err() != nil {
+		return conn, err
+	}
+
+	if cached {
+		sharedResolver.cache.Delete(hostKey(host))
+		if fresh, _, e := sharedResolver.lookup(ctx, host); e == nil && len(fresh) > 0 && !sameAddrs(fresh, addrs) {
+			return raceDialQUIC(ctx, fresh, port, tlsCfg, cfg)
+		}
+	}
+	return nil, err
+}
+
+func raceDialQUIC(ctx context.Context, addrs []netip.Addr, port string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+	if len(addrs) == 1 {
+		return quic.DialAddr(ctx, net.JoinHostPort(addrs[0].String(), port), tlsCfg, cfg)
+	}
+
+	raceCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	type result struct {
+		conn *quic.Conn
+		err  error
+	}
+	ch := make(chan result, len(addrs))
+	launched, done := 0, 0
+	launch := func() {
+		ep := net.JoinHostPort(addrs[launched].String(), port)
+		launched++
+		go func() {
+			c, err := quic.DialAddr(raceCtx, ep, tlsCfg, cfg)
+			ch <- result{c, err}
+		}()
+	}
+
+	launch()
+	var firstErr error
+	for {
+		var next <-chan time.Time
+		if launched < len(addrs) {
+			next = time.After(dialStagger)
+		}
+		select {
+		case <-next:
+			launch()
+		case res := <-ch:
+			done++
+			if res.err == nil {
+				go func(n int) {
+					for ; n > 0; n-- {
+						if r := <-ch; r.conn != nil {
+							_ = r.conn.CloseWithError(0, "")
+						}
+					}
+				}(launched - done)
+				return res.conn, nil
+			}
+			if firstErr == nil {
+				firstErr = res.err
+			}
+			if launched < len(addrs) {
+				launch()
+			} else if done == launched {
+				return nil, firstErr
+			}
+		case <-ctx.Done():
+			go func(n int) {
+				for ; n > 0; n-- {
+					if r := <-ch; r.conn != nil {
+						_ = r.conn.CloseWithError(0, "")
+					}
+				}
+			}(launched - done)
+			return nil, ctx.Err()
+		}
+	}
+}
+
+type doqDialCall struct {
+	done chan struct{}
+	conn *quic.Conn
+	err  error
+}
+
+type doqPool struct {
+	mu           sync.Mutex
+	conns        map[string]*quic.Conn
+	inflight     map[string]*doqDialCall
+	sessionCache tls.ClientSessionCache
+}
+
+var sharedDoQPool = &doqPool{
+	conns:        make(map[string]*quic.Conn),
+	inflight:     make(map[string]*doqDialCall),
+	sessionCache: tls.NewLRUClientSessionCache(64),
+}
+
+func (p *doqPool) get(ctx context.Context, addr, serverName string) (*quic.Conn, error) {
+	key := addr + "|" + serverName
+
+	p.mu.Lock()
+	if c, ok := p.conns[key]; ok {
+		if c.Context().Err() == nil {
+			p.mu.Unlock()
+			return c, nil
+		}
+		delete(p.conns, key)
+	}
+
+	call, ok := p.inflight[key]
+	if !ok {
+		call = &doqDialCall{done: make(chan struct{})}
+		p.inflight[key] = call
+		go func() {
+			dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			tlsCfg := &tls.Config{
+				ServerName:         serverName,
+				NextProtos:         []string{"doq"},
+				ClientSessionCache: p.sessionCache,
+			}
+			quicCfg := &quic.Config{
+				KeepAlivePeriod:      30 * time.Second,
+				MaxIdleTimeout:       90 * time.Second,
+				HandshakeIdleTimeout: 5 * time.Second,
+				Allow0RTT:            true,
+			}
+			call.conn, call.err = dialQUICAddr(dctx, addr, tlsCfg, quicCfg)
+
+			p.mu.Lock()
+			if call.err == nil && call.conn != nil {
+				p.conns[key] = call.conn
+			}
+			delete(p.inflight, key)
+			p.mu.Unlock()
+			close(call.done)
+		}()
+	}
+	p.mu.Unlock()
+
+	select {
+	case <-call.done:
+		return call.conn, call.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (p *doqPool) evict(addr, serverName string, bad *quic.Conn) {
+	key := addr + "|" + serverName
+	p.mu.Lock()
+	if cur, ok := p.conns[key]; ok && cur == bad {
+		delete(p.conns, key)
+	}
+	p.mu.Unlock()
+	if bad != nil {
+		_ = bad.CloseWithError(0, "evicted")
+	}
+}
+
+// 多协议自定义 DNS 解析（h3 / quic / https / tls / tcp / udp）
+
+var dotSessionCache = tls.NewLRUClientSessionCache(64)
+
+func resolveCustomDNS(ctx context.Context, domain, rawServer string, httpClient *http.Client) ([]netip.Addr, error) {
+	if ip, err := netip.ParseAddr(strings.Trim(domain, "[]")); err == nil {
+		return []netip.Addr{ip.Unmap()}, nil
+	}
+
+	server := strings.TrimSpace(rawServer)
+	if server == "" || strings.EqualFold(server, "system") || strings.EqualFold(server, "auto") {
+		addrs, _, err := sharedResolver.lookup(ctx, domain)
+		return addrs, err
+	}
+
+	if !strings.Contains(server, "://") {
+		if idx := strings.IndexByte(server, '/'); idx != -1 {
+			server = server[:idx]
+		}
+		addr := ensureDNSPort(server, "53")
+		res := &net.Resolver{
+			PreferGo: true,
+			Dial: func(c context.Context, network, _ string) (net.Conn, error) {
+				return dialer.DialContext(c, network, addr)
+			},
+		}
+		return lookupDual(ctx, res, domain)
+	}
+
+	u, err := url.Parse(server)
+	if err != nil || u.Hostname() == "" {
+		return nil, fmt.Errorf("invalid custom DNS server: %s", rawServer)
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	switch scheme {
+	case "h3":
+		// 真实 HTTP/3 over QUIC (RFC 8484 + http3.Transport)
+		u.Scheme = "https"
+		if u.Path == "" {
+			u.Path = "/dns-query"
+		}
+		endpoint := u.String()
+		h3Client := loonH3Client()
+		return queryWireDual(ctx, domain, func(c context.Context, q []byte) ([]byte, error) {
+			return exchangeDoH(c, h3Client, endpoint, q)
+		})
+
+	case "https", "http":
+		if u.Path == "" {
+			u.Path = "/dns-query"
+		}
+		endpoint := u.String()
+		return queryWireDual(ctx, domain, func(c context.Context, q []byte) ([]byte, error) {
+			return exchangeDoH(c, httpClient, endpoint, q)
+		})
+
+	case "quic", "doq":
+		// 真实 DNS over QUIC (RFC 9250)
+		port := u.Port()
+		if port == "" {
+			port = "853"
+		}
+		addr := net.JoinHostPort(u.Hostname(), port)
+		serverName := u.Hostname()
+		return queryWireDual(ctx, domain, func(c context.Context, q []byte) ([]byte, error) {
+			return exchangeDoQ(c, addr, serverName, q)
+		})
+
+	case "tls", "dot":
+		port := u.Port()
+		if port == "" {
+			port = "853"
+		}
+		addr := net.JoinHostPort(u.Hostname(), port)
+		serverName := u.Hostname()
+		return queryWireDual(ctx, domain, func(c context.Context, q []byte) ([]byte, error) {
+			return exchangeDoT(c, addr, serverName, q)
+		})
+
+	case "tcp":
+		port := u.Port()
+		if port == "" {
+			port = "53"
+		}
+		addr := net.JoinHostPort(u.Hostname(), port)
+		res := &net.Resolver{
+			PreferGo: true,
+			Dial: func(c context.Context, _, _ string) (net.Conn, error) {
+				return dialer.DialContext(c, "tcp", addr)
+			},
+		}
+		return lookupDual(ctx, res, domain)
+
+	case "udp":
+		port := u.Port()
+		if port == "" {
+			port = "53"
+		}
+		addr := net.JoinHostPort(u.Hostname(), port)
+		res := &net.Resolver{
+			PreferGo: true,
+			Dial: func(c context.Context, network, _ string) (net.Conn, error) {
+				return dialer.DialContext(c, network, addr)
+			},
+		}
+		return lookupDual(ctx, res, domain)
+
+	default:
+		return nil, fmt.Errorf("unsupported custom DNS scheme: %s", scheme)
+	}
+}
+
+func ensureDNSPort(host, defaultPort string) string {
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		return host
+	}
+	trimmed := strings.Trim(host, "[]")
+	if ip, err := netip.ParseAddr(trimmed); err == nil {
+		return net.JoinHostPort(ip.String(), defaultPort)
+	}
+	return net.JoinHostPort(trimmed, defaultPort)
+}
+
+func queryWireDual(ctx context.Context, domain string, exchange func(context.Context, []byte) ([]byte, error)) ([]netip.Addr, error) {
+	type result struct {
+		addrs []netip.Addr
+		err   error
+	}
+	runOne := func(qtype uint16, ch chan<- result) {
+		q, err := encodeDNSQuery(domain, qtype)
+		if err != nil {
+			ch <- result{err: err}
+			return
+		}
+		resp, err := exchange(ctx, q)
+		if err != nil {
+			ch <- result{err: err}
+			return
+		}
+		addrs, err := decodeDNSResponse(domain, resp)
+		ch <- result{addrs: addrs, err: err}
+	}
+
+	c4, c6 := make(chan result, 1), make(chan result, 1)
+	go runOne(1, c4)  // A
+	go runOne(28, c6) // AAAA
+
+	r4 := <-c4
+	if r4.err != nil || len(r4.addrs) == 0 {
+		r6 := <-c6
+		if r6.err == nil && len(r6.addrs) > 0 {
+			return orderAddrs(r6.addrs), nil
+		}
+		if r4.err != nil {
+			return nil, r4.err
+		}
+		if r6.err != nil {
+			return nil, r6.err
+		}
+		return nil, &net.DNSError{Err: "no such host", Name: domain, IsNotFound: true}
+	}
+
+	timer := time.NewTimer(wireV6Grace)
+	defer timer.Stop()
+	select {
+	case r6 := <-c6:
+		if r6.err == nil && len(r6.addrs) > 0 {
+			return orderAddrs(append(r4.addrs, r6.addrs...)), nil
+		}
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return orderAddrs(r4.addrs), nil
+}
+
+func exchangeDoH(ctx context.Context, client *http.Client, endpoint string, query []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(query))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/dns-message")
+	req.Header.Set("Accept", "application/dns-message")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("DoH %s returned status %d", endpoint, resp.StatusCode)
+	}
+	return body, nil
+}
+
+func exchangeDoQ(ctx context.Context, addr, serverName string, query []byte) ([]byte, error) {
+	frame := make([]byte, 2+len(query))
+	binary.BigEndian.PutUint16(frame[:2], uint16(len(query)))
+	copy(frame[2:], query)
+
+	var lastErr error
+	for attempt := range 2 {
+		conn, err := sharedDoQPool.get(ctx, addr, serverName)
+		if err != nil {
+			return nil, err
+		}
+
+		stream, err := conn.OpenStreamSync(ctx)
+		if err != nil {
+			lastErr = err
+			sharedDoQPool.evict(addr, serverName, conn)
+			if attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+
+		if dl, ok := ctx.Deadline(); ok {
+			_ = stream.SetDeadline(dl)
+		}
+
+		if _, err := stream.Write(frame); err != nil {
+			_ = stream.Close()
+			lastErr = err
+			sharedDoQPool.evict(addr, serverName, conn)
+			if attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+		// RFC 9250: 写半关闭通知 DoQ 服务端发送响应
+		_ = stream.Close()
+
+		var lenBuf [2]byte
+		if _, err := io.ReadFull(stream, lenBuf[:]); err != nil {
+			lastErr = err
+			sharedDoQPool.evict(addr, serverName, conn)
+			if attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+		respLen := int(binary.BigEndian.Uint16(lenBuf[:]))
+		if respLen < 12 {
+			return nil, fmt.Errorf("invalid DoQ response length: %d", respLen)
+		}
+		resp := make([]byte, respLen)
+		if _, err := io.ReadFull(stream, resp); err != nil {
+			lastErr = err
+			sharedDoQPool.evict(addr, serverName, conn)
+			if attempt == 0 && ctx.Err() == nil {
+				continue
+			}
+			return nil, err
+		}
+		return resp, nil
+	}
+	return nil, lastErr
+}
+
+func exchangeDoT(ctx context.Context, addr, serverName string, query []byte) ([]byte, error) {
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if dl, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(dl)
+	}
+
+	tlsCfg := &tls.Config{
+		ClientSessionCache: dotSessionCache,
+		ServerName:         serverName,
+	}
+	tlsConn := tls.Client(conn, tlsCfg)
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		return nil, err
+	}
+
+	frame := make([]byte, 2+len(query))
+	binary.BigEndian.PutUint16(frame[:2], uint16(len(query)))
+	copy(frame[2:], query)
+	if _, err := tlsConn.Write(frame); err != nil {
+		return nil, err
+	}
+
+	var lenBuf [2]byte
+	if _, err := io.ReadFull(tlsConn, lenBuf[:]); err != nil {
+		return nil, err
+	}
+	respLen := int(binary.BigEndian.Uint16(lenBuf[:]))
+	if respLen < 12 {
+		return nil, fmt.Errorf("invalid DoT response length: %d", respLen)
+	}
+	resp := make([]byte, respLen)
+	if _, err := io.ReadFull(tlsConn, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func encodeDNSQuery(domain string, qtype uint16) ([]byte, error) {
+	d := strings.TrimSuffix(strings.TrimSpace(domain), ".")
+	if d == "" || len(d) > 253 {
+		return nil, fmt.Errorf("invalid domain name: %s", domain)
+	}
+
+	buf := make([]byte, 12, 12+len(d)+6)
+	buf[2] = 0x01 // RD = 1
+	buf[5] = 0x01 // QDCOUNT = 1
+
+	for _, label := range strings.Split(d, ".") {
+		if len(label) == 0 || len(label) > 63 {
+			return nil, fmt.Errorf("invalid DNS label in domain: %s", domain)
+		}
+		buf = append(buf, byte(len(label)))
+		buf = append(buf, label...)
+	}
+	buf = append(buf, 0x00)
+
+	var tail [4]byte
+	binary.BigEndian.PutUint16(tail[0:2], qtype)
+	binary.BigEndian.PutUint16(tail[2:4], 1) // QCLASS = IN
+	buf = append(buf, tail[:]...)
+	return buf, nil
+}
+
+func decodeDNSResponse(domain string, pkt []byte) ([]netip.Addr, error) {
+	if len(pkt) < 12 {
+		return nil, fmt.Errorf("truncated DNS response")
+	}
+	rcode := pkt[3] & 0x0F
+	if rcode == 3 {
+		return nil, &net.DNSError{Err: "no such host", Name: domain, IsNotFound: true}
+	}
+	if rcode != 0 {
+		return nil, fmt.Errorf("dns server returned rcode %d", rcode)
+	}
+
+	qdcount := int(binary.BigEndian.Uint16(pkt[4:6]))
+	ancount := int(binary.BigEndian.Uint16(pkt[6:8]))
+
+	offset := 12
+	var err error
+	for range qdcount {
+		offset, err = skipDNSName(pkt, offset)
+		if err != nil {
+			return nil, err
+		}
+		if offset+4 > len(pkt) {
+			return nil, fmt.Errorf("truncated DNS question")
+		}
+		offset += 4
+	}
+
+	var addrs []netip.Addr
+	for range ancount {
+		offset, err = skipDNSName(pkt, offset)
+		if err != nil {
+			return nil, err
+		}
+		if offset+10 > len(pkt) {
+			return nil, fmt.Errorf("truncated DNS answer header")
+		}
+		rtype := binary.BigEndian.Uint16(pkt[offset : offset+2])
+		rclass := binary.BigEndian.Uint16(pkt[offset+2 : offset+4])
+		rdlen := int(binary.BigEndian.Uint16(pkt[offset+8 : offset+10]))
+		offset += 10
+		if offset+rdlen > len(pkt) {
+			return nil, fmt.Errorf("truncated DNS answer rdata")
+		}
+		if rclass == 1 {
+			if rtype == 1 && rdlen == 4 {
+				addrs = append(addrs, netip.AddrFrom4([4]byte(pkt[offset:offset+4])))
+			} else if rtype == 28 && rdlen == 16 {
+				addrs = append(addrs, netip.AddrFrom16([16]byte(pkt[offset:offset+16])).Unmap())
+			}
+		}
+		offset += rdlen
+	}
+	return addrs, nil
+}
+
+func skipDNSName(pkt []byte, offset int) (int, error) {
+	for {
+		if offset >= len(pkt) {
+			return 0, fmt.Errorf("truncated DNS name")
+		}
+		l := pkt[offset]
+		if l == 0 {
+			return offset + 1, nil
+		}
+		if l&0xC0 == 0xC0 {
+			if offset+2 > len(pkt) {
+				return 0, fmt.Errorf("truncated DNS name pointer")
+			}
+			return offset + 2, nil
+		}
+		if l&0xC0 != 0 {
+			return 0, fmt.Errorf("invalid DNS label length")
+		}
+		offset += 1 + int(l)
+	}
+}
 
 // localAPIClient 用于访问本机 Sub-Store 接口，超时略大于引擎 3 分钟的执行上限。
 var localAPIClient = &http.Client{

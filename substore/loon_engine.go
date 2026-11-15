@@ -10,10 +10,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/http/httptrace"
-	"net/netip"
 	"net/url"
 	"os"
 	"runtime"
@@ -773,35 +771,7 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			reqCtx, cancel := context.WithTimeout(runCtx, time.Duration(timeoutMs)*time.Millisecond)
 			defer cancel()
 
-			var addrs []netip.Addr
-			var err error
-
-			server := strings.TrimSpace(opts.Server)
-			if server == "" || strings.EqualFold(server, "system") || strings.EqualFold(server, "auto") {
-				addrs, _, err = sharedResolver.lookup(reqCtx, opts.Domain)
-			} else {
-				server = strings.TrimPrefix(server, "quic://")
-				server = strings.TrimPrefix(server, "h3://")
-				server = strings.TrimPrefix(server, "udp://")
-				server = strings.TrimPrefix(server, "tcp://")
-				server = strings.TrimPrefix(server, "tls://")
-
-				if _, _, e := net.SplitHostPort(server); e != nil {
-					if ip, e := netip.ParseAddr(server); e == nil {
-						server = netip.AddrPortFrom(ip, 53).String()
-					} else {
-						server = net.JoinHostPort(server, "53")
-					}
-				}
-
-				res := &net.Resolver{
-					PreferGo: true,
-					Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-						return dialer.DialContext(ctx, network, server)
-					},
-				}
-				addrs, err = lookupDual(reqCtx, res, opts.Domain)
-			}
+			addrs, err := resolveCustomDNS(reqCtx, opts.Domain, opts.Server, e.httpClient)
 
 			type DnsAnswer struct {
 				Type  string `json:"type"`
