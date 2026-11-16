@@ -123,13 +123,13 @@ var (
 
 // InitSingboxVersion 程序初始化时对 Singbox 版本号进行初始化
 func InitSingboxVersion() {
-	if config.GlobalConfig.SingboxLatest.Version != "" && config.GlobalConfig.SingboxLatest.JSON != "" && config.GlobalConfig.SingboxLatest.JS != "" {
-		LatestSingboxVersion = config.GlobalConfig.SingboxLatest.Version
+	if v := strings.TrimSpace(config.GlobalConfig.SingboxLatest.Version); v != "" {
+		LatestSingboxVersion = v
 	} else {
 		LatestSingboxVersion = defaultLatestVer
 	}
-	if config.GlobalConfig.SingboxExtra.Version != "" && config.GlobalConfig.SingboxExtra.JSON != "" && config.GlobalConfig.SingboxExtra.JS != "" {
-		ExtraSingboxVersion = config.GlobalConfig.SingboxExtra.Version
+	if v := strings.TrimSpace(config.GlobalConfig.SingboxExtra.Version); v != "" {
+		ExtraSingboxVersion = v
 	} else {
 		ExtraSingboxVersion = defaultExtraVer
 	}
@@ -721,6 +721,43 @@ func extractMajorMinor(ver string) string {
 	return ""
 }
 
+// extractFlavorTag 按非字母数字分词识别版本号中的 lite / ios 标识（避免误匹配）
+func extractFlavorTag(ver string) string {
+	tokens := strings.FieldsFunc(strings.ToLower(ver), func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
+	})
+	for _, tok := range tokens {
+		if tok == "lite" || tok == "ios" {
+			return tok
+		}
+	}
+	return ""
+}
+
+// hasFragParam 判断 URL fragment 中是否已包含指定参数（大小写及下划线/短横线不敏感）
+func hasFragParam(frag string, keys ...string) bool {
+	if frag == "" {
+		return false
+	}
+	normKey := func(s string) string {
+		s = strings.ToLower(strings.TrimSpace(s))
+		s = strings.ReplaceAll(s, "_", "")
+		s = strings.ReplaceAll(s, "-", "")
+		return s
+	}
+	targets := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		targets[normKey(k)] = struct{}{}
+	}
+	for _, part := range strings.Split(frag, "&") {
+		k, _, _ := strings.Cut(part, "=")
+		if _, ok := targets[normKey(k)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // newSingboxFile 返回 singbox 文件
 func newSingboxFile(name, jsURL, jsonURL string) file {
 	rawVersion := strings.TrimPrefix(name, SingboxName+"-")
@@ -728,15 +765,16 @@ func newSingboxFile(name, jsURL, jsonURL string) file {
 		rawVersion = ""
 	}
 	majorMinor := extractMajorMinor(rawVersion)
+	flavor := extractFlavorTag(rawVersion)
 
-	// 仅当 JS 与 JSON 地址均属于官方模板仓库（sinspired/sub-store-template）时，
-	// 才自动注入版本参数，避免破坏用户自定义的脚本或参数。
-	isOfficial := isOfficialTemplateURL(jsURL) && isOfficialTemplateURL(jsonURL)
+	// 仅当 JS 脚本属于官方模板仓库（sinspired/sub-store-template）时，
+	// 才自动注入 version / lite / ios 等官方脚本参数，避免给第三方脚本加无效参数。
+	isOfficialJS := isOfficialTemplateURL(jsURL)
 	jsURL = utils.WarpURL(jsURL, IsGithubProxy)
 	jsonURL = utils.WarpURL(jsonURL, IsGithubProxy)
 
 	arguments := Args{}
-	if isOfficial {
+	if isOfficialJS {
 		arguments["name"] = "sub"
 		arguments["type"] = "0"
 		if majorMinor != "" {
@@ -744,20 +782,30 @@ func newSingboxFile(name, jsURL, jsonURL string) file {
 		}
 
 		if _, frag, hasFrag := strings.Cut(jsURL, "#"); !hasFrag {
+			jsURL += "#name=sub&type=0"
 			if majorMinor != "" {
-				jsURL += "#name=sub&type=0&version=" + majorMinor
-			} else {
-				jsURL += "#name=sub&type=0"
+				jsURL += "&version=" + majorMinor
 			}
-		} else if majorMinor != "" &&
-			!strings.Contains(frag, "version=") &&
-			!strings.Contains(frag, "ver=") &&
-			!strings.Contains(frag, "sbVersion=") &&
-			!strings.Contains(frag, "sb_version=") {
-			if frag != "" && !strings.HasSuffix(jsURL, "&") {
-				jsURL += "&"
+			if flavor != "" {
+				jsURL += "&" + flavor + "=1"
+				arguments[flavor] = "1"
 			}
-			jsURL += "version=" + majorMinor
+		} else {
+			appendFrag := func(kv string) {
+				if frag != "" && !strings.HasSuffix(jsURL, "&") {
+					jsURL += "&"
+				}
+				jsURL += kv
+				frag += "&" + kv
+			}
+
+			if majorMinor != "" && !hasFragParam(frag, "version", "ver", "v", "sbVersion") {
+				appendFrag("version=" + majorMinor)
+			}
+			if flavor != "" && !hasFragParam(frag, "lite", "ios") && extractFlavorTag(frag) == "" {
+				appendFrag(flavor + "=1")
+				arguments[flavor] = "1"
+			}
 		}
 	} else if !strings.Contains(jsURL, "#") {
 		jsURL += "#name=sub&type=0"
@@ -1075,9 +1123,11 @@ func SyncSubStorePartial(yamlData []byte, doSub, doMihomo, doSbLatest, doSbOld b
 
 func processSingboxFile(sbc *config.SingBoxConfig, defaultJS, defaultJSON, version string) error {
 	js, jsonStr := defaultJS, defaultJSON
-	if len(sbc.JS) > 0 && len(sbc.JSON) > 0 {
-		js = sbc.JS
-		jsonStr = sbc.JSON
+	if s := strings.TrimSpace(sbc.JS); s != "" {
+		js = s
+	}
+	if s := strings.TrimSpace(sbc.JSON); s != "" {
+		jsonStr = s
 	}
 	f := newSingboxFile(SingboxName+"-"+version, js, jsonStr)
 	if err := f.syncSubStoreFile(); err != nil {
