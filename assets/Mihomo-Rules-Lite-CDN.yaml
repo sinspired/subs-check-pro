@@ -1,4 +1,4 @@
-# update: 2026-11-12 14:35:31
+# update: 2026-11-16 18:03:14
 # repo: https://github.com/sinspired/subs-check-pro 内置规则
 
 log-level: error # 日志等级 silent/error/warning/info/debug
@@ -105,9 +105,12 @@ sniffer:
   override-destination: false
   sniff: # TLS 和 QUIC 默认如果不配置 ports 默认嗅探 443
     QUIC:
-    #  ports: [ 443 ]
+      ports:
+        - 443
     TLS:
-    #  ports: [443, 8443]
+      ports:
+        - 443
+        - 8443
     # 默认嗅探 80
     HTTP: # 需要嗅探的端口
       ports:
@@ -640,7 +643,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/apple-intelligence.mrs'
-    path-in-bundle: 'geo/geosite/apple-intelligence.mrs'
   apple-tvplus:
     behavior: domain
     interval: 86400
@@ -648,7 +650,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/apple-tvplus.mrs'
-    path-in-bundle: 'geo/geosite/apple-tvplus.mrs'
   youku-intl:
     behavior: domain
     interval: 86400
@@ -656,7 +657,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/youku@!cn.mrs'
-    path-in-bundle: 'geo/geosite/youku@!cn.mrs'
   tencent-intl:
     behavior: domain
     interval: 86400
@@ -664,7 +664,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/tencent@!cn.mrs'
-    path-in-bundle: 'geo/geosite/tencent@!cn.mrs'
   iqiyi-intl:
     behavior: domain
     interval: 86400
@@ -672,7 +671,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/iqiyi@!cn.mrs'
-    path-in-bundle: 'geo/geosite/iqiyi@!cn.mrs'
   anthropic:
     behavior: domain
     interval: 86400
@@ -680,7 +678,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/anthropic.mrs'
-    path-in-bundle: 'geo/geosite/anthropic.mrs'
   openai:
     behavior: domain
     interval: 86400
@@ -688,7 +685,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/openai.mrs'
-    path-in-bundle: 'geo/geosite/openai.mrs'
   google-gemini:
     behavior: domain
     interval: 86400
@@ -696,7 +692,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/google-gemini.mrs'
-    path-in-bundle: 'geo/geosite/google-gemini.mrs'
   copilot:
     url: https://testingcf.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Copilot/Copilot.yaml
     path: ./ruleset/copilot.yaml
@@ -711,7 +706,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/bing.mrs'
-    path-in-bundle: 'geo/geosite/bing.mrs'
   twitter:
     behavior: domain
     interval: 86400
@@ -719,7 +713,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/twitter.mrs'
-    path-in-bundle: 'geo/geosite/twitter.mrs'
   tiktok:
     behavior: domain
     interval: 86400
@@ -727,7 +720,6 @@ rule-providers:
     type: http
     format: mrs
     url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/tiktok.mrs'
-    path-in-bundle: 'geo/geosite/tiktok.mrs'
 
 # 代理组
 proxy-groups:
