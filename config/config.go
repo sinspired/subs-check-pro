@@ -65,6 +65,8 @@ type Config struct {
 	CheckInterval        int     `yaml:"check-interval"`
 	CronExpression       string  `yaml:"cron-expression"`
 	Timeout              int     `yaml:"timeout"`
+	// MaxLatency 测活 HTTP 请求最大允许响应耗时（毫秒），0 表示不限制。
+	MaxLatency           int     `yaml:"max-latency"`
 	SpeedTestURL         string  `yaml:"speed-test-url"`
 	DownloadTimeout      int     `yaml:"download-timeout"`
 	DownloadMB           int     `yaml:"download-mb"`
@@ -214,6 +216,7 @@ var OriginDefaultConfig = &Config{
 		"youtube",
 	},
 	DownloadMB:       20,
+	MaxLatency:        300,
 	EnableSelfUpdate: true,
 	CronCheckUpdate:  "0 0,9,21 * * *",
 
