@@ -1,4 +1,4 @@
-# update: 2026-11-16 23:05:48
+# update: 2026-11-17 17:51:12
 # repo: https://github.com/sinspired/subs-check-pro 内置规则
 
 log-level: error # 日志等级 silent/error/warning/info/debug
@@ -734,6 +734,20 @@ rule-providers:
 
 # 代理组
 proxy-groups:
+  - icon: https://testingcf.jsdelivr.net/gh/Orz-3/mini@master/Color/Global.png
+    include-all: false
+    exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
+    name: GLOBAL
+    type: select
+    proxies:
+      - 'PROXY'
+      - 'AI'
+      - 'Cloudflare'
+      - 'YouTube'
+      - 'Netflix'
+      - 'TikTok'
+      - 'MANUAL'
+      - 'DIRECT'
   - icon: https://testingcf.jsdelivr.net/gh/Orz-3/mini@master/Color/Static.png
     include-all: false
     exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
@@ -760,7 +774,7 @@ proxy-groups:
       - AUTO
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png
     name: AI
-    type: fallback
+    type: select
     proxies:
       - 'AI-AUTO'
       - 'OpenAI'
@@ -921,7 +935,7 @@ proxy-groups:
       - 'MANUAL'
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Disney.png
     name: Disney
-    type: select
+    type: fallback
     proxies:
       - 'Disney-AUTO'
       - 'PROXY'
@@ -977,7 +991,7 @@ proxy-groups:
       - 'DIRECT'
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Heart.png
     name: Adult
-    type: select
+    type: fallback
     proxies:
       - 'PROXY'
       - 'Cloudflare'
@@ -1028,7 +1042,7 @@ proxy-groups:
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png
     include-all: true
     exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
-    filter: (?i)(?=.*(?:openai|chatgpt|gpt|GPT⁺))(?=.*(?:gemini|GM))
+    filter: (?i)(?=.*(?:openai|chatgpt|gpt|GPT⁺))(?=.*(?:gemini|GM))(?=.*(?:copilot|CP))
     name: AI-AUTO
     type: url-test
     interval: 600
