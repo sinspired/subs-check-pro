@@ -216,7 +216,7 @@ var OriginDefaultConfig = &Config{
 		"youtube",
 	},
 	DownloadMB:       20,
-	MaxLatency:        300,
+	MaxLatency:       300,
 	EnableSelfUpdate: true,
 	CronCheckUpdate:  "0 0,9,21 * * *",
 
