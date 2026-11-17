@@ -127,7 +127,8 @@ type ProxyJob struct {
 	speedMarked atomic.Bool
 	mediaMarked atomic.Bool
 
-	Speed int
+	Speed   int
+	Latency time.Duration // 原有测活 HTTP 请求响应耗时
 
 	NeedCF         bool
 	IsCfAccessible bool
@@ -764,8 +765,8 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 					continue
 				}
 
-				// 节点测活
-				isAlive := checkAlive(job, ctx)
+				// 节点测活：直接记录本次 HEAD 请求的响应耗时，不额外发送延迟测试请求。
+				isAlive, latency := checkAlive(job, ctx)
 
 				// 拥塞期间失败：用有限的预算复核一次，避免把「本来存活」的节点误判为死亡。
 				// 不等待网络恢复，只做一次短暂抖动后重测，且预算用尽后不再复核。
@@ -776,10 +777,11 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 					case <-time.After(time.Duration(300+rand.IntN(500)) * time.Millisecond):
 					}
 					if !checkCtxDone(ctx) {
-						isAlive = checkAlive(job, ctx)
+						isAlive, latency = checkAlive(job, ctx)
 					}
 				}
 				utils.NetGuard.Release(utils.GateAlive)
+				job.Latency = latency
 
 				if !isAlive {
 					// 记录非存活
@@ -789,6 +791,22 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 					pc.scoreAndRecycle(job.Result.Proxy, "alive_fail", 0, nil) // 失败打分扣除
 					job.Close()
 					continue // 不进入 speed/media
+				}
+
+				// 延迟过滤直接复用测活请求耗时。0 表示关闭阈值限制。
+				// 未通过的节点不进入测速/媒体阶段，也不会占用 success-limit 名额。
+				if !latencyWithinLimit(job.Latency, config.GlobalConfig.MaxLatency) {
+					if job.aliveMarked.CompareAndSwap(false, true) {
+						pc.pt.CountAlive(false)
+					}
+					slog.Debug("节点响应延迟超过阈值",
+						"Name", job.Client.mProxy.Name(),
+						"延迟毫秒", float64(job.Latency)/float64(time.Millisecond),
+						"阈值毫秒", config.GlobalConfig.MaxLatency,
+					)
+					pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil)
+					job.Close()
+					continue
 				}
 
 				// CF 过滤
@@ -1035,13 +1053,21 @@ func (pc *ProxyChecker) collectResults() {
 }
 
 // checkAlive 使用谷歌服务执行基本的存活检测。
-func checkAlive(job *ProxyJob, ctx context.Context) bool {
+// latencyWithinLimit 判断测活 HTTP 请求耗时是否低于配置阈值；0 表示不限制。
+func latencyWithinLimit(elapsed time.Duration, maxLatencyMS int) bool {
+	return maxLatencyMS <= 0 || (elapsed >= 0 && elapsed < time.Duration(maxLatencyMS)*time.Millisecond)
+}
+
+// checkAlive 使用原有谷歌 HEAD 请求执行存活检测，并返回同一次请求的响应耗时。
+func checkAlive(job *ProxyJob, ctx context.Context) (bool, time.Duration) {
+	started := time.Now()
 	gstatic, err := platform.CheckGstatic(job.Client.Client, ctx)
+	elapsed := time.Since(started)
 	if err == nil && gstatic {
-		return true
+		return true, elapsed
 	}
 	slog.Debug("测活出错", "Name", job.Client.mProxy.Name(), "error", err)
-	return false
+	return false, elapsed
 }
 
 // needsCF 判断所选的媒体检测平台是否需要Cloudflare访问权限。
