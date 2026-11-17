@@ -1052,7 +1052,6 @@ func (pc *ProxyChecker) collectResults() {
 	}
 }
 
-// checkAlive 使用谷歌服务执行基本的存活检测。
 // latencyWithinLimit 判断测活 HTTP 请求耗时是否低于配置阈值；0 表示不限制。
 func latencyWithinLimit(elapsed time.Duration, maxLatencyMS int) bool {
 	return maxLatencyMS <= 0 || (elapsed >= 0 && elapsed < time.Duration(maxLatencyMS)*time.Millisecond)
