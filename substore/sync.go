@@ -600,7 +600,7 @@ func cleanTags(tags []string, defaultTags []string) []string {
 	seen := make(map[string]bool)
 	for _, t := range tags {
 		if t == "已检测" {
-			// continue
+			continue
 		}
 		if t == "Subs-Check-Pro" {
 			t = "SCP"
@@ -670,7 +670,7 @@ func newMihomoFile() file {
 	return file{
 		Name:        MihomoName,
 		Remark:      remark,
-		Tag:         []string{"SCP", "已检测"},
+		Tag:         []string{"SCP"},
 		IsIconColor: true,
 		SubInfoURL:  SubUserInfoURL,
 		Source:      "local",
@@ -822,7 +822,7 @@ func newSingboxFile(name, jsURL, jsonURL string) file {
 	return file{
 		Name:        name,
 		Remark:      remark,
-		Tag:         []string{"SCP", "已检测"},
+		Tag:         []string{"SCP"},
 		Icon:        icon,
 		IsIconColor: true,
 		SubInfoURL:  SubUserInfoURL,
