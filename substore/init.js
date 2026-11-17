@@ -1,13 +1,6 @@
 // sub_store\init.js
 // package substore
 
-// import (
-// 	_ "embed"
-// )
-
-// //go:embed init.js
-// var initScriptBytes []byte
-
 
 // Web API Polyfill
 (function (g) {
@@ -561,8 +554,7 @@ const $persistentStore = {
         return val === undefined ? null : val;
     },
     write: function (val, key) {
-        __ps_write(val, key);
-        return true;
+        return __ps_write(val, key) !== false;
     }
 };
 

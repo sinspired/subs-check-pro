@@ -94,9 +94,46 @@ func (s *LoonServer) cleanupResponseCache() {
 	}
 }
 
+func (s *LoonServer) clearResponseCache() {
+	s.responseCache.Range(func(k, _ any) bool {
+		s.responseCache.Delete(k)
+		return true
+	})
+}
+
+func hasNoCacheRequest(r *http.Request) bool {
+	for k, vals := range r.URL.Query() {
+		if strings.EqualFold(k, "noCache") {
+			if len(vals) == 0 {
+				return true
+			}
+			for _, v := range vals {
+				t := strings.TrimSpace(v)
+				if !strings.EqualFold(t, "false") && t != "0" {
+					return true
+				}
+			}
+		} else if strings.EqualFold(k, "url") && len(vals) > 0 {
+			if _, hasNC := parseNoCacheURL(vals[0]); hasNC {
+				return true
+			}
+		}
+	}
+
+	cc := strings.ToLower(r.Header.Get("Cache-Control"))
+	if strings.Contains(cc, "no-cache") || strings.Contains(cc, "no-store") {
+		return true
+	}
+	if strings.Contains(strings.ToLower(r.Header.Get("Pragma")), "no-cache") {
+		return true
+	}
+	return false
+}
+
 // UpdateEngine 用新引擎原子替换旧引擎，旧引擎里尚未完成的请求继续用旧的执行
 func (s *LoonServer) UpdateEngine(e *LoonEngine) {
 	s.engine.Store(e)
+	s.clearResponseCache()
 }
 
 func (s *LoonServer) handle(w http.ResponseWriter, r *http.Request) {
@@ -196,19 +233,38 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 	isSyncAction := strings.HasPrefix(strippedPath, "/api/utils/backup") ||
 		strings.HasPrefix(strippedPath, "/api/sync/artifacts")
 
+	engine := s.engine.Load()
+	reqNoCache := hasNoCacheRequest(r)
+	targetNoCache := engine != nil && engine.store != nil && engine.store.TargetHasNoCache(strippedPath)
+
+	if reqNoCache || targetNoCache {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+	}
+
 	detach := (isReadMethod || r.Method == http.MethodPost) && (isDownloadOrFile || isSyncAction)
-	// 仅对幂等只读下载/文件查询启用短效缓存，避免 POST 或备份/同步指令命中旧缓存
-	cacheable := isReadMethod && isDownloadOrFile
+	// 仅对幂等只读下载/文件查询且未启用 noCache 时启用 60 秒短效缓存
+	cacheable := isReadMethod && isDownloadOrFile && !reqNoCache && !targetNoCache
+
+	isMutation := r.Method == http.MethodPut ||
+		r.Method == http.MethodPatch ||
+		r.Method == http.MethodDelete ||
+		(r.Method == http.MethodPost && !strings.HasPrefix(strippedPath, "/api/preview/")) ||
+		(strings.HasPrefix(strippedPath, "/api/utils/") && !strings.HasPrefix(strippedPath, "/api/utils/env"))
 
 	var resp *LoonHTTPResponse
 	if detach {
-		key := r.Method + "|" + fullURL + "|" + r.Header.Get("User-Agent") + "|" + argument
+		var cfgVer uint64
+		if engine != nil && engine.store != nil {
+			cfgVer = engine.store.ConfigVersion()
+		}
+		key := fmt.Sprintf("%s|%s|%s|%s|%d", r.Method, fullURL, r.Header.Get("User-Agent"), argument, cfgVer)
 		if r.Method == http.MethodPost {
 			key += "|" + req.Body
 		}
 		resp, err = s.executeDetached(r.Context(), key, req, argument, cacheable)
 	} else {
-		resp, err = s.engine.Load().Execute(r.Context(), req, argument)
+		resp, err = engine.Execute(r.Context(), req, argument)
 	}
 	if err != nil {
 		if r.Context().Err() != nil {
@@ -224,6 +280,9 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
 		return
+	}
+	if isMutation {
+		s.clearResponseCache()
 	}
 
 	bodyOut := resp.Body

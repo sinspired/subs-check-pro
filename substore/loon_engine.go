@@ -13,10 +13,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -72,6 +74,7 @@ type LoonEngine struct {
 	httpClient *http.Client
 	netDebug   bool
 
+	defaultUAs       []string
 	bannerPrinted    atomic.Bool
 	subStoreBytecode []byte
 }
@@ -170,6 +173,7 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 		logger:           logger,
 		httpClient:       httpClient,
 		netDebug:         os.Getenv("SUBSTORE_NET_DEBUG") == "1",
+		defaultUAs:       extractScriptDefaultUAs(string(scriptSrc)),
 		subStoreBytecode: bytecode,
 	}
 
@@ -220,7 +224,18 @@ func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argu
 	}
 
 	if e.netDebug {
-		e.logger.Info("请求端到端耗时诊断", "url", req.URL, "totalMs", time.Since(execStart).Milliseconds())
+		respLen := 0
+		respMd5 := ""
+		if resp != nil {
+			respLen = len(resp.Body)
+			respMd5 = md5Hex(resp.Body)
+		}
+		e.logger.Info("请求端到端耗时诊断",
+			"url", req.URL,
+			"totalMs", time.Since(execStart).Milliseconds(),
+			"respLen", respLen,
+			"respMd5", respMd5,
+		)
 	}
 
 	return resp, retErr
@@ -299,6 +314,63 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 
 	globals := ctx.Globals()
 	defer globals.Free()
+
+	globalNoCache, queryURL := hasNoCacheQueryParam(req.URL)
+	noCacheURLs := make(map[string]struct{})
+	extraUASet := make(map[string]struct{}, len(e.defaultUAs)+8)
+	for _, ua := range e.defaultUAs {
+		extraUASet[ua] = struct{}{}
+	}
+	for k, v := range req.Headers {
+		if strings.EqualFold(k, "User-Agent") && strings.TrimSpace(v) != "" {
+			extraUASet[strings.TrimSpace(v)] = struct{}{}
+		}
+	}
+	if parsedReqURL, err := url.Parse(req.URL); err == nil {
+		if ua := strings.TrimSpace(parsedReqURL.Query().Get("ua")); ua != "" {
+			extraUASet[ua] = struct{}{}
+		}
+	}
+	if queryURL != "" {
+		if base, hasNC := parseNoCacheURL(queryURL); hasNC && base != "" {
+			noCacheURLs[base] = struct{}{}
+		}
+	}
+
+	if e.store != nil {
+		storeInfo := e.store.NoCacheSnapshot()
+		maps.Copy(noCacheURLs, storeInfo.urls)
+		for _, ua := range storeInfo.uas {
+			extraUASet[ua] = struct{}{}
+		}
+	}
+	if trimmedBody := strings.TrimSpace(req.Body); strings.HasPrefix(trimmedBody, "{") || strings.HasPrefix(trimmedBody, "[") {
+		var bodyObj any
+		if json.Unmarshal([]byte(trimmedBody), &bodyObj) == nil {
+			collectNoCacheFromAny(bodyObj, noCacheURLs, extraUASet)
+		}
+	}
+	if e.store != nil {
+		for u := range noCacheURLs {
+			for _, ua := range e.store.GetURLUAs(u) {
+				extraUASet[ua] = struct{}{}
+			}
+		}
+	}
+
+	maskedCacheEntries := make(map[string]map[string]json.RawMessage)
+	collectUAs := func() []string {
+		uas := make([]string, 0, len(extraUASet)+4)
+		for ua := range extraUASet {
+			uas = append(uas, ua)
+		}
+		if e.store != nil {
+			for u := range noCacheURLs {
+				uas = append(uas, e.store.GetURLUAs(u)...)
+			}
+		}
+		return uas
+	}
 
 	// 兼容 __orig_b64 快速解码路径
 	globals.Set("__go_base64_to_string", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
@@ -465,10 +537,11 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	}))
 
 	globals.Set("__ps_read", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-		if len(args) == 0 {
+		if len(args) == 0 || e.store == nil {
 			return ctx.Undefined()
 		}
-		val := e.store.Read(args[0].String())
+		key := args[0].String()
+		val := e.store.Read(key)
 		if val == nil {
 			return ctx.Undefined()
 		}
@@ -476,12 +549,46 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 		if str == "undefined" || str == "null" {
 			return ctx.Undefined()
 		}
+
+		if isResourceCacheKey(key) && (globalNoCache || len(noCacheURLs) > 0) && str != "" {
+			var cacheMap map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(str), &cacheMap); err == nil && len(cacheMap) > 0 {
+				if globalNoCache {
+					maskedCacheEntries[key] = cacheMap
+					str = "{}"
+				} else {
+					candKeys := candidateCacheKeys(noCacheURLs, collectUAs())
+					removed := false
+					for k, rawVal := range cacheMap {
+						if _, hit := candKeys[k]; hit {
+							delete(cacheMap, k)
+							removed = true
+							continue
+						}
+						rawStr := string(rawVal)
+						for u := range noCacheURLs {
+							if k == u || strings.HasPrefix(k, u) || strings.Contains(rawStr, u) {
+								delete(cacheMap, k)
+								removed = true
+								break
+							}
+						}
+					}
+					if removed {
+						if b, mErr := json.Marshal(cacheMap); mErr == nil {
+							str = string(b)
+						}
+					}
+				}
+			}
+		}
+
 		return ctx.String(str)
 	}))
 
 	globals.Set("__ps_write", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-		if len(args) < 2 {
-			return ctx.Undefined()
+		if len(args) < 2 || e.store == nil {
+			return ctx.NewBool(false)
 		}
 		valArg := args[0]
 		key := args[1].String()
@@ -490,10 +597,22 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 		if valArg.IsNull() || valArg.IsUndefined() || str == "undefined" || str == "null" {
 			valPtr = nil
 		} else {
+			if isResourceCacheKey(key) && globalNoCache {
+				if masked := maskedCacheEntries[key]; len(masked) > 0 {
+					var newMap map[string]json.RawMessage
+					if json.Unmarshal([]byte(str), &newMap) == nil && newMap != nil {
+						merged := make(map[string]json.RawMessage, len(masked)+len(newMap))
+						maps.Copy(merged, masked)
+						maps.Copy(merged, newMap)
+						if b, mErr := json.Marshal(merged); mErr == nil {
+							str = string(b)
+						}
+					}
+				}
+			}
 			valPtr = &str
 		}
-		e.store.Write(valPtr, key)
-		return ctx.Undefined()
+		return ctx.NewBool(e.store.Write(valPtr, key))
 	}))
 
 	globals.Set("__notify_post", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
@@ -564,6 +683,12 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			return ctx.Undefined()
 		}
 		level, msg := args[0].String(), args[1].String()
+		if u, ua, ok := extractCachedLogURLUA(msg); ok {
+			if e.store != nil {
+				e.store.RecordURLUA(u, ua)
+			}
+			extraUASet[ua] = struct{}{}
+		}
 		if strings.Contains(msg, "┅┅┅┅") || strings.Contains(msg, "Sub-Store -- v") {
 			if e.bannerPrinted.CompareAndSwap(false, true) {
 				e.logger.Info(msg)
@@ -628,6 +753,10 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			slog.Debug("脚本底层解析 HTTP 参数失败", "err", err, "reqId", jsReqId)
 			e.logger.Error("脚本底层解析 HTTP 参数失败", "err", err, "reqId", jsReqId)
 		}
+
+		reqBaseURL, reqHasNC := parseNoCacheURL(opts.URL)
+		_, isListedNoCache := noCacheURLs[reqBaseURL]
+		bypassHTTPCache := globalNoCache || reqHasNC || isListedNoCache
 
 		go func() {
 			defer func() {
@@ -729,6 +858,19 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 					}
 					httpReq.Header.Set(k, v)
 				}
+				if e.store != nil {
+					if ua := strings.TrimSpace(httpReq.Header.Get("User-Agent")); ua != "" {
+						e.store.RecordURLUA(opts.URL, ua)
+					}
+				}
+				if bypassHTTPCache && httpReq.Method == http.MethodGet {
+					if httpReq.Header.Get("Cache-Control") == "" {
+						httpReq.Header.Set("Cache-Control", "no-cache, no-store, max-age=0")
+					}
+					if httpReq.Header.Get("Pragma") == "" {
+						httpReq.Header.Set("Pragma", "no-cache")
+					}
+				}
 
 				if e.netDebug {
 					timing = &netTiming{start: time.Now()}
@@ -807,6 +949,21 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 					Status:  httpResp.StatusCode,
 					Headers: make(map[string]string, len(httpResp.Header)),
 				}
+
+				if e.netDebug {
+					e.logger.Info("上游响应缓存头诊断",
+						"url", opts.URL,
+						"status", httpResp.StatusCode,
+						"bodyLen", len(bodyBytes),
+						"bodyMd5", md5Hex(string(bodyBytes)),
+						"cacheControl", httpResp.Header.Get("Cache-Control"),
+						"age", httpResp.Header.Get("Age"),
+						"cfCache", httpResp.Header.Get("Cf-Cache-Status"),
+						"xCache", httpResp.Header.Get("X-Cache"),
+						"etag", httpResp.Header.Get("Etag"),
+					)
+				}
+
 				for k, v := range httpResp.Header {
 					res.Response.Headers[strings.ToLower(k)] = v[0]
 				}
@@ -1139,4 +1296,70 @@ func parseLoonResponse(metaJson string, bodyStr string) *LoonHTTPResponse {
 
 	resp.Body = bodyStr
 	return resp
+}
+
+var defaultUAPattern = regexp.MustCompile(`(?i)(?:clash\.meta|mihomo(?:\.party)?|clash-verge|clash)/v[0-9A-Za-z._-]+`)
+
+func extractScriptDefaultUAs(src string) []string {
+	seen := map[string]struct{}{
+		"clash.meta": {},
+		"clash":      {},
+	}
+	for _, m := range defaultUAPattern.FindAllString(src, 32) {
+		if len(m) >= 3 && len(m) <= 64 {
+			seen[m] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for ua := range seen {
+		out = append(out, ua)
+	}
+	return out
+}
+
+func isResourceCacheKey(key string) bool {
+	return key == "sub-store-cached-resource" ||
+		key == "sub-store-cached-script-resource" ||
+		(strings.HasPrefix(key, "sub-store-cached-") && !strings.Contains(key, "custom-imm"))
+}
+
+func hasNoCacheQueryParam(rawURL string) (global bool, paramURL string) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false, ""
+	}
+	for k, vals := range u.Query() {
+		if strings.EqualFold(k, "noCache") {
+			if len(vals) == 0 {
+				global = true
+			}
+			for _, v := range vals {
+				t := strings.TrimSpace(v)
+				if !strings.EqualFold(t, "false") && t != "0" {
+					global = true
+				}
+			}
+		} else if strings.EqualFold(k, "url") && len(vals) > 0 {
+			paramURL = vals[0]
+		}
+	}
+	return global, paramURL
+}
+
+func extractCachedLogURLUA(msg string) (string, string, bool) {
+	idx := strings.Index(msg, "使用缓存:")
+	if idx < 0 {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(msg[idx+len("使用缓存:"):])
+	comma := strings.LastIndex(rest, ",")
+	if comma <= 0 {
+		return "", "", false
+	}
+	u := strings.TrimSpace(rest[:comma])
+	ua := strings.TrimSpace(rest[comma+1:])
+	if u == "" || ua == "" {
+		return "", "", false
+	}
+	return u, ua, true
 }
