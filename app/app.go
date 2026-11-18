@@ -349,14 +349,17 @@ func (app *App) triggerCheck() {
 		slog.Warn("已有检测正在进行，跳过本次检测")
 		return
 	}
+	// 检测锁必须覆盖完整生命周期，包括底层连接回收和内存清理。
+	// defer 在 releaseMemory 返回后才释放锁，防止清理期间启动下一轮检测。
 	defer app.checking.Store(false)
 
-	if err := app.checkProxies(); err != nil {
+	checkErr := app.checkProxies()
+	if checkErr != nil {
 		check.CurrentStepName.Store("检测失败")
-		slog.Error("检测代理失败", "error", err)
+		slog.Error("检测代理失败", "error", checkErr)
 	}
 
-	// 检测完成后显示下次检测时间
+	// 检测主体结束后显示下次检测时间
 	if app.ticker != nil {
 		// 使用间隔时间模式
 		app.ticker.Reset(time.Duration(app.interval) * time.Minute)
@@ -369,13 +372,16 @@ func (app *App) triggerCheck() {
 			slog.Info("下次检测时间", "time", app.formatNextRunTime(entries[0].Next, app.cron.Location()))
 		}
 	}
-	check.CurrentStepName.Store("检测完成")
 
-	// 手动标记检测完成
-	app.checking.Store(false)
-
-	// 释放内存
+	// 清理阶段仍持有检测锁，避免新任务重置全局进度或共享资源。
+	check.CurrentStepName.Store("清理内存")
 	releaseMemory()
+
+	if checkErr != nil {
+		check.CurrentStepName.Store("检测失败")
+	} else {
+		check.CurrentStepName.Store("检测完成")
+	}
 }
 
 // checkProxies 执行代理检测
