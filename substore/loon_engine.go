@@ -284,6 +284,11 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	memLimit, stackSize := jsRuntimeLimits()
 	rt.SetMemoryLimit(memLimit)
 	rt.SetMaxStackSize(stackSize)
+	if runtime.GOOS == "android" {
+		rt.SetGCThreshold(32 << 20)
+	} else {
+		rt.SetGCThreshold(64 << 20)
+	}
 	defer rt.Close()
 
 	ctx := rt.NewContext()
@@ -920,11 +925,15 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			if timing != nil && timing.start.Unix() > 0 {
 				timing.total = time.Since(timing.start)
 				if e.netDebug {
+					var ttfbMs int64 = -1
+					if !timing.gotFirstByte.IsZero() {
+						ttfbMs = timing.gotFirstByte.Sub(timing.start).Milliseconds()
+					}
 					e.logger.Info("底层HTTP分段耗时",
 						"url", opts.URL,
 						"dnsMs", timing.dnsDone.Sub(timing.dnsStart).Milliseconds(),
 						"tcpMs", timing.connectDone.Sub(timing.connectStart).Milliseconds(),
-						"ttfbMs", timing.gotFirstByte.Sub(timing.start).Milliseconds(),
+						"ttfbMs", ttfbMs,
 						"totalMs", timing.total.Milliseconds(),
 					)
 				}

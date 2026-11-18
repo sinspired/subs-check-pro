@@ -460,7 +460,7 @@
     g.RegExp = CachedRegExp;
 })(globalThis);
 
-// 加速排序期间的正则重复匹配（惰性创建缓存 Map，避免非正则排序产生无谓对象分配）
+// 加速排序期间的正则重复匹配（仅在长数组排序期间临时挂载，其余时间保持原生 C 方法零包装开销）
 (function () {
     const _origSort = Array.prototype.sort;
     const _origTest = RegExp.prototype.test;
@@ -470,10 +470,7 @@
     let _regexTestCache = null;   // Map<RegExp, Map<string, boolean> | false>
     let _regexSearchCache = null; // Map<RegExp, Map<string, number> | false>
 
-    RegExp.prototype.test = function (str) {
-        if (_sortDepth === 0) {
-            return _origTest.call(this, str);
-        }
+    function _cachedTest(str) {
         if (_regexTestCache === null) {
             _regexTestCache = new Map();
         }
@@ -495,12 +492,9 @@
         hit = _origTest.call(this, s);
         m.set(s, hit);
         return hit;
-    };
+    }
 
-    String.prototype.search = function (regexp) {
-        if (_sortDepth === 0) {
-            return _origSearch.call(this, regexp);
-        }
+    function _cachedSearch(regexp) {
         if (_regexSearchCache === null) {
             _regexSearchCache = new Map();
         }
@@ -522,7 +516,7 @@
         hit = _origSearch.call(s, regexp);
         m.set(s, hit);
         return hit;
-    };
+    }
 
     Array.prototype.sort = function (compareFn) {
         if (typeof compareFn !== 'function' || this.length < 20) {
@@ -530,11 +524,17 @@
         }
         const isOuter = _sortDepth === 0;
         _sortDepth++;
+        if (isOuter) {
+            RegExp.prototype.test = _cachedTest;
+            String.prototype.search = _cachedSearch;
+        }
         try {
             return _origSort.call(this, compareFn);
         } finally {
             _sortDepth--;
             if (isOuter) {
+                RegExp.prototype.test = _origTest;
+                String.prototype.search = _origSearch;
                 _regexTestCache = null;
                 _regexSearchCache = null;
             }
@@ -598,26 +598,30 @@ const console = {
     error: function () { __throttled_log("error", ...arguments); }
 };
 
-// 仅在触发过 DoH AAAA->A 回退后才启用 answers 过滤兼容，同时保留标准 thisArg
+// 仅在真正触发过 DoH AAAA->A 回退后才启用 answers 过滤兼容，平时保持原生 C filter 零包装开销
 let __doh_fallback_used = false;
 const _originalFilter = Array.prototype.filter;
-Array.prototype.filter = function (fn, thisArg) {
-    if (__doh_fallback_used && this.length > 0) {
-        const first = this[0];
-        if (first !== null && typeof first === 'object' && first.type !== undefined && (first.data !== undefined || first.value !== undefined)) {
-            const strictRes = _originalFilter.call(this, fn, thisArg);
-            if (strictRes.length > 0) return strictRes;
-            const fnStr = String(fn);
-            if (fnStr.indexOf('.type') !== -1 && fnStr.indexOf('===') !== -1) {
-                return _originalFilter.call(this, function (i) {
-                    return i && (i.type === 'A' || i.type === 1 || i.type === 'AAAA' || i.type === 28);
-                });
+function __enableDohFilterCompat() {
+    if (__doh_fallback_used) return;
+    __doh_fallback_used = true;
+    Array.prototype.filter = function (fn, thisArg) {
+        if (this.length > 0) {
+            const first = this[0];
+            if (first !== null && typeof first === 'object' && first.type !== undefined && (first.data !== undefined || first.value !== undefined)) {
+                const strictRes = _originalFilter.call(this, fn, thisArg);
+                if (strictRes.length > 0) return strictRes;
+                const fnStr = String(fn);
+                if (fnStr.indexOf('.type') !== -1 && fnStr.indexOf('===') !== -1) {
+                    return _originalFilter.call(this, function (i) {
+                        return i && (i.type === 'A' || i.type === 1 || i.type === 'AAAA' || i.type === 28);
+                    });
+                }
+                return strictRes;
             }
-            return strictRes;
         }
-    }
-    return _originalFilter.call(this, fn, thisArg);
-};
+        return _originalFilter.call(this, fn, thisArg);
+    };
+}
 
 // JS 侧的无损二进制/Base64转换器
 const _b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
