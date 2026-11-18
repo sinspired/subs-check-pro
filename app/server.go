@@ -583,6 +583,7 @@ func (app *App) getStatus(c *gin.Context) {
 
 		"subStorePort":  config.GlobalConfig.SubStorePort,
 		"subStorePath":  config.GlobalConfig.SubStorePath,
+		"subStorePublicUrl": config.GlobalConfig.SubStorePublicURL,
 		"singboxExtra":  substore.ExtraSingboxVersion,
 		"singboxLatest": substore.LatestSingboxVersion,
 	})

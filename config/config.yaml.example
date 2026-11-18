@@ -177,6 +177,11 @@ sub-store-port: ':8299'
 # sub-store-path: '/path'
 sub-store-path: ''
 
+# Sub-Store 公网访问入口（可选）。设置后，WebUI 首页入口和分享链接优先使用此地址。
+# 仅填写 http(s)://主机:端口，可带路径前缀；不要填写查询参数或 URL 片段。
+# 也可在配置文件留空，通过环境变量 SUB_STORE_PUBLIC_URL 设置。
+sub-store-public-url: ''
+
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接
 # 防止网络不好，所以现在内置，依赖:8199端口
 # 内置 ACL4SSR_Online_Full 和 Mihomo-Rules-CDN.yaml
