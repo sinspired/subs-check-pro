@@ -139,6 +139,7 @@ type Config struct {
 	SubStoreUpdateNotify bool     `yaml:"sub-store-update-notify"`
 	SubStorePort         string   `yaml:"sub-store-port"`
 	SubStorePath         string   `yaml:"sub-store-path"`
+	SubStorePublicURL    string   `yaml:"sub-store-public-url"`
 	SubStoreSyncCron     string   `yaml:"sub-store-sync-cron"`
 	SubStorePushService  string   `yaml:"sub-store-push-service"`
 	SubStoreProduceCron  string   `yaml:"sub-store-produce-cron"`
