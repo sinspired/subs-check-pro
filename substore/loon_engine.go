@@ -77,6 +77,7 @@ type LoonEngine struct {
 	defaultUAs       []string
 	bannerPrinted    atomic.Bool
 	subStoreBytecode []byte
+	isSubStoreApp    bool
 }
 
 type loonResult struct {
@@ -93,10 +94,127 @@ type jsTask struct {
 	failCh   chan error
 }
 
+type activeReqState struct {
+	runCtx             context.Context
+	stopped            atomic.Bool
+	doneCh             chan<- loonResult
+	globalNoCache      bool
+	noCacheURLs        map[string]struct{}
+	extraUASet         map[string]struct{}
+	maskedCacheEntries map[string]map[string]json.RawMessage
+	timersMu           sync.Mutex
+	goTimers           map[string]*time.Timer
+}
+
+func (s *activeReqState) clearTimers() {
+	s.timersMu.Lock()
+	for _, t := range s.goTimers {
+		t.Stop()
+	}
+	clear(s.goTimers)
+	s.timersMu.Unlock()
+}
+
+type workerRuntime struct {
+	engine         *LoonEngine
+	rt             *quickjs.Runtime
+	ctx            *quickjs.Context
+	globals        *quickjs.Value
+	state          *activeReqState
+	runCount       int
+	lastConfigVer  uint64
+	dirtyResources bool
+}
+
+func (w *workerRuntime) close() {
+	if w.globals != nil {
+		w.globals.Free()
+		w.globals = nil
+	}
+	if w.ctx != nil {
+		w.ctx.Close()
+		w.ctx = nil
+	}
+	if w.rt != nil {
+		w.rt.Close()
+		w.rt = nil
+	}
+	w.engine = nil
+	w.state = nil
+}
+
 var (
 	jsPoolOnce sync.Once
 	jsTaskCh   chan jsTask
+
+	rePatchYAMLWrap = regexp.MustCompile(`(\{safeLoad:[A-Za-z0-9_$]+,load:[A-Za-z0-9_$]+,safeDump:[A-Za-z0-9_$]+,dump:[A-Za-z0-9_$]+,parse:[A-Za-z0-9_$]+,stringify:[A-Za-z0-9_$]+\})`)
+	rePatchJSON5    = regexp.MustCompile(`(\{parse:[A-Za-z0-9_$]+,stringify:[A-Za-z0-9_$]+\})(,[A-Za-z0-9_$]+=[A-Za-z0-9_$]+,[A-Za-z0-9_$]+=[A-Za-z0-9_$]+;return [A-Za-z0-9_$]+)`)
+	rePatchStore    = regexp.MustCompile(`=new ([A-Za-z0-9_$]+)\("sub-store"\)`)
+	rePatchRCache   = regexp.MustCompile(`this\._cleanup\(\)\}`)
 )
+
+func patchSubStoreScript(src string) (string, bool) {
+	patched := strings.Replace(src,
+		`app.start=()=>{dispatch($request)}`,
+		`app.start=()=>{globalThis.__substore_dispatch=dispatch;if(!globalThis.__substore_booting)dispatch($request)}`,
+		1,
+	)
+	isApp := patched != src
+
+	patched = rePatchStore.ReplaceAllString(patched, `=globalThis.__substore_R=new $1("sub-store")`)
+	patched = rePatchRCache.ReplaceAllString(patched, `this._cleanup();(globalThis.__substore_rcaches=globalThis.__substore_rcaches||[]).push(this)}`)
+	patched = strings.Replace(patched, `=new Map`, `=globalThis.__substore_dlCache=new Map`, 1)
+	patched = rePatchYAMLWrap.ReplaceAllString(patched, `globalThis.__wrap_yaml($1)`)
+	patched = strings.Replace(patched,
+		`if(typeof e!="string"||!e.includes("short-id"))return e;`,
+		`if(typeof e!="string"||!e.includes("short-id"))return e;if(globalThis.__go_needs_short_id_norm&&!globalThis.__go_needs_short_id_norm(e))return e;`,
+		1,
+	)
+
+	if idx := strings.Index(patched, `return{name:"Clash Pre-processor"`); idx != -1 {
+		openIdx := idx + len("return")
+		if closeIdx := findMatchingBrace(patched, openIdx); closeIdx > openIdx {
+			patched = patched[:openIdx] + " globalThis.__wrap_clash_pre(" + patched[openIdx:closeIdx+1] + ")" + patched[closeIdx+1:]
+		}
+	}
+
+	patched = rePatchJSON5.ReplaceAllString(patched, `globalThis.__wrap_json5($1)$2`)
+	return patched, isApp
+}
+
+func findMatchingBrace(s string, start int) int {
+	depth := 0
+	inStr := byte(0)
+	escaped := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inStr != 0 {
+			switch c {
+			case '\\':
+				escaped = true
+			case inStr:
+				inStr = 0
+			}
+			continue
+		}
+		switch c {
+		case '"', '\'', '`':
+			inStr = c
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
 
 // 全局常驻固定 OS 线程 Worker 池：避免并发峰值引发 OOM，同时不随 UpdateEngine 泄漏协程
 func initJSPool() {
@@ -115,6 +233,15 @@ func initJSPool() {
 func jsWorkerLoop() {
 	// 常驻绑定固定 OS 线程，满足 QuickJS 栈边界检测且消除线程反复销毁创建开销
 	runtime.LockOSThread()
+	var wr *workerRuntime
+	reuseDisabled := os.Getenv("SUBSTORE_REUSE_RUNTIME") == "0"
+
+	defer func() {
+		if wr != nil {
+			wr.close()
+		}
+	}()
+
 	for task := range jsTaskCh {
 		if task.execCtx.Err() != nil {
 			select {
@@ -123,7 +250,32 @@ func jsWorkerLoop() {
 			}
 			continue
 		}
-		task.engine.runInQuickJS(task.execCtx, task.req, task.argument, task.doneCh, task.failCh)
+
+		// 仅对真实 Sub-Store 应用启用常驻复用；普通短脚本每轮重建保证隔离
+		canReuse := task.engine.isSubStoreApp && !reuseDisabled
+		if !canReuse || wr == nil || wr.engine != task.engine || wr.runCount >= 50 {
+			if wr != nil {
+				wr.close()
+				wr = nil
+			}
+			var err error
+			wr, err = task.engine.newWorkerRuntime()
+			if err != nil {
+				select {
+				case task.failCh <- err:
+				default:
+				}
+				continue
+			}
+		}
+
+		ok := task.engine.runTaskInWorker(wr, task.execCtx, task.req, task.argument, task.doneCh, task.failCh)
+		if !ok || !canReuse {
+			wr.close()
+			wr = nil
+		} else {
+			wr.runCount++
+		}
 	}
 }
 
@@ -150,10 +302,12 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 
 	bScript, _ := json.Marshal(map[string]any{"name": scriptTag, "startTime": time.Now().UnixMilli()})
 
+	patchedSrc, isSubStoreApp := patchSubStoreScript(string(scriptSrc))
+
 	initScript := string(initScriptBytes)
 	initScript = strings.Replace(initScript, "__LOON_JSON_OBJ__", string(bLoon), 1)
 	initScript = strings.Replace(initScript, "__SCRIPT_JSON_OBJ__", string(bScript), 1)
-	initScript = strings.Replace(initScript, "__SCRIPT_SRC__", string(scriptSrc), 1)
+	initScript = strings.Replace(initScript, "__SCRIPT_SRC__", patchedSrc, 1)
 
 	bytecode, err := ctx.Compile(initScript)
 	if err != nil {
@@ -175,6 +329,7 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 		netDebug:         os.Getenv("SUBSTORE_NET_DEBUG") == "1",
 		defaultUAs:       extractScriptDefaultUAs(string(scriptSrc)),
 		subStoreBytecode: bytecode,
+		isSubStoreApp:    isSubStoreApp,
 	}
 
 	if engine.netDebug {
@@ -276,10 +431,7 @@ func decompressDeflate(data []byte) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(fr, 64<<20))
 }
 
-func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest, argument string, doneCh chan<- loonResult, failCh chan<- error) {
-	runCtx, runCancel := context.WithTimeout(execCtx, e.timeout)
-	defer runCancel()
-
+func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 	rt := quickjs.NewRuntime()
 	memLimit, stackSize := jsRuntimeLimits()
 	rt.SetMemoryLimit(memLimit)
@@ -289,93 +441,36 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	} else {
 		rt.SetGCThreshold(64 << 20)
 	}
-	defer rt.Close()
 
 	ctx := rt.NewContext()
-	defer ctx.Close()
-
-	defer func() {
-		if r := recover(); r != nil {
-			select {
-			case failCh <- fmt.Errorf("QuickJS 引擎崩溃 (已拦截): %v", r):
-			default:
-			}
-		}
-	}()
-
-	var execStopped atomic.Bool
-	defer execStopped.Store(true)
-
-	var timersMu sync.Mutex
-	goTimers := make(map[string]*time.Timer)
-	defer func() {
-		timersMu.Lock()
-		for _, t := range goTimers {
-			t.Stop()
-		}
-		clear(goTimers)
-		timersMu.Unlock()
-	}()
-
 	globals := ctx.Globals()
-	defer globals.Free()
 
-	globalNoCache, queryURL := hasNoCacheQueryParam(req.URL)
-	noCacheURLs := make(map[string]struct{})
-	extraUASet := make(map[string]struct{}, len(e.defaultUAs)+8)
-	for _, ua := range e.defaultUAs {
-		extraUASet[ua] = struct{}{}
-	}
-	for k, v := range req.Headers {
-		if strings.EqualFold(k, "User-Agent") && strings.TrimSpace(v) != "" {
-			extraUASet[strings.TrimSpace(v)] = struct{}{}
-		}
-	}
-	if parsedReqURL, err := url.Parse(req.URL); err == nil {
-		if ua := strings.TrimSpace(parsedReqURL.Query().Get("ua")); ua != "" {
-			extraUASet[ua] = struct{}{}
-		}
-	}
-	if queryURL != "" {
-		if base, hasNC := parseNoCacheURL(queryURL); hasNC && base != "" {
-			noCacheURLs[base] = struct{}{}
-		}
+	wr := &workerRuntime{
+		engine:  e,
+		rt:      rt,
+		ctx:     ctx,
+		globals: globals,
 	}
 
-	if e.store != nil {
-		storeInfo := e.store.NoCacheSnapshot()
-		maps.Copy(noCacheURLs, storeInfo.urls)
-		for _, ua := range storeInfo.uas {
-			extraUASet[ua] = struct{}{}
+	// Go 原生 YAML / Clash Pre-processor 加速桥接
+	globals.Set("__go_yaml_to_json", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
 		}
-	}
-	if trimmedBody := strings.TrimSpace(req.Body); strings.HasPrefix(trimmedBody, "{") || strings.HasPrefix(trimmedBody, "[") {
-		var bodyObj any
-		if json.Unmarshal([]byte(trimmedBody), &bodyObj) == nil {
-			collectNoCacheFromAny(bodyObj, noCacheURLs, extraUASet)
+		return ctx.String(goYAMLToJSON(args[0].String()))
+	}))
+	globals.Set("__go_json_to_yaml", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
 		}
-	}
-	if e.store != nil {
-		for u := range noCacheURLs {
-			for _, ua := range e.store.GetURLUAs(u) {
-				extraUASet[ua] = struct{}{}
-			}
+		return ctx.String(goJSONToYAML(args[0].String()))
+	}))
+	globals.Set("__go_clash_extract_proxies", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
 		}
-	}
-
-	maskedCacheEntries := make(map[string]map[string]json.RawMessage)
-	collectUAs := func() []string {
-		uas := make([]string, 0, len(extraUASet)+4)
-		for ua := range extraUASet {
-			uas = append(uas, ua)
-		}
-		if e.store != nil {
-			for u := range noCacheURLs {
-				uas = append(uas, e.store.GetURLUAs(u)...)
-			}
-		}
-		return uas
-	}
+		return ctx.String(goClashExtractProxies(args[0].String()))
+	}))
 
 	// 兼容 __orig_b64 快速解码路径
 	globals.Set("__go_base64_to_string", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
@@ -525,6 +620,10 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	}))
 
 	globals.Set("__done", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		st := wr.state
+		if st == nil || st.stopped.Load() {
+			return ctx.Undefined()
+		}
 		metaJson := "{}"
 		if len(args) > 0 && !args[0].IsNull() && !args[0].IsUndefined() {
 			metaJson = args[0].String()
@@ -535,7 +634,7 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 		}
 
 		select {
-		case doneCh <- loonResult{meta: metaJson, body: bodyStr}:
+		case st.doneCh <- loonResult{meta: metaJson, body: bodyStr}:
 		default:
 		}
 		return ctx.Undefined()
@@ -555,14 +654,22 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			return ctx.Undefined()
 		}
 
-		if isResourceCacheKey(key) && (globalNoCache || len(noCacheURLs) > 0) && str != "" {
+		st := wr.state
+		if st != nil && isResourceCacheKey(key) && (st.globalNoCache || len(st.noCacheURLs) > 0) && str != "" {
 			var cacheMap map[string]json.RawMessage
 			if err := json.Unmarshal([]byte(str), &cacheMap); err == nil && len(cacheMap) > 0 {
-				if globalNoCache {
-					maskedCacheEntries[key] = cacheMap
+				if st.globalNoCache {
+					st.maskedCacheEntries[key] = cacheMap
 					str = "{}"
 				} else {
-					candKeys := candidateCacheKeys(noCacheURLs, collectUAs())
+					uas := make([]string, 0, len(st.extraUASet)+4)
+					for ua := range st.extraUASet {
+						uas = append(uas, ua)
+					}
+					for u := range st.noCacheURLs {
+						uas = append(uas, e.store.GetURLUAs(u)...)
+					}
+					candKeys := candidateCacheKeys(st.noCacheURLs, uas)
 					removed := false
 					for k, rawVal := range cacheMap {
 						if _, hit := candKeys[k]; hit {
@@ -571,7 +678,7 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 							continue
 						}
 						rawStr := string(rawVal)
-						for u := range noCacheURLs {
+						for u := range st.noCacheURLs {
 							if k == u || strings.HasPrefix(k, u) || strings.Contains(rawStr, u) {
 								delete(cacheMap, k)
 								removed = true
@@ -602,8 +709,9 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 		if valArg.IsNull() || valArg.IsUndefined() || str == "undefined" || str == "null" {
 			valPtr = nil
 		} else {
-			if isResourceCacheKey(key) && globalNoCache {
-				if masked := maskedCacheEntries[key]; len(masked) > 0 {
+			st := wr.state
+			if st != nil && isResourceCacheKey(key) && st.globalNoCache {
+				if masked := st.maskedCacheEntries[key]; len(masked) > 0 {
 					var newMap map[string]json.RawMessage
 					if json.Unmarshal([]byte(str), &newMap) == nil && newMap != nil {
 						merged := make(map[string]json.RawMessage, len(masked)+len(newMap))
@@ -660,18 +768,10 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 					} else {
 						targetURLs = cfg
 					}
-
 					if targetURLs == "" {
 						return
 					}
-
-					req := utils.NotifyRequest{
-						URLs:   targetURLs,
-						Body:   pushMsg,
-						Title:  t,
-						Format: "markdown",
-					}
-
+					req := utils.NotifyRequest{URLs: targetURLs, Body: pushMsg, Title: t, Format: "markdown"}
 					if err := utils.Notify(req, ""); err != nil {
 						e.logger.Warn("Sub-Store Apprise 推送失败", "err", err)
 					} else {
@@ -692,7 +792,9 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			if e.store != nil {
 				e.store.RecordURLUA(u, ua)
 			}
-			extraUASet[ua] = struct{}{}
+			if st := wr.state; st != nil {
+				st.extraUASet[ua] = struct{}{}
+			}
 		}
 		if strings.Contains(msg, "┅┅┅┅") || strings.Contains(msg, "Sub-Store -- v") {
 			if e.bannerPrinted.CompareAndSwap(false, true) {
@@ -717,7 +819,8 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	}))
 
 	globals.Set("__go_http_request_async", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-		if len(args) < 3 {
+		st := wr.state
+		if len(args) < 3 || st == nil || st.stopped.Load() {
 			return ctx.Undefined()
 		}
 		method, reqOptsJSON, jsReqId := args[0].String(), args[1].String(), args[2].String()
@@ -760,8 +863,9 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 		}
 
 		reqBaseURL, reqHasNC := parseNoCacheURL(opts.URL)
-		_, isListedNoCache := noCacheURLs[reqBaseURL]
-		bypassHTTPCache := globalNoCache || reqHasNC || isListedNoCache
+		_, isListedNoCache := st.noCacheURLs[reqBaseURL]
+		bypassHTTPCache := st.globalNoCache || reqHasNC || isListedNoCache
+		runCtx := st.runCtx
 
 		go func() {
 			defer func() {
@@ -922,21 +1026,19 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 				break
 			}
 
-			if timing != nil && timing.start.Unix() > 0 {
+			if timing != nil && timing.start.Unix() > 0 && e.netDebug {
 				timing.total = time.Since(timing.start)
-				if e.netDebug {
-					var ttfbMs int64 = -1
-					if !timing.gotFirstByte.IsZero() {
-						ttfbMs = timing.gotFirstByte.Sub(timing.start).Milliseconds()
-					}
-					e.logger.Info("底层HTTP分段耗时",
-						"url", opts.URL,
-						"dnsMs", timing.dnsDone.Sub(timing.dnsStart).Milliseconds(),
-						"tcpMs", timing.connectDone.Sub(timing.connectStart).Milliseconds(),
-						"ttfbMs", ttfbMs,
-						"totalMs", timing.total.Milliseconds(),
-					)
+				var ttfbMs int64 = -1
+				if !timing.gotFirstByte.IsZero() {
+					ttfbMs = timing.gotFirstByte.Sub(timing.start).Milliseconds()
 				}
+				e.logger.Info("底层HTTP分段耗时",
+					"url", opts.URL,
+					"dnsMs", timing.dnsDone.Sub(timing.dnsStart).Milliseconds(),
+					"tcpMs", timing.connectDone.Sub(timing.connectStart).Milliseconds(),
+					"ttfbMs", ttfbMs,
+					"totalMs", timing.total.Milliseconds(),
+				)
 			}
 
 			if err != nil {
@@ -958,21 +1060,6 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 					Status:  httpResp.StatusCode,
 					Headers: make(map[string]string, len(httpResp.Header)),
 				}
-
-				if e.netDebug {
-					e.logger.Info("上游响应缓存头诊断",
-						"url", opts.URL,
-						"status", httpResp.StatusCode,
-						"bodyLen", len(bodyBytes),
-						"bodyMd5", md5Hex(string(bodyBytes)),
-						"cacheControl", httpResp.Header.Get("Cache-Control"),
-						"age", httpResp.Header.Get("Age"),
-						"cfCache", httpResp.Header.Get("Cf-Cache-Status"),
-						"xCache", httpResp.Header.Get("X-Cache"),
-						"etag", httpResp.Header.Get("Etag"),
-					)
-				}
-
 				for k, v := range httpResp.Header {
 					res.Response.Headers[strings.ToLower(k)] = v[0]
 				}
@@ -997,12 +1084,12 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 				res.IsBinary = isBinary
 			}
 
-			if execStopped.Load() {
+			if st.stopped.Load() {
 				return
 			}
 			resBytes, _ := json.Marshal(res)
 			ctx.Schedule(func(inner *quickjs.Context) {
-				if execStopped.Load() {
+				if st.stopped.Load() || wr.state != st {
 					return
 				}
 				idVal := inner.String(jsReqId)
@@ -1037,7 +1124,8 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	}))
 
 	globals.Set("__go_dns_query_async", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-		if len(args) < 2 {
+		st := wr.state
+		if len(args) < 2 || st == nil || st.stopped.Load() {
 			return ctx.Undefined()
 		}
 		optsJson, jsReqId := args[0].String(), args[1].String()
@@ -1053,6 +1141,7 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			e.logger.Error("脚本底层解析 DNS 参数失败", "err", err, "reqId", jsReqId)
 		}
 
+		runCtx := st.runCtx
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -1113,12 +1202,12 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 				resObj.Response = &DnsResponse{Answers: answers}
 			}
 
-			if execStopped.Load() {
+			if st.stopped.Load() {
 				return
 			}
 			resBytes, _ := json.Marshal(resObj)
 			ctx.Schedule(func(inner *quickjs.Context) {
-				if execStopped.Load() {
+				if st.stopped.Load() || wr.state != st {
 					return
 				}
 				idVal := inner.String(jsReqId)
@@ -1141,22 +1230,22 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 
 	// 使用 time.AfterFunc（零休眠协程开销），并支持 clearTimeout 主动取消
 	globals.Set("__go_set_timeout", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-		if len(args) < 2 {
+		st := wr.state
+		if len(args) < 2 || st == nil || st.stopped.Load() {
 			return ctx.Undefined()
 		}
 		id := args[0].String()
 		delay := max(args[1].Int32(), 0)
 
-		var t *time.Timer
-		t = time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
-			timersMu.Lock()
-			delete(goTimers, id)
-			timersMu.Unlock()
-			if execStopped.Load() {
+		t := time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
+			st.timersMu.Lock()
+			delete(st.goTimers, id)
+			st.timersMu.Unlock()
+			if st.stopped.Load() {
 				return
 			}
 			ctx.Schedule(func(inner *quickjs.Context) {
-				if execStopped.Load() {
+				if st.stopped.Load() || wr.state != st {
 					return
 				}
 				idVal := inner.String(id)
@@ -1168,32 +1257,150 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 			})
 		})
 
-		timersMu.Lock()
-		goTimers[id] = t
-		timersMu.Unlock()
+		st.timersMu.Lock()
+		st.goTimers[id] = t
+		st.timersMu.Unlock()
 		return ctx.Undefined()
 	}))
 
 	globals.Set("__go_clear_timeout", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
-		if len(args) > 0 {
+		st := wr.state
+		if len(args) > 0 && st != nil {
 			id := args[0].String()
-			timersMu.Lock()
-			if t, ok := goTimers[id]; ok {
+			st.timersMu.Lock()
+			if t, ok := st.goTimers[id]; ok {
 				t.Stop()
-				delete(goTimers, id)
+				delete(st.goTimers, id)
 			}
-			timersMu.Unlock()
+			st.timersMu.Unlock()
 		}
 		return ctx.Undefined()
 	}))
 
+	// 如果是真实的 Sub-Store 应用，在 Worker 初始化时只执行 1 次字节码注册全部路由与模块
+	if e.isSubStoreApp {
+		bootSt := &activeReqState{
+			runCtx:             context.Background(),
+			noCacheURLs:        map[string]struct{}{},
+			extraUASet:         map[string]struct{}{},
+			maskedCacheEntries: map[string]map[string]json.RawMessage{},
+			goTimers:           map[string]*time.Timer{},
+		}
+		wr.state = bootSt
+		if e.store != nil {
+			wr.lastConfigVer = e.store.ConfigVersion()
+		}
+
+		bootPre := ctx.Eval(`globalThis.__substore_booting = true; globalThis.$argument = "cors=*";`)
+		bootPre.Free()
+
+		bytecodeVal := ctx.EvalBytecode(e.subStoreBytecode)
+		if bytecodeVal.IsException() {
+			err := ctx.Exception()
+			bytecodeVal.Free()
+			bootSt.clearTimers()
+			wr.close()
+			return nil, fmt.Errorf("初始化 Sub-Store 运行时失败: %w", err)
+		}
+		bytecodeVal.Free()
+
+		bootPost := ctx.Eval(`globalThis.__substore_booting = false;`)
+		bootPost.Free()
+
+		bootSt.stopped.Store(true)
+		bootSt.clearTimers()
+		wr.state = nil
+	}
+
+	return wr, nil
+}
+
+func (e *LoonEngine) runTaskInWorker(
+	wr *workerRuntime,
+	execCtx context.Context,
+	req *LoonHTTPRequest,
+	argument string,
+	doneCh chan<- loonResult,
+	failCh chan<- error,
+) (healthy bool) {
+	runCtx, runCancel := context.WithTimeout(execCtx, e.timeout)
+	defer runCancel()
+
+	defer func() {
+		if r := recover(); r != nil {
+			healthy = false
+			select {
+			case failCh <- fmt.Errorf("QuickJS 引擎崩溃 (已拦截): %v", r):
+			default:
+			}
+		}
+	}()
+
+	globalNoCache, queryURL := hasNoCacheQueryParam(req.URL)
+	noCacheURLs := make(map[string]struct{})
+	extraUASet := make(map[string]struct{}, len(e.defaultUAs)+8)
+	for _, ua := range e.defaultUAs {
+		extraUASet[ua] = struct{}{}
+	}
+	for k, v := range req.Headers {
+		if strings.EqualFold(k, "User-Agent") && strings.TrimSpace(v) != "" {
+			extraUASet[strings.TrimSpace(v)] = struct{}{}
+		}
+	}
+	if parsedReqURL, err := url.Parse(req.URL); err == nil {
+		if ua := strings.TrimSpace(parsedReqURL.Query().Get("ua")); ua != "" {
+			extraUASet[ua] = struct{}{}
+		}
+	}
+	if queryURL != "" {
+		if base, hasNC := parseNoCacheURL(queryURL); hasNC && base != "" {
+			noCacheURLs[base] = struct{}{}
+		}
+	}
+	if e.store != nil {
+		storeInfo := e.store.NoCacheSnapshot()
+		maps.Copy(noCacheURLs, storeInfo.urls)
+		for _, ua := range storeInfo.uas {
+			extraUASet[ua] = struct{}{}
+		}
+	}
+	if trimmedBody := strings.TrimSpace(req.Body); strings.HasPrefix(trimmedBody, "{") || strings.HasPrefix(trimmedBody, "[") {
+		var bodyObj any
+		if json.Unmarshal([]byte(trimmedBody), &bodyObj) == nil {
+			collectNoCacheFromAny(bodyObj, noCacheURLs, extraUASet)
+		}
+	}
+	if e.store != nil {
+		for u := range noCacheURLs {
+			for _, ua := range e.store.GetURLUAs(u) {
+				extraUASet[ua] = struct{}{}
+			}
+		}
+	}
+
+	st := &activeReqState{
+		runCtx:             runCtx,
+		doneCh:             doneCh,
+		globalNoCache:      globalNoCache,
+		noCacheURLs:        noCacheURLs,
+		extraUASet:         extraUASet,
+		maskedCacheEntries: make(map[string]map[string]json.RawMessage),
+		goTimers:           make(map[string]*time.Timer),
+	}
+	wr.state = st
+	defer func() {
+		st.stopped.Store(true)
+		st.clearTimers()
+		wr.state = nil
+	}()
+
 	// 当外部 Context 取消或引擎超时时，立即唤醒阻塞在 ctx.Await 上的 Worker 释放线程
 	stopAfter := context.AfterFunc(runCtx, func() {
-		if execStopped.Load() {
+		if st.stopped.Load() {
 			return
 		}
-		ctx.Schedule(func(inner *quickjs.Context) {
-			if execStopped.Load() {
+		wr.ctx.Schedule(func(inner *quickjs.Context) {
+			if st.stopped.Load() || wr.state != st {
 				return
 			}
 			reason := "Sub-Store script aborted"
@@ -1201,7 +1408,7 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 				reason = err.Error()
 			}
 			reasonVal := inner.String(reason)
-			ret := globals.Call("__abort_done", reasonVal)
+			ret := wr.globals.Call("__abort_done", reasonVal)
 			reasonVal.Free()
 			if ret != nil {
 				ret.Free()
@@ -1210,7 +1417,11 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 	})
 	defer stopAfter()
 
-	reqMap := map[string]any{"url": req.URL, "method": req.Method, "headers": req.Headers}
+	headers := req.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	reqMap := map[string]any{"url": req.URL, "method": req.Method, "headers": headers}
 	if req.Body != "" {
 		reqMap["body"] = req.Body
 	}
@@ -1218,58 +1429,81 @@ func (e *LoonEngine) runInQuickJS(execCtx context.Context, req *LoonHTTPRequest,
 
 	scriptStart := time.Now()
 
-	bytecodeVal := ctx.EvalBytecode(e.subStoreBytecode)
-	if bytecodeVal.IsException() {
-		err := ctx.Exception()
-		select {
-		case failCh <- fmt.Errorf("执行字节码异常: %w", err):
-		default:
+	// 非 Sub-Store 独立测试脚本：现场执行字节码并标记不复用
+	if !e.isSubStoreApp {
+		bytecodeVal := wr.ctx.EvalBytecode(e.subStoreBytecode)
+		if bytecodeVal.IsException() {
+			err := wr.ctx.Exception()
+			select {
+			case failCh <- fmt.Errorf("执行字节码异常: %w", err):
+			default:
+			}
+			bytecodeVal.Free()
+			return false
 		}
 		bytecodeVal.Free()
-		return
 	}
-	bytecodeVal.Free()
 
-	reqVal := ctx.String(string(bReq))
-	argVal := ctx.String(argument)
-	promiseVal := globals.Call("__start_sub_store", reqVal, argVal)
+	var configVer uint64
+	if e.store != nil {
+		configVer = e.store.ConfigVersion()
+	}
+	reloadMain := e.isSubStoreApp && (configVer != wr.lastConfigVer || globalNoCache)
+	reloadRes := e.isSubStoreApp && (globalNoCache || len(noCacheURLs) > 0 || wr.dirtyResources)
+
+	reqVal := wr.ctx.String(string(bReq))
+	argVal := wr.ctx.String(argument)
+	reloadMainVal := wr.ctx.NewBool(reloadMain)
+	reloadResVal := wr.ctx.NewBool(reloadRes)
+	promiseVal := wr.globals.Call("__dispatch_sub_store", reqVal, argVal, reloadMainVal, reloadResVal)
 	reqVal.Free()
 	argVal.Free()
+	reloadMainVal.Free()
+	reloadResVal.Free()
 
 	if promiseVal == nil {
 		select {
 		case failCh <- fmt.Errorf("启动入口脚本失败: 空返回值"):
 		default:
 		}
-		return
+		return false
 	}
 	if promiseVal.IsException() {
-		err := ctx.Exception()
+		err := wr.ctx.Exception()
 		select {
 		case failCh <- fmt.Errorf("执行入口脚本失败: %w", err):
 		default:
 		}
 		promiseVal.Free()
-		return
+		return false
 	}
 
-	resVal := ctx.Await(promiseVal)
+	resVal := wr.ctx.Await(promiseVal)
 	promiseVal.Free()
 
 	if resVal.IsException() {
-		err := ctx.Exception()
+		err := wr.ctx.Exception()
 		select {
 		case failCh <- fmt.Errorf("脚本执行或回调崩溃: %w", err):
 		default:
 		}
 		resVal.Free()
-		return
+		return false
 	}
 	resVal.Free()
 
-	if e.netDebug {
-		e.logger.Info("脚本内部执行耗时分析", "scriptMs", time.Since(scriptStart).Milliseconds())
+	// 记录本次同步后的状态，保证下一次请求对 globalNoCache 的屏蔽还原
+	wr.lastConfigVer = configVer
+	if globalNoCache {
+		wr.dirtyResources = true
+	} else if reloadRes {
+		wr.dirtyResources = false
 	}
+
+	if e.netDebug {
+		e.logger.Info("脚本内部执行耗时分析", "scriptMs", time.Since(scriptStart).Milliseconds(), "reuseCount", wr.runCount)
+	}
+	return e.isSubStoreApp
 }
 
 func parseLoonResponse(metaJson string, bodyStr string) *LoonHTTPResponse {

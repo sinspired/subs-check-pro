@@ -1,7 +1,6 @@
 // sub_store\init.js
 // package substore
 
-
 // Web API Polyfill
 (function (g) {
     const _b64c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -796,7 +795,7 @@ let __http_req_id = 0;
                 }
 
                 if (needsFallback && originalCallback) {
-                    __doh_fallback_used = true;
+                    __enableDohFilterCompat();
                     const newReq = Object.assign({}, req);
                     let fallbackRawBody = null;
                     if (isJSONDoH) {
@@ -923,6 +922,182 @@ globalThis.__fire_timer = function (id) {
     }
 };
 
+// Go 原生 YAML / Clash Preprocessor / JSON5 快路径包装
+globalThis.__wrap_yaml = function (orig) {
+    if (!orig) return orig;
+    const canGoParse = (s, opts) => {
+        if (typeof s !== 'string') return false;
+        if (!opts) return true;
+        if (typeof opts === 'function') return false;
+        if (opts.intAsBigInt || opts.mapAsMap || opts.keepSourceTokens || opts.customTags || opts.schema) return false;
+        return true;
+    };
+    const canGoDump = (obj, opts) => {
+        if (obj === undefined || typeof obj === 'function') return false;
+        if (!opts) return true;
+        if (typeof opts !== 'object') return false;
+        if (opts.replacer || opts.sortKeys || opts.forceQuotes || opts.quotingType || opts.noArrayIndent || opts.noRefs === false) return false;
+        return true;
+    };
+
+    const fastLoad = function (s, opts) {
+        if (typeof __go_yaml_to_json === 'function' && canGoParse(s, opts)) {
+            const jsonStr = __go_yaml_to_json(s);
+            if (jsonStr && jsonStr.length > 0) {
+                try { return JSON.parse(jsonStr); } catch (_) { }
+            }
+        }
+        return orig.safeLoad(s, opts);
+    };
+    const fastDump = function (obj, opts) {
+        if (typeof __go_json_to_yaml === 'function' && canGoDump(obj, opts)) {
+            try {
+                const yamlStr = __go_json_to_yaml(JSON.stringify(obj));
+                if (yamlStr && yamlStr.length > 0) return yamlStr;
+            } catch (_) { }
+        }
+        return orig.safeDump(obj, opts);
+    };
+
+    return {
+        safeLoad: fastLoad,
+        load: fastLoad,
+        parse: fastLoad,
+        safeDump: fastDump,
+        dump: fastDump,
+        stringify: fastDump
+    };
+};
+
+globalThis.__wrap_clash_pre = function (orig) {
+    let lastRaw = null;
+    let lastRes = null;
+    return {
+        name: orig.name,
+        test: function (raw) {
+            if (typeof raw !== 'string' || raw.indexOf('proxies') === -1) {
+                lastRaw = null;
+                lastRes = null;
+                return false;
+            }
+            if (typeof __go_clash_extract_proxies === 'function') {
+                const jsonStr = __go_clash_extract_proxies(raw);
+                if (jsonStr && jsonStr.length > 0) {
+                    const parsed = JSON.parse(jsonStr);
+                    if (!parsed.valid) {
+                        lastRaw = null;
+                        lastRes = null;
+                        return false;
+                    }
+                    lastRaw = raw;
+                    lastRes = parsed.proxies || [];
+                    return true;
+                }
+            }
+            lastRaw = null;
+            lastRes = null;
+            return orig.test(raw);
+        },
+        parse: function (raw, includeProxies) {
+            let proxies = null;
+            if (lastRaw === raw && Array.isArray(lastRes)) {
+                proxies = lastRes;
+                lastRaw = null;
+                lastRes = null;
+                const prefix = includeProxies ? 'proxies:\n' : '';
+                const linePrefix = includeProxies ? '  - ' : '';
+                const lines = new Array(proxies.length);
+                for (let i = 0; i < proxies.length; i++) {
+                    lines[i] = linePrefix + JSON.stringify(proxies[i]) + '\n';
+                }
+                return prefix + lines.join('');
+            }
+            lastRaw = null;
+            lastRes = null;
+            if (typeof __go_clash_extract_proxies === 'function') {
+                const jsonStr = __go_clash_extract_proxies(raw);
+                if (jsonStr && jsonStr.length > 0) {
+                    const parsed = JSON.parse(jsonStr);
+                    proxies = Array.isArray(parsed.proxies) ? parsed.proxies : [];
+                    const prefix = includeProxies ? 'proxies:\n' : '';
+                    const linePrefix = includeProxies ? '  - ' : '';
+                    const lines = new Array(proxies.length);
+                    for (let i = 0; i < proxies.length; i++) {
+                        lines[i] = linePrefix + JSON.stringify(proxies[i]) + '\n';
+                    }
+                    return prefix + lines.join('');
+                }
+            }
+            return orig.parse(raw, includeProxies);
+        }
+    };
+};
+
+globalThis.__wrap_json5 = function (orig) {
+    let lastStr = null;
+    let lastObj = null;
+    return {
+        parse: function (str, reviver) {
+            if (!reviver && typeof str === 'string') {
+                if (str === lastStr) return lastObj;
+                if (str.charCodeAt(0) === 123) {
+                    try {
+                        const obj = JSON.parse(str);
+                        lastStr = str;
+                        lastObj = obj;
+                        return obj;
+                    } catch (_) { }
+                }
+            }
+            const res = orig.parse(str, reviver);
+            if (!reviver && typeof str === 'string') {
+                lastStr = str;
+                lastObj = res;
+            }
+            return res;
+        },
+        stringify: orig.stringify
+    };
+};
+
+globalThis.__go_needs_short_id_norm = function (raw) {
+    if (/&\S+\s+['"]?short-id['"]?/.test(raw)) return true;
+    for (let idx = raw.indexOf('short-id'); idx !== -1; idx = raw.indexOf('short-id', idx + 8)) {
+        let i = idx + 8;
+        if (raw[i] === '"' || raw[i] === "'") i++;
+        while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) i++;
+        if (raw[i] !== ':') continue;
+        i++;
+        while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) i++;
+        if (i >= raw.length || raw[i] === '\r' || raw[i] === '\n') return true;
+        const quote = raw[i];
+        if (quote === '"' || quote === "'") {
+            let j = i + 1, closed = false;
+            while (j < raw.length && raw[j] !== '\r' && raw[j] !== '\n') {
+                if (quote === '"' && raw[j] === '\\') { j += 2; continue; }
+                if (quote === "'" && raw[j] === "'" && raw[j + 1] === "'") { j += 2; continue; }
+                if (raw[j] === quote) { closed = true; j++; break; }
+                j++;
+            }
+            if (!closed) return true;
+            while (j < raw.length && (raw[j] === ' ' || raw[j] === '\t')) j++;
+            if (j < raw.length && raw[j] !== ',' && raw[j] !== '}' && raw[j] !== '\r' && raw[j] !== '\n' && raw[j] !== '#') return true;
+            continue;
+        }
+        let j = i;
+        while (j < raw.length) {
+            const ch = raw[j];
+            if (ch === ',' || ch === '}' || ch === '\r' || ch === '\n' || ch === '#') break;
+            j++;
+        }
+        const val = raw.slice(i, j).trim();
+        if (!val || !/^[0-9a-fA-F]+$/.test(val) || /^[0-9]+$/.test(val) || /^0[xXbBoO]/.test(val) || /^[0-9]+[eE][0-9]+$/.test(val)) {
+            return true;
+        }
+    }
+    return false;
+};
+
 // 在 JS 侧剥离巨型 Body 绕过 JSON 序列化
 const $done = function (val) {
     let bodyStr = undefined;
@@ -945,8 +1120,50 @@ const $done = function (val) {
     }
 };
 
-function __start_sub_store(reqJson, argStr) {
+function __reload_substore_caches(reloadMain, reloadResources) {
+    if (reloadMain && globalThis.__substore_R && typeof globalThis.__substore_R.initCache === 'function') {
+        globalThis.__substore_R.initCache();
+    }
+    if (reloadResources) {
+        if (globalThis.__substore_dlCache && typeof globalThis.__substore_dlCache.clear === 'function') {
+            globalThis.__substore_dlCache.clear();
+        }
+        const caches = globalThis.__substore_rcaches;
+        if (Array.isArray(caches)) {
+            const keys = [
+                'sub-store-cached-resource',
+                'sub-store-cached-headers-resource',
+                'sub-store-cached-script-resource'
+            ];
+            for (let i = 0; i < caches.length; i++) {
+                const c = caches[i];
+                const k = keys[i];
+                if (c && k) {
+                    try {
+                        const raw = $persistentStore.read(k);
+                        c.resourceCache = raw ? JSON.parse(raw) : {};
+                    } catch (_) {
+                        c.resourceCache = {};
+                    }
+                }
+            }
+        }
+    }
+}
+
+function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources) {
     return new Promise((resolve, reject) => {
+        for (const k in __http_callbacks) delete __http_callbacks[k];
+        __http_req_id = 0;
+        __log_cache.clear();
+        if (__doh_fallback_used) {
+            Array.prototype.filter = _originalFilter;
+            __doh_fallback_used = false;
+        }
+        for (const id in globalThis.__timers) {
+            clearTimeout(id);
+        }
+
         const timeoutId = setTimeout(() => {
             reject(new Error("Sub-Store script timeout inside QuickJS"));
         }, 179000);
@@ -960,13 +1177,23 @@ function __start_sub_store(reqJson, argStr) {
         };
         try {
             $request = JSON.parse(reqJson);
+            if (!$request.headers || typeof $request.headers !== 'object') $request.headers = {};
             $argument = argStr;
-            __run_sub_store_script();
+            if (typeof globalThis.__substore_dispatch === 'function') {
+                __reload_substore_caches(reloadMain, reloadResources);
+                globalThis.__substore_dispatch($request);
+            } else {
+                __run_sub_store_script();
+            }
         } catch (e) {
             clearTimeout(timeoutId);
             reject(e);
         }
     });
+}
+
+function __start_sub_store(reqJson, argStr) {
+    return __dispatch_sub_store(reqJson, argStr, false, false);
 }
 
 function __abort_done(reason) {
