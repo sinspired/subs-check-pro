@@ -39,6 +39,7 @@ const (
 // registerSubscriptionInfoRoute 注册公共订阅信息路由（无需鉴权）。
 func (app *App) registerSubscriptionInfoRoute(router *gin.Engine) {
 	router.GET(SubInfoPath, app.handleSubscriptionInfo)
+	router.HEAD(SubInfoPath, app.handleSubscriptionInfo)
 }
 
 // handleSubscriptionInfo 公共路由，构建最新订阅信息字符串，写入 subscription-userinfo 响应头，
@@ -47,6 +48,10 @@ func (app *App) handleSubscriptionInfo(c *gin.Context) {
 
 	c.Header("subscription-userinfo", info)
 	c.Header("Content-Type", "text/plain; charset=utf-8")
+	if c.Request.Method == http.MethodHead {
+		c.Status(http.StatusOK)
+		return
+	}
 	c.String(http.StatusOK, info)
 }
 
