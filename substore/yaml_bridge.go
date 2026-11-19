@@ -3,7 +3,9 @@ package substore
 
 import (
 	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -15,9 +17,63 @@ var (
 	inlineShortIDRe       = regexp.MustCompile(`(["']?short-id["']?\s*:\s*)([^"',}\]\r\n#]+)`)
 )
 
+// YAMLDumpOptions 控制 Go YAML 输出格式，可由默认值/环境变量/JS opts 共同决定。
+type YAMLDumpOptions struct {
+	Indent           int   `json:"indent,omitempty"`
+	IndentSequence   *bool `json:"indentSequence,omitempty"`
+	UseSingleQuote   *bool `json:"useSingleQuote,omitempty"`
+	UseLiteralStyle  *bool `json:"useLiteralStyle,omitempty"`
+	Flow             *bool `json:"flow,omitempty"`
+	PreserveKeyOrder *bool `json:"preserveKeyOrder,omitempty"`
+	PreserveComments *bool `json:"preserveComments,omitempty"`
+}
+
+// defaultYAMLDumpOptions 默认 YAML 格式
+//
+// SUBSTORE_YAML_INDENT=2（缩进空格数，1~8）
+// SUBSTORE_YAML_INDENT_SEQ=true（- 是否缩进，false 为顶格 -）
+// SUBSTORE_YAML_SINGLE_QUOTE=false（true 优先单引号）
+// SUBSTORE_YAML_LITERAL_MULTILINE=false（true 多行字符串用 |）
+// SUBSTORE_YAML_PRESERVE_ORDER=true（是否保留键顺序）
+// SUBSTORE_YAML_PRESERVE_COMMENTS=true（是否尝试回填同请求内的非数组元素注释）
+func defaultYAMLDumpOptions() YAMLDumpOptions {
+	indent := 2
+	if s := strings.TrimSpace(os.Getenv("SUBSTORE_YAML_INDENT")); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 1 && n <= 8 {
+			indent = n
+		}
+	}
+	indentSeq := envBoolDefault("SUBSTORE_YAML_INDENT_SEQ", true)
+	singleQuote := envBoolDefault("SUBSTORE_YAML_SINGLE_QUOTE", false)
+	literalStyle := envBoolDefault("SUBSTORE_YAML_LITERAL_MULTILINE", false)
+	preserveOrder := envBoolDefault("SUBSTORE_YAML_PRESERVE_ORDER", true)
+	preserveComments := envBoolDefault("SUBSTORE_YAML_PRESERVE_COMMENTS", true)
+
+	return YAMLDumpOptions{
+		Indent:           indent,
+		IndentSequence:   &indentSeq,
+		UseSingleQuote:   &singleQuote,
+		UseLiteralStyle:  &literalStyle,
+		PreserveKeyOrder: &preserveOrder,
+		PreserveComments: &preserveComments,
+	}
+}
+
+func envBoolDefault(key string, def bool) bool {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return def
+	}
+	return b
+}
+
 // goYAMLToJSON 将 YAML 转为 JSON 字符串供 JS 直接 JSON.parse；
-// 返回 "" 表示交由原版 eemeli/yaml 兜底（如含 <<: 合并锚点、显式 tag 或多文档）。
-func goYAMLToJSON(raw string) string {
+// 若传入 commentSink 且源 YAML 含注释，会提取安全路径（非数组下标）上的注释用于后续 dump 回填。
+func goYAMLToJSON(raw string, commentSink yaml.CommentMap) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "null"
@@ -31,9 +87,23 @@ func goYAMLToJSON(raw string) string {
 	normalized := normalizeClashShortIDForGo(raw)
 
 	var v any
-	if err := yaml.Unmarshal([]byte(normalized), &v); err != nil {
-		return ""
+	if commentSink != nil && strings.Contains(normalized, "#") {
+		cm := yaml.CommentMap{}
+		if err := yaml.UnmarshalWithOptions([]byte(normalized), &v, yaml.CommentToMap(cm)); err != nil {
+			return ""
+		}
+		for path, comments := range cm {
+			// 跳过带数组下标的路径（如 $.proxies[0] / $.rules[2]），避免增删节点/规则后注释错位
+			if !strings.Contains(path, "[") && len(comments) > 0 {
+				commentSink[path] = comments
+			}
+		}
+	} else {
+		if err := yaml.Unmarshal([]byte(normalized), &v); err != nil {
+			return ""
+		}
 	}
+
 	v = normalizeJSONCompatible(v)
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -42,17 +112,158 @@ func goYAMLToJSON(raw string) string {
 	return string(b)
 }
 
-// goJSONToYAML 将 JSON 字符串转为 YAML；失败返回 "" 交由原版 eemeli/yaml 兜底。
-func goJSONToYAML(jsonStr string) string {
-	var v any
-	if err := json.Unmarshal([]byte(jsonStr), &v); err != nil {
+// goJSONToYAML 将 JSON 字符串转为 YAML；支持格式化参数、保序与注释回填。
+func goJSONToYAML(jsonStr string, optsJSON string, comments yaml.CommentMap) string {
+	cfg := defaultYAMLDumpOptions()
+	if strings.TrimSpace(optsJSON) != "" {
+		var jsOpts YAMLDumpOptions
+		if err := json.Unmarshal([]byte(optsJSON), &jsOpts); err == nil {
+			if jsOpts.Indent > 0 && jsOpts.Indent <= 8 {
+				cfg.Indent = jsOpts.Indent
+			}
+			if jsOpts.IndentSequence != nil {
+				cfg.IndentSequence = jsOpts.IndentSequence
+			}
+			if jsOpts.UseSingleQuote != nil {
+				cfg.UseSingleQuote = jsOpts.UseSingleQuote
+			}
+			if jsOpts.UseLiteralStyle != nil {
+				cfg.UseLiteralStyle = jsOpts.UseLiteralStyle
+			}
+			if jsOpts.Flow != nil {
+				cfg.Flow = jsOpts.Flow
+			}
+			if jsOpts.PreserveKeyOrder != nil {
+				cfg.PreserveKeyOrder = jsOpts.PreserveKeyOrder
+			}
+			if jsOpts.PreserveComments != nil {
+				cfg.PreserveComments = jsOpts.PreserveComments
+			}
+		}
+	}
+
+	var (
+		v   any
+		err error
+	)
+	if cfg.PreserveKeyOrder == nil || *cfg.PreserveKeyOrder {
+		v, err = decodeJSONPreservingOrder(jsonStr)
+	} else {
+		err = json.Unmarshal([]byte(jsonStr), &v)
+	}
+	if err != nil {
 		return ""
 	}
-	b, err := yaml.Marshal(v)
+
+	var encOpts []yaml.EncodeOption
+	if cfg.Indent > 0 {
+		encOpts = append(encOpts, yaml.Indent(cfg.Indent))
+	}
+	if cfg.IndentSequence != nil {
+		encOpts = append(encOpts, yaml.IndentSequence(*cfg.IndentSequence))
+	}
+	if cfg.UseSingleQuote != nil && *cfg.UseSingleQuote {
+		encOpts = append(encOpts, yaml.UseSingleQuote(true))
+	}
+	if cfg.UseLiteralStyle != nil && *cfg.UseLiteralStyle {
+		encOpts = append(encOpts, yaml.UseLiteralStyleIfMultiline(true))
+	}
+	if cfg.Flow != nil && *cfg.Flow {
+		encOpts = append(encOpts, yaml.Flow(true))
+	}
+	if (cfg.PreserveComments == nil || *cfg.PreserveComments) && len(comments) > 0 {
+		encOpts = append(encOpts, yaml.WithComment(comments))
+	}
+
+	b, err := yaml.MarshalWithOptions(v, encOpts...)
 	if err != nil {
 		return ""
 	}
 	return string(b)
+}
+
+// decodeJSONPreservingOrder 使用 yaml.MapSlice 解码 JSON，保留 JS 对象的原始键顺序与整数精度。
+func decodeJSONPreservingOrder(jsonStr string) (any, error) {
+	dec := json.NewDecoder(strings.NewReader(jsonStr))
+	dec.UseNumber()
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	return decodeJSONToken(dec, tok)
+}
+
+func decodeJSONToken(dec *json.Decoder, tok json.Token) (any, error) {
+	switch t := tok.(type) {
+	case json.Delim:
+		switch t {
+		case '{':
+			ms := make(yaml.MapSlice, 0)
+			for dec.More() {
+				kTok, err := dec.Token()
+				if err != nil {
+					return nil, err
+				}
+				key, ok := kTok.(string)
+				if !ok {
+					return nil, fmt.Errorf("unexpected JSON object key: %T", kTok)
+				}
+				vTok, err := dec.Token()
+				if err != nil {
+					return nil, err
+				}
+				val, err := decodeJSONToken(dec, vTok)
+				if err != nil {
+					return nil, err
+				}
+				ms = append(ms, yaml.MapItem{Key: key, Value: val})
+			}
+			endTok, err := dec.Token()
+			if err != nil {
+				return nil, err
+			}
+			if d, ok := endTok.(json.Delim); !ok || d != '}' {
+				return nil, fmt.Errorf("expected '}', got %v", endTok)
+			}
+			return ms, nil
+		case '[':
+			arr := make([]any, 0)
+			for dec.More() {
+				eTok, err := dec.Token()
+				if err != nil {
+					return nil, err
+				}
+				val, err := decodeJSONToken(dec, eTok)
+				if err != nil {
+					return nil, err
+				}
+				arr = append(arr, val)
+			}
+			endTok, err := dec.Token()
+			if err != nil {
+				return nil, err
+			}
+			if d, ok := endTok.(json.Delim); !ok || d != ']' {
+				return nil, fmt.Errorf("expected ']', got %v", endTok)
+			}
+			return arr, nil
+		default:
+			return nil, fmt.Errorf("unexpected delimiter: %v", t)
+		}
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return i, nil
+		}
+		if f, err := t.Float64(); err == nil {
+			return f, nil
+		}
+		return t.String(), nil
+	default:
+		if t == nil {
+			return nil, nil
+		}
+		return t, nil
+	}
 }
 
 // goClashExtractProxies 为 Clash Pre-processor 一次提取 proxies 数组及合法性；

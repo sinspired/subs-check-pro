@@ -936,7 +936,9 @@ globalThis.__wrap_yaml = function (orig) {
         if (obj === undefined || typeof obj === 'function') return false;
         if (!opts) return true;
         if (typeof opts !== 'object') return false;
-        if (opts.replacer || opts.sortKeys || opts.forceQuotes || opts.quotingType || opts.noArrayIndent || opts.noRefs === false) return false;
+        if (opts.replacer || opts.sortKeys || opts.forceQuotes || opts.noRefs === false || opts.styles) return false;
+        if (opts.flowLevel !== undefined && opts.flowLevel !== -1 && opts.flowLevel !== 0) return false;
+        if (opts.quotingType !== undefined && opts.quotingType !== "'" && opts.quotingType !== '"') return false;
         return true;
     };
 
@@ -952,7 +954,17 @@ globalThis.__wrap_yaml = function (orig) {
     const fastDump = function (obj, opts) {
         if (typeof __go_json_to_yaml === 'function' && canGoDump(obj, opts)) {
             try {
-                const yamlStr = __go_json_to_yaml(JSON.stringify(obj));
+                let goOptsJson = "";
+                if (opts && typeof opts === 'object') {
+                    const goOpts = {};
+                    if (typeof opts.indent === 'number') goOpts.indent = opts.indent;
+                    if (typeof opts.noArrayIndent === 'boolean') goOpts.indentSequence = !opts.noArrayIndent;
+                    if (opts.quotingType === "'") goOpts.useSingleQuote = true;
+                    else if (opts.quotingType === '"') goOpts.useSingleQuote = false;
+                    if (opts.flowLevel === 0) goOpts.flow = true;
+                    goOptsJson = JSON.stringify(goOpts);
+                }
+                const yamlStr = __go_json_to_yaml(JSON.stringify(obj), goOptsJson);
                 if (yamlStr && yamlStr.length > 0) return yamlStr;
             } catch (_) { }
         }

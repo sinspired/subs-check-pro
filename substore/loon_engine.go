@@ -27,6 +27,7 @@ import (
 
 	"github.com/buke/quickjs-go"
 	"github.com/goccy/go-json"
+	"github.com/goccy/go-yaml"
 	"github.com/sinspired/subs-check-pro/v3/config"
 	"github.com/sinspired/subs-check-pro/v3/utils"
 )
@@ -104,6 +105,7 @@ type activeReqState struct {
 	maskedCacheEntries map[string]map[string]json.RawMessage
 	timersMu           sync.Mutex
 	goTimers           map[string]*time.Timer
+	yamlComments       yaml.CommentMap
 }
 
 func (s *activeReqState) clearTimers() {
@@ -457,13 +459,25 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 		if len(args) == 0 {
 			return ctx.String("")
 		}
-		return ctx.String(goYAMLToJSON(args[0].String()))
+		var sink yaml.CommentMap
+		if st := wr.state; st != nil {
+			sink = st.yamlComments
+		}
+		return ctx.String(goYAMLToJSON(args[0].String(), sink))
 	}))
 	globals.Set("__go_json_to_yaml", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
 		if len(args) == 0 {
 			return ctx.String("")
 		}
-		return ctx.String(goJSONToYAML(args[0].String()))
+		optsJSON := ""
+		if len(args) >= 2 && !args[1].IsNull() && !args[1].IsUndefined() {
+			optsJSON = args[1].String()
+		}
+		var cm yaml.CommentMap
+		if st := wr.state; st != nil {
+			cm = st.yamlComments
+		}
+		return ctx.String(goJSONToYAML(args[0].String(), optsJSON, cm))
 	}))
 	globals.Set("__go_clash_extract_proxies", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
 		if len(args) == 0 {
