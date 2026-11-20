@@ -44,6 +44,7 @@ type LoonKVStore struct {
 	saveMu    sync.Mutex
 
 	configVersion atomic.Uint64
+	cacheVersion  atomic.Uint64
 
 	noCacheMu    sync.RWMutex
 	noCacheVer   uint64
@@ -63,6 +64,7 @@ func NewLoonKVStore(mainPath string) (*LoonKVStore, error) {
 		urlUAs:    make(map[string]map[string]struct{}),
 	}
 	s.configVersion.Store(1)
+	s.cacheVersion.Store(1)
 
 	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建持久化存储目录失败: %w", err)
@@ -85,6 +87,36 @@ func NewLoonKVStore(mainPath string) (*LoonKVStore, error) {
 }
 
 func (s *LoonKVStore) ConfigVersion() uint64 {
+	return s.configVersion.Load()
+}
+
+func (s *LoonKVStore) CacheVersion() uint64 {
+	return s.cacheVersion.Load()
+}
+
+// SyncMainModTime 仅做一次轻量 os.Stat 检查磁盘外部修改，避免无变更时全量重读解析。
+func (s *LoonKVStore) SyncMainModTime() uint64 {
+	info, err := os.Stat(s.mainPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.mu.Lock()
+			changed := s.hasMain
+			s.mainData = ""
+			s.hasMain = false
+			s.mainModTime = time.Time{}
+			s.mu.Unlock()
+			if changed {
+				return s.configVersion.Add(1)
+			}
+		}
+		return s.configVersion.Load()
+	}
+	s.mu.RLock()
+	same := s.hasMain && info.ModTime().Equal(s.mainModTime)
+	s.mu.RUnlock()
+	if !same {
+		_ = s.Read("sub-store")
+	}
 	return s.configVersion.Load()
 }
 
@@ -153,15 +185,9 @@ func (s *LoonKVStore) Write(value *string, key string) bool {
 		}
 
 		content := *value
-		var obj any
-		if err := json.Unmarshal([]byte(content), &obj); err == nil {
-			var buf bytes.Buffer
-			enc := json.NewEncoder(&buf)
-			enc.SetEscapeHTML(false)
-			enc.SetIndent("", "  ")
-			if err := enc.Encode(obj); err == nil {
-				content = strings.TrimSuffix(buf.String(), "\n")
-			}
+		var buf bytes.Buffer
+		if json.Indent(&buf, []byte(content), "", "  ") == nil {
+			content = buf.String()
 		}
 
 		s.mu.Lock()
@@ -195,6 +221,7 @@ func (s *LoonKVStore) Write(value *string, key string) bool {
 		s.cacheData[key] = *value
 	}
 	s.mu.Unlock()
+	s.cacheVersion.Add(1)
 
 	s.scheduleCacheSave()
 	return true

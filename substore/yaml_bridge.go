@@ -2,6 +2,7 @@
 package substore
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
@@ -264,6 +265,46 @@ func decodeJSONToken(dec *json.Decoder, tok json.Token) (any, error) {
 		}
 		return t, nil
 	}
+}
+
+type clashExtractDoc struct {
+	Proxies     *[]any `yaml:"proxies"`
+	ProxyGroups *[]any `yaml:"proxy-groups"`
+}
+
+// goClashExtractProxyLines 为 Clash Pre-processor 直接输出 "1\n{json}\n..." 格式的 NDJSON，
+// 避免 JS 侧全量 JSON.parse 后再逐条 JSON.stringify 的双端往返。
+func goClashExtractProxyLines(raw string) string {
+	if !strings.Contains(raw, "proxies") {
+		return "0"
+	}
+	if strings.Contains(raw, "<<:") || strings.Contains(raw, "!<") || strings.Contains(raw, "\n---") {
+		return ""
+	}
+
+	normalized := normalizeClashShortIDForGo(raw)
+	var doc clashExtractDoc
+	if err := yaml.Unmarshal([]byte(normalized), &doc); err != nil {
+		return ""
+	}
+
+	if doc.Proxies == nil && doc.ProxyGroups == nil {
+		return "0"
+	}
+
+	var buf bytes.Buffer
+	buf.Grow(len(raw))
+	buf.WriteString("1\n")
+	if doc.Proxies != nil && len(*doc.Proxies) > 0 {
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		for _, item := range *doc.Proxies {
+			if err := enc.Encode(normalizeJSONCompatible(item)); err != nil {
+				return ""
+			}
+		}
+	}
+	return buf.String()
 }
 
 // goClashExtractProxies 为 Clash Pre-processor 一次提取 proxies 数组及合法性；

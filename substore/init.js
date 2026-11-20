@@ -34,6 +34,11 @@
             str = String(str);
             const len = str.length;
             if (len === 0) return "";
+            if (len > 256 && typeof __go_b64_encode_latin1 === 'function') {
+                const res = __go_b64_encode_latin1(str);
+                if (typeof res === 'string') return res;
+                throw new Error("InvalidCharacterError: btoa failed");
+            }
             if (len > 256 && typeof __go_b64_encode === 'function') {
                 const u8 = new Uint8Array(len);
                 for (let i = 0; i < len; i++) {
@@ -75,6 +80,10 @@
         g.atob = function atob(b64) {
             b64 = String(b64);
             if (b64.length === 0) return "";
+            if (b64.length > 256 && typeof __go_b64_decode_latin1 === 'function') {
+                const s = __go_b64_decode_latin1(b64);
+                if (typeof s === 'string') return s;
+            }
             if (b64.length > 256 && typeof __go_b64_decode === 'function') {
                 const u8 = __go_b64_decode(b64);
                 if (u8 instanceof Uint8Array) return _bytesToLatin1(u8);
@@ -421,8 +430,21 @@
 // 缓存无状态 RegExp（不含 g/y 标志），消除 RegexFilter 在节点循环中重复编译同一正则的开销
 (function (g) {
     const OrigRegExp = g.RegExp;
-    const reCache = new Map();
-    let cacheCount = 0;
+    const rePlain = new Map();
+    const reI = new Map();
+    const reOther = new Map();
+    const MAX_PER_BUCKET = 2048;
+
+    function getOrSet(map, key, pattern, f) {
+        let hit = map.get(key);
+        if (hit !== undefined) return hit;
+        hit = new OrigRegExp(pattern, f);
+        if (map.size >= MAX_PER_BUCKET) {
+            map.delete(map.keys().next().value);
+        }
+        map.set(key, hit);
+        return hit;
+    }
 
     function CachedRegExp(pattern, flags) {
         if (!new.target && pattern instanceof OrigRegExp && flags === undefined) {
@@ -430,25 +452,10 @@
         }
         if (typeof pattern === 'string') {
             const f = flags === undefined ? '' : String(flags);
+            if (f === '') return getOrSet(rePlain, pattern, pattern, f);
+            if (f === 'i') return getOrSet(reI, pattern, pattern, f);
             if (f.indexOf('g') === -1 && f.indexOf('y') === -1) {
-                let byFlag = reCache.get(f);
-                if (byFlag !== undefined) {
-                    const hit = byFlag.get(pattern);
-                    if (hit !== undefined) return hit;
-                } else {
-                    byFlag = new Map();
-                    reCache.set(f, byFlag);
-                }
-                const re = new OrigRegExp(pattern, f);
-                if (cacheCount >= 1024) {
-                    reCache.clear();
-                    cacheCount = 0;
-                    byFlag = new Map();
-                    reCache.set(f, byFlag);
-                }
-                byFlag.set(pattern, re);
-                cacheCount++;
-                return re;
+                return getOrSet(reOther, f + '\0' + pattern, pattern, f);
             }
         }
         return new OrigRegExp(pattern, flags);
@@ -591,10 +598,10 @@ function __throttled_log(level) {
 }
 
 const console = {
-    log: function () { __throttled_log("log", ...arguments); },
-    info: function () { __throttled_log("info", ...arguments); },
-    warn: function () { __throttled_log("warn", ...arguments); },
-    error: function () { __throttled_log("error", ...arguments); }
+    log: function (a) { arguments.length === 1 ? __throttled_log("log", a) : __throttled_log.apply(null, ["log"].concat(Array.prototype.slice.call(arguments))); },
+    info: function (a) { arguments.length === 1 ? __throttled_log("info", a) : __throttled_log.apply(null, ["info"].concat(Array.prototype.slice.call(arguments))); },
+    warn: function (a) { arguments.length === 1 ? __throttled_log("warn", a) : __throttled_log.apply(null, ["warn"].concat(Array.prototype.slice.call(arguments))); },
+    error: function (a) { arguments.length === 1 ? __throttled_log("error", a) : __throttled_log.apply(null, ["error"].concat(Array.prototype.slice.call(arguments))); }
 };
 
 // 仅在真正触发过 DoH AAAA->A 回退后才启用 answers 过滤兼容，平时保持原生 C filter 零包装开销
@@ -983,61 +990,54 @@ globalThis.__wrap_yaml = function (orig) {
 
 globalThis.__wrap_clash_pre = function (orig) {
     let lastRaw = null;
-    let lastRes = null;
+    let lastLines = null;
+
+    function formatLines(lines, includeProxies) {
+        if (!includeProxies) return lines;
+        if (!lines) return 'proxies:\n';
+        const trimmed = lines.endsWith('\n') ? lines.slice(0, -1) : lines;
+        if (!trimmed) return 'proxies:\n';
+        return 'proxies:\n  - ' + trimmed.replace(/\n/g, '\n  - ') + '\n';
+    }
+
     return {
         name: orig.name,
         test: function (raw) {
             if (typeof raw !== 'string' || raw.indexOf('proxies') === -1) {
                 lastRaw = null;
-                lastRes = null;
+                lastLines = null;
                 return false;
             }
-            if (typeof __go_clash_extract_proxies === 'function') {
-                const jsonStr = __go_clash_extract_proxies(raw);
-                if (jsonStr && jsonStr.length > 0) {
-                    const parsed = JSON.parse(jsonStr);
-                    if (!parsed.valid) {
-                        lastRaw = null;
-                        lastRes = null;
-                        return false;
-                    }
+            if (typeof __go_clash_extract_proxy_lines === 'function') {
+                const res = __go_clash_extract_proxy_lines(raw);
+                if (res === '0') {
+                    lastRaw = null;
+                    lastLines = null;
+                    return false;
+                }
+                if (res && res.charCodeAt(0) === 49) {
                     lastRaw = raw;
-                    lastRes = parsed.proxies || [];
+                    lastLines = res.slice(2);
                     return true;
                 }
             }
             lastRaw = null;
-            lastRes = null;
+            lastLines = null;
             return orig.test(raw);
         },
         parse: function (raw, includeProxies) {
-            let proxies = null;
-            if (lastRaw === raw && Array.isArray(lastRes)) {
-                proxies = lastRes;
+            if (lastRaw === raw && typeof lastLines === 'string') {
+                const lines = lastLines;
                 lastRaw = null;
-                lastRes = null;
-                const prefix = includeProxies ? 'proxies:\n' : '';
-                const linePrefix = includeProxies ? '  - ' : '';
-                const lines = new Array(proxies.length);
-                for (let i = 0; i < proxies.length; i++) {
-                    lines[i] = linePrefix + JSON.stringify(proxies[i]) + '\n';
-                }
-                return prefix + lines.join('');
+                lastLines = null;
+                return formatLines(lines, includeProxies);
             }
             lastRaw = null;
-            lastRes = null;
-            if (typeof __go_clash_extract_proxies === 'function') {
-                const jsonStr = __go_clash_extract_proxies(raw);
-                if (jsonStr && jsonStr.length > 0) {
-                    const parsed = JSON.parse(jsonStr);
-                    proxies = Array.isArray(parsed.proxies) ? parsed.proxies : [];
-                    const prefix = includeProxies ? 'proxies:\n' : '';
-                    const linePrefix = includeProxies ? '  - ' : '';
-                    const lines = new Array(proxies.length);
-                    for (let i = 0; i < proxies.length; i++) {
-                        lines[i] = linePrefix + JSON.stringify(proxies[i]) + '\n';
-                    }
-                    return prefix + lines.join('');
+            lastLines = null;
+            if (typeof __go_clash_extract_proxy_lines === 'function') {
+                const res = __go_clash_extract_proxy_lines(raw);
+                if (res && res.charCodeAt(0) === 49) {
+                    return formatLines(res.slice(2), includeProxies);
                 }
             }
             return orig.parse(raw, includeProxies);
@@ -1132,14 +1132,14 @@ const $done = function (val) {
     }
 };
 
-function __reload_substore_caches(reloadMain, reloadResources) {
+function __reload_substore_caches(reloadMain, reloadResources, clearDlCache) {
     if (reloadMain && globalThis.__substore_R && typeof globalThis.__substore_R.initCache === 'function') {
         globalThis.__substore_R.initCache();
     }
+    if ((reloadResources || clearDlCache) && globalThis.__substore_dlCache && typeof globalThis.__substore_dlCache.clear === 'function') {
+        globalThis.__substore_dlCache.clear();
+    }
     if (reloadResources) {
-        if (globalThis.__substore_dlCache && typeof globalThis.__substore_dlCache.clear === 'function') {
-            globalThis.__substore_dlCache.clear();
-        }
         const caches = globalThis.__substore_rcaches;
         if (Array.isArray(caches)) {
             const keys = [
@@ -1163,7 +1163,7 @@ function __reload_substore_caches(reloadMain, reloadResources) {
     }
 }
 
-function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources) {
+function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources, clearDlCache) {
     return new Promise((resolve, reject) => {
         for (const k in __http_callbacks) delete __http_callbacks[k];
         __http_req_id = 0;
@@ -1192,13 +1192,16 @@ function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources) {
             if (!$request.headers || typeof $request.headers !== 'object') $request.headers = {};
             $argument = argStr;
             if (typeof globalThis.__substore_dispatch === 'function') {
-                __reload_substore_caches(reloadMain, reloadResources);
+                __reload_substore_caches(reloadMain, reloadResources, clearDlCache);
                 globalThis.__substore_dispatch($request);
             } else {
                 __run_sub_store_script();
             }
         } catch (e) {
             clearTimeout(timeoutId);
+            if (e && typeof e === 'object' && e.stack && typeof e.message === 'string') {
+                e.message = e.message + '\n' + e.stack;
+            }
             reject(e);
         }
     });

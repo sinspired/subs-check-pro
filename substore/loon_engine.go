@@ -125,6 +125,7 @@ type workerRuntime struct {
 	state          *activeReqState
 	runCount       int
 	lastConfigVer  uint64
+	lastCacheVer   uint64
 	dirtyResources bool
 }
 
@@ -149,39 +150,77 @@ var (
 	jsPoolOnce sync.Once
 	jsTaskCh   chan jsTask
 
-	rePatchYAMLWrap = regexp.MustCompile(`(\{safeLoad:[A-Za-z0-9_$]+,load:[A-Za-z0-9_$]+,safeDump:[A-Za-z0-9_$]+,dump:[A-Za-z0-9_$]+,parse:[A-Za-z0-9_$]+,stringify:[A-Za-z0-9_$]+\})`)
-	rePatchJSON5    = regexp.MustCompile(`(\{parse:[A-Za-z0-9_$]+,stringify:[A-Za-z0-9_$]+\})(,[A-Za-z0-9_$]+=[A-Za-z0-9_$]+,[A-Za-z0-9_$]+=[A-Za-z0-9_$]+;return [A-Za-z0-9_$]+)`)
-	rePatchStore    = regexp.MustCompile(`=new ([A-Za-z0-9_$]+)\("sub-store"\)`)
-	rePatchRCache   = regexp.MustCompile(`this\._cleanup\(\)\}`)
+	rePatchAppStart        = regexp.MustCompile(`([A-Za-z0-9_$]+\.start)\s*=\s*\(\s*\)\s*=>\s*\{\s*([A-Za-z0-9_$]+)\(\$request\)\s*\}`)
+	rePatchYAMLWrap        = regexp.MustCompile(`(\{\s*safeLoad\s*:\s*[A-Za-z0-9_$]+\s*,\s*load\s*:\s*[A-Za-z0-9_$]+\s*,\s*safeDump\s*:\s*[A-Za-z0-9_$]+\s*,\s*dump\s*:\s*[A-Za-z0-9_$]+\s*,\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})`)
+	rePatchJSON5           = regexp.MustCompile(`(\{\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})(\s*,\s*[A-Za-z0-9_$]+\s*=\s*[A-Za-z0-9_$]+\s*,\s*[A-Za-z0-9_$]+\s*=\s*[A-Za-z0-9_$]+\s*;\s*return\s+[A-Za-z0-9_$]+)`)
+	rePatchStore           = regexp.MustCompile(`=\s*new\s+([A-Za-z0-9_$]+)\(\s*["']sub-store["']\s*\)`)
+	rePatchRCache          = regexp.MustCompile(`this\._cleanup\(\)\s*;?\s*\}`)
+	rePatchShortID         = regexp.MustCompile(`if\s*\(\s*typeof ([A-Za-z0-9_$]+)\s*!==?\s*["']string["']\s*\|\|\s*!([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*\)\s*return ([A-Za-z0-9_$]+)\s*;`)
+	rePatchClashPre        = regexp.MustCompile(`\{\s*name\s*:\s*["']Clash Pre-processor["']`)
+	rePatchClashPreVarName = regexp.MustCompile(`["']Clash Pre-processor["'][^;{}]*;\s*return\s*(\{\s*name\s*:\s*[A-Za-z0-9_$]+\s*,)`)
+	rePatchClashPreReturn  = regexp.MustCompile(`return\s*(\{\s*name(?:\s*:\s*[A-Za-z0-9_$]+)?\s*,)`)
 )
 
-func patchSubStoreScript(src string) (string, bool) {
-	patched := strings.Replace(src,
-		`app.start=()=>{dispatch($request)}`,
-		`app.start=()=>{globalThis.__substore_dispatch=dispatch;if(!globalThis.__substore_booting)dispatch($request)}`,
-		1,
-	)
-	isApp := patched != src
+type patchStatus struct {
+	isApp    bool
+	store    bool
+	rCache   bool
+	dlCache  bool
+	yamlWrap bool
+	shortID  bool
+	clashPre bool
+	json5    bool
+}
 
+func patchSubStoreScript(src string) (string, bool, patchStatus) {
+	var st patchStatus
+
+	patched := rePatchAppStart.ReplaceAllString(src, `${1}=()=>{globalThis.__substore_dispatch=${2};if(!globalThis.__substore_booting)${2}($$request)}`)
+	st.isApp = patched != src
+
+	prev := patched
 	patched = rePatchStore.ReplaceAllString(patched, `=globalThis.__substore_R=new $1("sub-store")`)
-	patched = rePatchRCache.ReplaceAllString(patched, `this._cleanup();(globalThis.__substore_rcaches=globalThis.__substore_rcaches||[]).push(this)}`)
-	patched = strings.Replace(patched, `=new Map`, `=globalThis.__substore_dlCache=new Map`, 1)
-	patched = rePatchYAMLWrap.ReplaceAllString(patched, `globalThis.__wrap_yaml($1)`)
-	patched = strings.Replace(patched,
-		`if(typeof e!="string"||!e.includes("short-id"))return e;`,
-		`if(typeof e!="string"||!e.includes("short-id"))return e;if(globalThis.__go_needs_short_id_norm&&!globalThis.__go_needs_short_id_norm(e))return e;`,
-		1,
-	)
+	st.store = patched != prev
 
-	if idx := strings.Index(patched, `return{name:"Clash Pre-processor"`); idx != -1 {
-		openIdx := idx + len("return")
-		if closeIdx := findMatchingBrace(patched, openIdx); closeIdx > openIdx {
-			patched = patched[:openIdx] + " globalThis.__wrap_clash_pre(" + patched[openIdx:closeIdx+1] + ")" + patched[closeIdx+1:]
+	prev = patched
+	patched = rePatchRCache.ReplaceAllString(patched, `this._cleanup();(globalThis.__substore_rcaches=globalThis.__substore_rcaches||[]).push(this)}`)
+	st.rCache = patched != prev
+
+	prev = patched
+	patched = strings.Replace(patched, `=new Map`, `=globalThis.__substore_dlCache=new Map`, 1)
+	st.dlCache = patched != prev
+
+	prev = patched
+	patched = rePatchYAMLWrap.ReplaceAllString(patched, `globalThis.__wrap_yaml($1)`)
+	st.yamlWrap = patched != prev
+
+	prev = patched
+	patched = rePatchShortID.ReplaceAllString(patched, `if(typeof $1!="string"||!$1.includes("short-id"))return $1;if(globalThis.__go_needs_short_id_norm&&!globalThis.__go_needs_short_id_norm($1))return $1;`)
+	st.shortID = patched != prev
+
+clashOpenIdx := -1
+	if loc := rePatchClashPre.FindStringIndex(patched); loc != nil {
+		clashOpenIdx = loc[0]
+	} else if loc := rePatchClashPreVarName.FindStringSubmatchIndex(patched); len(loc) >= 4 {
+		clashOpenIdx = loc[2]
+	} else if idx := strings.Index(patched, "Clash Pre-processor"); idx != -1 {
+		windowEnd := min(len(patched), idx+2000)
+		if loc := rePatchClashPreReturn.FindStringSubmatchIndex(patched[idx:windowEnd]); len(loc) >= 4 {
+			clashOpenIdx = idx + loc[2]
+		}
+	}
+	if clashOpenIdx >= 0 {
+		if closeIdx := findMatchingBrace(patched, clashOpenIdx); closeIdx > clashOpenIdx {
+			patched = patched[:clashOpenIdx] + " globalThis.__wrap_clash_pre(" + patched[clashOpenIdx:closeIdx+1] + ")" + patched[closeIdx+1:]
+			st.clashPre = true
 		}
 	}
 
+	prev = patched
 	patched = rePatchJSON5.ReplaceAllString(patched, `globalThis.__wrap_json5($1)$2`)
-	return patched, isApp
+	st.json5 = patched != prev
+
+	return patched, st.isApp, st
 }
 
 func findMatchingBrace(s string, start int) int {
@@ -237,6 +276,10 @@ func jsWorkerLoop() {
 	runtime.LockOSThread()
 	var wr *workerRuntime
 	reuseDisabled := os.Getenv("SUBSTORE_REUSE_RUNTIME") == "0"
+	maxReuse := envInt("SUBSTORE_MAX_REUSE")
+	if maxReuse <= 0 {
+		maxReuse = 150
+	}
 
 	defer func() {
 		if wr != nil {
@@ -255,7 +298,7 @@ func jsWorkerLoop() {
 
 		// 仅对真实 Sub-Store 应用启用常驻复用；普通短脚本每轮重建保证隔离
 		canReuse := task.engine.isSubStoreApp && !reuseDisabled
-		if !canReuse || wr == nil || wr.engine != task.engine || wr.runCount >= 50 {
+		if !canReuse || wr == nil || wr.engine != task.engine || wr.runCount >= maxReuse {
 			if wr != nil {
 				wr.close()
 				wr = nil
@@ -304,7 +347,26 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 
 	bScript, _ := json.Marshal(map[string]any{"name": scriptTag, "startTime": time.Now().UnixMilli()})
 
-	patchedSrc, isSubStoreApp := patchSubStoreScript(string(scriptSrc))
+	patchedSrc, isSubStoreApp, pStatus := patchSubStoreScript(string(scriptSrc))
+	if isSubStoreApp && os.Getenv("SUBSTORE_NET_DEBUG") == "1" {
+		logger.Info("Sub-Store 补丁命中状态",
+			"app", pStatus.isApp,
+			"store", pStatus.store,
+			"rCache", pStatus.rCache,
+			"dlCache", pStatus.dlCache,
+			"yaml", pStatus.yamlWrap,
+			"shortID", pStatus.shortID,
+			"clashPre", pStatus.clashPre,
+			"json5", pStatus.json5,
+		)
+		if !pStatus.clashPre {
+			if idx := strings.Index(patchedSrc, "Clash Pre-processor"); idx != -1 {
+				start := max(0, idx-80)
+				end := min(len(patchedSrc), idx+140)
+				logger.Info("ClashPre上下文", "snippet", patchedSrc[start:end])
+			}
+		}
+	}
 
 	initScript := string(initScriptBytes)
 	initScript = strings.Replace(initScript, "__LOON_JSON_OBJ__", string(bLoon), 1)
@@ -484,6 +546,67 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 			return ctx.String("")
 		}
 		return ctx.String(goClashExtractProxies(args[0].String()))
+	}))
+
+	globals.Set("__go_clash_extract_proxy_lines", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
+		}
+		return ctx.String(goClashExtractProxyLines(args[0].String()))
+	}))
+
+	globals.Set("__go_b64_decode_latin1", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.Undefined()
+		}
+		data, err := decodeBase64Flexible(args[0].String())
+		if err != nil {
+			return ctx.Undefined()
+		}
+		hasHigh := false
+		for _, b := range data {
+			if b >= 0x80 {
+				hasHigh = true
+				break
+			}
+		}
+		if !hasHigh {
+			return ctx.String(string(data))
+		}
+		buf := make([]byte, 0, len(data)*2)
+		for _, b := range data {
+			if b < 0x80 {
+				buf = append(buf, b)
+			} else {
+				buf = append(buf, 0xC0|(b>>6), 0x80|(b&0x3F))
+			}
+		}
+		return ctx.String(string(buf))
+	}))
+
+	globals.Set("__go_b64_encode_latin1", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
+		if len(args) == 0 {
+			return ctx.String("")
+		}
+		s := args[0].String()
+		isASCII := true
+		for i := 0; i < len(s); i++ {
+			if s[i] >= 0x80 {
+				isASCII = false
+				break
+			}
+		}
+		if isASCII {
+			return ctx.String(base64.StdEncoding.EncodeToString([]byte(s)))
+		}
+		out := make([]byte, 0, len(s))
+		for _, r := range s {
+			if r > 0xff {
+				return ctx.Undefined()
+			}
+			out = append(out, byte(r))
+		}
+		return ctx.String(base64.StdEncoding.EncodeToString(out))
 	}))
 
 	// 兼容 __orig_b64 快速解码路径
@@ -1303,6 +1426,7 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 		wr.state = bootSt
 		if e.store != nil {
 			wr.lastConfigVer = e.store.ConfigVersion()
+			wr.lastCacheVer = e.store.CacheVersion()
 		}
 
 		bootPre := ctx.Eval(`globalThis.__substore_booting = true; globalThis.$argument = "cors=*";`)
@@ -1458,22 +1582,27 @@ func (e *LoonEngine) runTaskInWorker(
 		bytecodeVal.Free()
 	}
 
-	var configVer uint64
+	var configVer, cacheVer uint64
 	if e.store != nil {
-		configVer = e.store.ConfigVersion()
+		configVer = e.store.SyncMainModTime()
+		cacheVer = e.store.CacheVersion()
 	}
-	reloadMain := e.isSubStoreApp && (configVer != wr.lastConfigVer || globalNoCache)
-	reloadRes := e.isSubStoreApp && (globalNoCache || len(noCacheURLs) > 0 || wr.dirtyResources)
+	reloadMain := e.isSubStoreApp && (configVer != wr.lastConfigVer)
+	reloadRes := e.isSubStoreApp && (globalNoCache || wr.dirtyResources ||
+		(len(noCacheURLs) > 0 && (cacheVer != wr.lastCacheVer || configVer != wr.lastConfigVer)))
+	clearDlCache := e.isSubStoreApp && (globalNoCache || len(noCacheURLs) > 0)
 
 	reqVal := wr.ctx.String(string(bReq))
 	argVal := wr.ctx.String(argument)
 	reloadMainVal := wr.ctx.NewBool(reloadMain)
 	reloadResVal := wr.ctx.NewBool(reloadRes)
-	promiseVal := wr.globals.Call("__dispatch_sub_store", reqVal, argVal, reloadMainVal, reloadResVal)
+	clearDlVal := wr.ctx.NewBool(clearDlCache)
+	promiseVal := wr.globals.Call("__dispatch_sub_store", reqVal, argVal, reloadMainVal, reloadResVal, clearDlVal)
 	reqVal.Free()
 	argVal.Free()
 	reloadMainVal.Free()
 	reloadResVal.Free()
+	clearDlVal.Free()
 
 	if promiseVal == nil {
 		select {
@@ -1508,6 +1637,7 @@ func (e *LoonEngine) runTaskInWorker(
 
 	// 记录本次同步后的状态，保证下一次请求对 globalNoCache 的屏蔽还原
 	wr.lastConfigVer = configVer
+	wr.lastCacheVer = cacheVer
 	if globalNoCache {
 		wr.dirtyResources = true
 	} else if reloadRes {

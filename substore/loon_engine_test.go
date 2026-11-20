@@ -6,16 +6,21 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/sinspired/subs-check-pro/v3/assets"
 )
 
 func newDiscardLogger() *slog.Logger {
+	if os.Getenv("SUBSTORE_NET_DEBUG") == "1" {
+		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	}
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
@@ -143,12 +148,15 @@ func seedBenchStore(t testing.TB, nodeCount int) *LoonKVStore {
 		)
 	}
 
-	escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(yamlBuf.String())
+	escaped, err := json.Marshal(yamlBuf.String())
+	if err != nil {
+		t.Fatal("序列化 YAML 字符串失败")
+	}
 	storeJSON := fmt.Sprintf(`{
 		"subs": [{
 			"name": "bench_sub",
 			"source": "local",
-			"content": "%s",
+			"content": %s,
 			"process": [
 				{"type": "Regex Filter", "args": {"keep": true, "regex": ["香港|日本|新加坡|美国"]}},
 				{"type": "Regex Sort Operator", "args": {"order": "asc", "expressions": ["香港", "新加坡", "日本", "美国"]}}
@@ -258,6 +266,97 @@ func BenchmarkLoonEngine_RealSubStore(b *testing.B) {
 		b.Fatalf("冷启动失败: err=%v resp=%+v", err, resp0)
 	}
 	b.Logf("第1次冷执行耗时: %v (输出 %d bytes)", time.Since(coldStart), len(resp0.Body))
+
+	for b.Loop() {
+		resp, err := engine.Execute(context.Background(), req, "")
+		if err != nil || resp.Status != 200 || len(resp.Body) == 0 {
+			b.Fatalf("执行失败: err=%v resp=%+v", err, resp)
+		}
+	}
+}
+
+// 6. 验证长 Base64 非 ASCII Latin-1 编解码 + sing-box 真实输出与 Worker 复用一致性
+func TestLoonEngine_SingBoxSmokeAndBase64(t *testing.T) {
+	store := seedBenchStore(t, 200)
+	engine, err := NewLoonEngine(assets.EmbeddedSubStore, "Sub-Store", store, newDiscardLogger())
+	if err != nil {
+		t.Fatalf("编译真实 EmbeddedSubStore 失败: %v", err)
+	}
+
+	var firstBody string
+	for i := range 2 {
+		resp, err := engine.Execute(context.Background(), &LoonHTTPRequest{
+			URL:     "http://127.0.0.1:8299/download/bench_sub?target=sing-box",
+			Method:  "GET",
+			Headers: map[string]string{"User-Agent": "sing-box"},
+		}, "")
+		if err != nil {
+			t.Fatalf("第 %d 次 sing-box 拉取失败: %v", i, err)
+		}
+		if resp.Status != 200 {
+			t.Fatalf("第 %d 次状态码异常: %d body=%s", i, resp.Status, resp.Body)
+		}
+		var out struct {
+			Outbounds []map[string]any `json:"outbounds"`
+			Endpoints []map[string]any `json:"endpoints"`
+		}
+		if err := json.Unmarshal([]byte(resp.Body), &out); err != nil {
+			t.Fatalf("第 %d 次输出不是有效 sing-box JSON: %v", i, err)
+		}
+		if len(out.Outbounds) == 0 {
+			t.Fatalf("第 %d 次 sing-box outbounds 为空", i)
+		}
+		if i == 0 {
+			firstBody = resp.Body
+		} else if resp.Body != firstBody {
+			t.Fatalf("第 2 次复用输出与第 1 次不一致")
+		}
+	}
+
+	// 验证超过 256 字节阈值的含 0x80..0xFF Latin-1 btoa/atob 往返
+	latin1Script := []byte(`
+		(() => {
+			let raw = "";
+			for (let i = 0; i < 400; i++) raw += String.fromCharCode(i & 0xff);
+			const enc = btoa(raw);
+			const dec = atob(enc);
+			if (dec !== raw) throw new Error("latin1 roundtrip mismatch");
+			let badThrown = false;
+			try { btoa(raw + "中"); } catch (_) { badThrown = true; }
+			if (!badThrown) throw new Error("expected btoa to throw on >0xff");
+			$done({ response: { status: 200, body: "OK" } });
+		})();
+	`)
+	b64Engine, err := NewLoonEngine(latin1Script, "B64Test", store, newDiscardLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	b64Resp, err := b64Engine.Execute(context.Background(), &LoonHTTPRequest{URL: "http://127.0.0.1/b64", Method: "GET"}, "")
+	if err != nil || b64Resp.Status != 200 || b64Resp.Body != "OK" {
+		t.Fatalf("Latin-1 btoa/atob 校验失败: err=%v resp=%+v", err, b64Resp)
+	}
+}
+
+// 7. 真实 1500 节点 Sub-Store sing-box 全量负载基准测试
+func BenchmarkLoonEngine_SingBox(b *testing.B) {
+	store := seedBenchStore(b, 1500)
+	engine, err := NewLoonEngine(assets.EmbeddedSubStore, "Sub-Store", store, newDiscardLogger())
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	req := &LoonHTTPRequest{
+		URL:     "http://127.0.0.1:8299/download/bench_sub?target=sing-box",
+		Method:  "GET",
+		Headers: map[string]string{"User-Agent": "sing-box"},
+	}
+
+	coldStart := time.Now()
+	resp0, err := engine.Execute(context.Background(), req, "")
+	if err != nil || resp0.Status != 200 || !strings.Contains(resp0.Body, `"outbounds"`) {
+		b.Fatalf("冷启动失败: err=%v resp=%+v", err, resp0)
+	}
+	b.Logf("第1次 sing-box 冷执行耗时: %v (输出 %d bytes)", time.Since(coldStart), len(resp0.Body))
 
 	for b.Loop() {
 		resp, err := engine.Execute(context.Background(), req, "")
