@@ -90,6 +90,9 @@ const (
 	// 差量合并时：有此前缀 → 按类型决策；无此前缀 → 用户操作，原样保留。
 	scpIDPrefix = "SCP."
 
+	// officialTemplateRepoPrefix 官方模板仓库路径前缀（用户名/仓库名）
+	officialTemplateRepoPrefix = "sinspired/sub-store-template/"
+
 	defaultLatestVer  = "1.14"
 	latestSingboxJSON = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.json"
 	latestSingboxJS   = "https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.js"
@@ -130,13 +133,13 @@ var localAPIClient = &http.Client{
 
 // InitSingboxVersion 程序初始化时对 Singbox 版本号进行初始化
 func InitSingboxVersion() {
-	if config.GlobalConfig.SingboxLatest.Version != "" && config.GlobalConfig.SingboxLatest.JSON != "" && config.GlobalConfig.SingboxLatest.JS != "" {
-		LatestSingboxVersion = config.GlobalConfig.SingboxLatest.Version
+	if v := strings.TrimSpace(config.GlobalConfig.SingboxLatest.Version); v != "" {
+		LatestSingboxVersion = v
 	} else {
 		LatestSingboxVersion = defaultLatestVer
 	}
-	if config.GlobalConfig.SingboxExtra.Version != "" && config.GlobalConfig.SingboxExtra.JSON != "" && config.GlobalConfig.SingboxExtra.JS != "" {
-		ExtraSingboxVersion = config.GlobalConfig.SingboxExtra.Version
+	if v := strings.TrimSpace(config.GlobalConfig.SingboxExtra.Version); v != "" {
+		ExtraSingboxVersion = v
 	} else {
 		ExtraSingboxVersion = defaultExtraVer
 	}
@@ -480,28 +483,49 @@ func canonicalURL(u string) string {
 	return utils.NormalizeGitHubRawURL(u)
 }
 
+// isOfficialTemplateURL 判断 URL 是否指向官方模板仓库（sinspired/sub-store-template）
+func isOfficialTemplateURL(u string) bool {
+	if base, _, ok := strings.Cut(u, "#"); ok {
+		u = base
+	}
+	if base, _, ok := strings.Cut(u, "?"); ok {
+		u = base
+	}
+	u = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(u), config.GlobalConfig.GithubProxy))
+	return strings.Contains(u, "raw.githubusercontent.com/"+officialTemplateRepoPrefix) ||
+		strings.Contains(u, "github.com/"+officialTemplateRepoPrefix) ||
+		strings.Contains(u, "cdn.jsdelivr.net/gh/sinspired/sub-store-template@") ||
+		strings.Contains(u, "cdn.jsdelivr.net/gh/"+officialTemplateRepoPrefix)
+}
+
 func isSameScpOp(raw json.RawMessage, op ScriptOperator) bool {
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
+	var m struct {
+		Type string `json:"type"`
+		Args *struct {
+			Content string `json:"content"`
+			Mode    string `json:"mode"`
+		} `json:"args"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil || m.Type != op.Type || m.Args == nil {
 		return false
 	}
-	if t, _ := m["type"].(string); t != op.Type {
-		return false
-	}
-	args, _ := m["args"].(map[string]any)
-	if args == nil {
-		return false
-	}
-
-	rawContent := canonicalURL(args["content"].(string))
-	newContent := canonicalURL(fmt.Sprint(op.Args["content"]))
-	if rawContent != newContent {
+	if m.Args.Mode != fmt.Sprint(op.Args["mode"]) {
 		return false
 	}
 
-	rawMode, _ := args["mode"].(string)
-	newMode := fmt.Sprint(op.Args["mode"])
-	return rawMode == newMode
+	rawCanon := canonicalURL(m.Args.Content)
+	newCanon := canonicalURL(fmt.Sprint(op.Args["content"]))
+	if rawCanon == newCanon {
+		return true
+	}
+
+	// 无 SCP 前缀的旧操作：仅在同为官方模板仓库且旧参数为空或默认 #name=sub&type=0 时原地升级，
+	// 避免覆盖用户自定义的脚本或参数。
+	rawBase, rawFrag, _ := strings.Cut(rawCanon, "#")
+	newBase, _, _ := strings.Cut(newCanon, "#")
+	return rawBase == newBase &&
+		isOfficialTemplateURL(newBase) &&
+		(rawFrag == "" || rawFrag == "name=sub&type=0")
 }
 
 // mergeFileProcess file 资源的差量合并：
@@ -586,7 +610,7 @@ func cleanTags(tags []string, defaultTags []string) []string {
 	seen := make(map[string]bool)
 	for _, t := range tags {
 		if t == "已检测" {
-			// continue
+			continue
 		}
 		if t == "Subs-Check-Pro" {
 			t = "SCP"
@@ -656,7 +680,7 @@ func newMihomoFile() file {
 	return file{
 		Name:        MihomoName,
 		Remark:      remark,
-		Tag:         []string{"SCP", "已检测"},
+		Tag:         []string{"SCP"},
 		IsIconColor: true,
 		SubInfoURL:  SubUserInfoURL,
 		Source:      "local",
@@ -679,22 +703,136 @@ func newMihomoFile() file {
 	}
 }
 
+// extractMajorMinor 从版本号中提取 "major.minor"（如 v1.14.3 / 1.14-lite / 1.14_lite / 1.14-beta.1 → 1.14）
+func extractMajorMinor(ver string) string {
+	s := strings.TrimSpace(ver)
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			continue
+		}
+		if i > 0 && s[i-1] == '.' {
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j < len(s) && s[j] == '.' {
+			k := j + 1
+			for k < len(s) && s[k] >= '0' && s[k] <= '9' {
+				k++
+			}
+			if k > j+1 {
+				return s[i:k]
+			}
+		}
+		i = j - 1
+	}
+	return ""
+}
+
+// extractFlavorTag 按非字母数字分词识别版本号中的 lite / ios 标识（避免误匹配）
+func extractFlavorTag(ver string) string {
+	tokens := strings.FieldsFunc(strings.ToLower(ver), func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
+	})
+	for _, tok := range tokens {
+		if tok == "lite" || tok == "ios" {
+			return tok
+		}
+	}
+	return ""
+}
+
+// hasFragParam 判断 URL fragment 中是否已包含指定参数（大小写及下划线/短横线不敏感）
+func hasFragParam(frag string, keys ...string) bool {
+	if frag == "" {
+		return false
+	}
+	normKey := func(s string) string {
+		s = strings.ToLower(strings.TrimSpace(s))
+		s = strings.ReplaceAll(s, "_", "")
+		s = strings.ReplaceAll(s, "-", "")
+		return s
+	}
+	targets := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		targets[normKey(k)] = struct{}{}
+	}
+	for _, part := range strings.Split(frag, "&") {
+		k, _, _ := strings.Cut(part, "=")
+		if _, ok := targets[normKey(k)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // newSingboxFile 返回 singbox 文件
 func newSingboxFile(name, jsURL, jsonURL string) file {
-	jsURL = utils.WarpURL(jsURL, IsGithubProxy) + "#name=sub&type=0"
+	rawVersion := strings.TrimPrefix(name, SingboxName+"-")
+	if rawVersion == name {
+		rawVersion = ""
+	}
+	majorMinor := extractMajorMinor(rawVersion)
+	flavor := extractFlavorTag(rawVersion)
+
+	// 仅当 JS 脚本属于官方模板仓库（sinspired/sub-store-template）时，
+	// 才自动注入 version / lite / ios 等官方脚本参数，避免给第三方脚本加无效参数。
+	isOfficialJS := isOfficialTemplateURL(jsURL)
+	jsURL = utils.WarpURL(jsURL, IsGithubProxy)
 	jsonURL = utils.WarpURL(jsonURL, IsGithubProxy)
 
-	version := strings.Split(name, "-")[1]
+	arguments := Args{}
+	if isOfficialJS {
+		arguments["name"] = "sub"
+		arguments["type"] = "0"
+		if majorMinor != "" {
+			arguments["version"] = majorMinor
+		}
+
+		if _, frag, hasFrag := strings.Cut(jsURL, "#"); !hasFrag {
+			jsURL += "#name=sub&type=0"
+			if majorMinor != "" {
+				jsURL += "&version=" + majorMinor
+			}
+			if flavor != "" {
+				jsURL += "&" + flavor + "=1"
+				arguments[flavor] = "1"
+			}
+		} else {
+			appendFrag := func(kv string) {
+				if frag != "" && !strings.HasSuffix(jsURL, "&") {
+					jsURL += "&"
+				}
+				jsURL += kv
+				frag += "&" + kv
+			}
+
+			if majorMinor != "" && !hasFragParam(frag, "version", "ver", "v", "sbVersion") {
+				appendFrag("version=" + majorMinor)
+			}
+			if flavor != "" && !hasFragParam(frag, "lite", "ios") && extractFlavorTag(frag) == "" {
+				appendFrag(flavor + "=1")
+				arguments[flavor] = "1"
+			}
+		}
+	} else if !strings.Contains(jsURL, "#") {
+		jsURL += "#name=sub&type=0"
+		arguments["name"] = "sub"
+		arguments["type"] = "0"
+	}
+
 	remark := "默认 Sing-Box 订阅 (带分流规则)"
-	if version != "" {
-		remark = "默认 Sing-Box-" + version + " 订阅 (带分流规则)"
+	if rawVersion != "" {
+		remark = "默认 Sing-Box-" + rawVersion + " 订阅 (带分流规则)"
 	}
 
 	icon := "/scp/sing-box.svg"
 	return file{
 		Name:        name,
 		Remark:      remark,
-		Tag:         []string{"SCP", "已检测"},
+		Tag:         []string{"SCP"},
 		Icon:        icon,
 		IsIconColor: true,
 		SubInfoURL:  SubUserInfoURL,
@@ -706,12 +844,9 @@ func newSingboxFile(name, jsURL, jsonURL string) file {
 				Type: "Script Operator",
 				ID:   newOperatorID(),
 				Args: Args{
-					"content": jsURL,
-					"mode":    "link",
-					"arguments": Args{
-						"name": "sub",
-						"type": "0",
-					},
+					"content":   jsURL,
+					"mode":      "link",
+					"arguments": arguments,
 				},
 			},
 		},
@@ -979,7 +1114,7 @@ func SyncSubStorePartial(yamlData []byte, doSub, doMihomo, doSbLatest, doSbOld b
 
 	if doSbLatest {
 		if err := processSingboxFile(&config.GlobalConfig.SingboxLatest, latestSingboxJS, latestSingboxJSON, LatestSingboxVersion); err != nil {
-			name := SingboxName + "-" + latestSingboxJSON
+			name := SingboxName + "-" + LatestSingboxVersion
 			slog.Warn(name+"订阅同步失败", "error", err)
 		}
 	}
@@ -998,9 +1133,11 @@ func SyncSubStorePartial(yamlData []byte, doSub, doMihomo, doSbLatest, doSbOld b
 
 func processSingboxFile(sbc *config.SingBoxConfig, defaultJS, defaultJSON, version string) error {
 	js, jsonStr := defaultJS, defaultJSON
-	if len(sbc.JS) > 0 && len(sbc.JSON) > 0 {
-		js = sbc.JS
-		jsonStr = sbc.JSON
+	if s := strings.TrimSpace(sbc.JS); s != "" {
+		js = s
+	}
+	if s := strings.TrimSpace(sbc.JSON); s != "" {
+		jsonStr = s
 	}
 	f := newSingboxFile(SingboxName+"-"+version, js, jsonStr)
 	if err := f.syncSubStoreFile(); err != nil {

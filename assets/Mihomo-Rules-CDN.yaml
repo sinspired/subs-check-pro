@@ -1,4 +1,4 @@
-# update: 2026-11-12 14:35:33
+# update: 2026-11-17 17:51:12
 # repo: https://github.com/sinspired/subs-check-pro 内置规则
 
 log-level: error # 日志等级 silent/error/warning/info/debug
@@ -105,9 +105,12 @@ sniffer:
   override-destination: false
   sniff: # TLS 和 QUIC 默认如果不配置 ports 默认嗅探 443
     QUIC:
-    #  ports: [ 443 ]
+      ports:
+        - 443
     TLS:
-    #  ports: [443, 8443]
+      ports:
+        - 443
+        - 8443
     # 默认嗅探 80
     HTTP: # 需要嗅探的端口
       ports:
@@ -731,6 +734,20 @@ rule-providers:
 
 # 代理组
 proxy-groups:
+  - icon: https://testingcf.jsdelivr.net/gh/Orz-3/mini@master/Color/Global.png
+    include-all: false
+    exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
+    name: GLOBAL
+    type: select
+    proxies:
+      - 'PROXY'
+      - 'AI'
+      - 'Cloudflare'
+      - 'YouTube'
+      - 'Netflix'
+      - 'TikTok'
+      - 'MANUAL'
+      - 'DIRECT'
   - icon: https://testingcf.jsdelivr.net/gh/Orz-3/mini@master/Color/Static.png
     include-all: false
     exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
@@ -757,7 +774,7 @@ proxy-groups:
       - AUTO
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png
     name: AI
-    type: fallback
+    type: select
     proxies:
       - 'AI-AUTO'
       - 'OpenAI'
@@ -918,7 +935,7 @@ proxy-groups:
       - 'MANUAL'
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Disney.png
     name: Disney
-    type: select
+    type: fallback
     proxies:
       - 'Disney-AUTO'
       - 'PROXY'
@@ -974,7 +991,7 @@ proxy-groups:
       - 'DIRECT'
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Heart.png
     name: Adult
-    type: select
+    type: fallback
     proxies:
       - 'PROXY'
       - 'Cloudflare'
@@ -1025,7 +1042,7 @@ proxy-groups:
   - icon: https://testingcf.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png
     include-all: true
     exclude-filter: (?i)Traffic|Expire|Premium|频道|订阅|ISP|流量|到期|重置
-    filter: (?i)(?=.*(?:openai|chatgpt|gpt|GPT⁺))(?=.*(?:gemini|GM))
+    filter: (?i)(?=.*(?:openai|chatgpt|gpt|GPT⁺))(?=.*(?:gemini|GM))(?=.*(?:copilot|CP))
     name: AI-AUTO
     type: url-test
     interval: 600
@@ -1273,6 +1290,18 @@ rules:
   - 'GEOSITE,private,DIRECT'
   - 'GEOIP,private,DIRECT'
   - 'GEOSITE,category-ads-all,REJECT'
+
+  - 'PROCESS-NAME-REGEX,(?i)^(Weixin|WeChat|WeChatAppEx|QQ|DingTalk|WXWork|WeMeet)(\.exe)?$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(Meituan|Jingdong|JD|Quark|QuarkCloudDrive|quark_cloud_drive|TencentVideo|QQLive|iQIYI|QyClient|QyPlayer|Youku|BiliBili|哔哩哔哩)(\.exe)?$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(BaiduNetdisk|BaiduNetdiskHost|Thunder|XunleiDownload|cloudmusic|QQMusic|AliWangWang)(\.exe)?$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(Weather|WeatherWidget|VidHub)$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.sankuai\.meituan|com\.sankuai\.meituan\.takeoutnew|com\.tencent\.mm|com\.jingdong\.app\.mall|com\.quark\.browser)$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.tencent\.qqlive|com\.qiyi\.video|com\.youku\.phone|tv\.danmaku\.bili)$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.eg\.android\.AlipayGphone|com\.taobao\.taobao|com\.tencent\.mobileqq|com\.alibaba\.android\.rimet|com\.tencent\.wework)$,DIRECT'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.baidu\.netdisk|com\.xunlei\.downloadprovider|com\.netease\.cloudmusic|com\.tencent\.qqmusic)$,DIRECT'
+  - 'PROCESS-PATH-REGEX,(?i).*/(WeChat|Weixin|QQ|DingTalk|Quark|TencentVideo|QQLive|iQIYI|Youku|Bilibili|Weather|VidHub)\.app/Contents/.*$,DIRECT'
+  - 'PROCESS-PATH-REGEX,(?i).*/Weather\.app/Contents/PlugIns/WeatherWidget\.appex/Contents/MacOS/WeatherWidget$,DIRECT'
+
   - 'RULE-SET,apple-intelligence,Apple-Intl'
   - 'RULE-SET,apple-tvplus,Apple-Intl'
   - 'RULE-SET,youku-intl,Media-Intl'
@@ -1283,13 +1312,32 @@ rules:
   - 'GEOSITE,apple,Apple'
   - 'RULE-SET,alipay,CN'
   - 'RULE-SET,extra-direct,CN'
+  - 'PROCESS-NAME-REGEX,(?i)^Claude(\.exe)?$,Claude'
+  - 'PROCESS-PATH-REGEX,(?i).*/Claude\.app/Contents/.*$,Claude'
+  - 'PROCESS-NAME,com.anthropic.claude,Claude'
   - 'RULE-SET,anthropic,Claude'
+  - 'PROCESS-NAME-REGEX,(?i)^ChatGPT(\.exe)?$,OpenAI'
+  - 'PROCESS-PATH-REGEX,(?i).*/ChatGPT\.app/Contents/.*$,OpenAI'
+  - 'PROCESS-NAME,com.openai.chatgpt,OpenAI'
   - 'RULE-SET,openai,OpenAI'
+  - 'PROCESS-NAME-REGEX,(?i)^Gemini(\.exe)?$,Gemini'
+  - 'PROCESS-PATH-REGEX,(?i).*/Gemini\.app/Contents/.*$,Gemini'
+  - 'PROCESS-NAME,com.google.android.apps.bard,Gemini'
   - 'RULE-SET,google-gemini,Gemini'
+  - 'PROCESS-NAME-REGEX,(?i)^(Copilot|CopilotApp|CopilotAppHost|M365Copilot)(\.exe)?$,Copilot'
+  - 'PROCESS-PATH-REGEX,(?i).*/(Copilot|Microsoft Copilot)\.app/Contents/.*$,Copilot'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.microsoft\.office\.officehubrow|com\.microsoft\.copilot)$,Copilot'
   - 'RULE-SET,copilot,Copilot'
   - 'RULE-SET,bing,Bing'
+  - 'PROCESS-NAME,com.twitter.android,Twitter'
   - 'RULE-SET,twitter,Twitter'
+  - 'PROCESS-NAME-REGEX,(?i)^(Poe|Perplexity|Notion)(\.exe)?$,AI'
+  - 'PROCESS-PATH-REGEX,(?i).*/(Poe|Perplexity|Notion)\.app/Contents/.*$,AI'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.poe\.android|com\.quora\.poe\.android|ai\.perplexity\.app\.android|notion\.id)$,AI'
   - 'GEOSITE,category-ai-!cn,AI'
+  - 'PROCESS-NAME-REGEX,(?i)^Telegram(\.exe)?$,Telegram'
+  - 'PROCESS-PATH-REGEX,(?i).*/Telegram\.app/Contents/.*$,Telegram'
+  - 'PROCESS-NAME-REGEX,(?i)^(org\.telegram\.messenger|org\.thunderdog\.challegram)$,Telegram'
   - 'GEOSITE,telegram,Telegram'
   - 'GEOSITE,spotify,Spotify'
   - 'GEOSITE,netflix,Netflix'
@@ -1298,6 +1346,10 @@ rules:
   - 'GEOSITE,google,Google'
   - 'GEOSITE,disney,Disney'
   - 'GEOSITE,cloudflare,Cloudflare'
+  - 'PROCESS-NAME-REGEX,(?i)^WhatsApp(\.exe)?$,PROXY'
+  - 'PROCESS-PATH-REGEX,(?i).*/WhatsApp\.app/Contents/.*$,PROXY'
+  - 'PROCESS-NAME-REGEX,(?i)^(com\.whatsapp|com\.whatsapp\.w4b)$,PROXY'
+  - 'PROCESS-NAME,com.github.android,PROXY'
   - 'GEOSITE,github,PROXY'
   - 'GEOSITE,category-porn,Adult'
   - 'GEOSITE,cn,DIRECT'

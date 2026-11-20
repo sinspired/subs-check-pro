@@ -2,7 +2,6 @@ package app
 
 import (
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -10,6 +9,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 )
+
+const officialTemplateSlug = "sinspired/sub-store-template"
 
 // v1/v2 统一视图：json/js 可能是字符串，也可能是列表
 type singBoxConfigUnified struct {
@@ -22,8 +23,7 @@ type singBoxConfigUnified struct {
 type migrateConfigView struct {
 	SingboxLatest singBoxConfigUnified `yaml:"singbox-latest"`
 	SingboxExtra  singBoxConfigUnified `yaml:"singbox-extra"`
-
-	SingboxOld singBoxConfigUnified `yaml:"singbox-old"`
+	SingboxOld    singBoxConfigUnified `yaml:"singbox-old"`
 
 	KeepSuccessProxies *bool `yaml:"keep-success-proxies"`
 
@@ -60,35 +60,16 @@ func (app *App) migrateConfig() error {
 
 	// keep-success-proxies -> use-last-result
 	if view.KeepSuccessProxies != nil {
-		content = rewriteKeepSuccessProxies(
-			content,
-			*view.KeepSuccessProxies,
-		)
-
+		content = rewriteKeepSuccessProxies(content, *view.KeepSuccessProxies)
 		needWrite = true
 		migrated = append(migrated, "keep-success-proxies")
 		slog.Debug("keep-success-proxies 已迁移到新配置结构")
 	}
 
-	// 自动升级 singbox-latest 到 1.14（支持 v1/v2）
+	// 自动升级官方 singbox-latest（< 1.14 或官方模板路径 < 1.14 → 1.14.x；保留 >= 1.14 及第三方自定义配置）
 	if view.SingboxLatest.Version != "" {
-		latestVer := strings.TrimSpace(view.SingboxLatest.Version)
-		latestJSON := extractString(view.SingboxLatest.JSON)
-		latestJS := extractString(view.SingboxLatest.JS)
-
-		isOfficialJSON := strings.Contains(latestJSON, "sinspired/sub-store-template")
-		isOfficialJS := strings.Contains(latestJS, "sinspired/sub-store-template")
-
-		major, minor := parseVersion(latestVer)
-
-		needUpgrade :=
-			versionLess(latestVer, 1, 14) ||
-				(isOfficialJSON && (major != 1 || minor != 14)) ||
-				(isOfficialJS && (major != 1 || minor != 14))
-
-		if needUpgrade {
+		if _, needUpgrade := checkOfficialSingboxUpgrade(view.SingboxLatest, 1, 14); needUpgrade {
 			slog.Info("singbox-latest 配置迁移到 1.14.x")
-
 			newCfg := singBoxConfigV1{
 				Version: "1.14",
 				JSON: []string{
@@ -98,30 +79,20 @@ func (app *App) migrateConfig() error {
 					"https://raw.githubusercontent.com/sinspired/sub-store-template/main/1.14.x/sing-box.js",
 				},
 			}
-
 			content = rewriteSingboxBlock(content, "singbox-latest", "singbox-latest", newCfg)
 			needWrite = true
 			migrated = append(migrated, "singbox")
 		}
-
 	}
 
-	// singbox-old → extra 配置
 	// singbox-old → singbox-extra 配置迁移
 	if view.SingboxOld.Version != "" {
 		oldVer := strings.TrimSpace(view.SingboxOld.Version)
 		oldJSON := extractString(view.SingboxOld.JSON)
 		oldJS := extractString(view.SingboxOld.JS)
 
-		isOfficialJSON := strings.Contains(oldJSON, "sinspired/sub-store-template")
-		isOfficialJS := strings.Contains(oldJS, "sinspired/sub-store-template")
-
-		oldMajor, oldMinor := parseVersion(oldVer)
-
 		var newCfg singBoxConfigV1
-
-		// 如果是官方 1.11 → 升级到 1.15-pre
-		if oldMajor == 1 && oldMinor == 11 && (isOfficialJSON || isOfficialJS) {
+		if _, needUpgrade := checkOfficialSingboxUpgrade(view.SingboxOld, 1, 14); needUpgrade {
 			slog.Info("singbox-old 配置迁移到 singbox-extra (1.15.x)")
 			newCfg = singBoxConfigV1{
 				Version: "1.15-pre",
@@ -133,7 +104,7 @@ func (app *App) migrateConfig() error {
 				},
 			}
 		} else {
-			// 保持原版本，只改 key 名
+			// 自定义模板或已是 >= 1.14 版本：保持原配置，仅重命名 key
 			newCfg = singBoxConfigV1{
 				Version: oldVer,
 				JSON:    []string{oldJSON},
@@ -143,10 +114,11 @@ func (app *App) migrateConfig() error {
 
 		// 重写块：把 singbox-old 改成 singbox-extra
 		content = rewriteSingboxBlock(content, "singbox-old", "singbox-extra", newCfg)
-
 		needWrite = true
 		migrated = append(migrated, "singbox-extra")
 	}
+
+	// TODO: singbox-extra 1.15-pre 版本在 1.15 正式发布后，自动升级到 1.15
 
 	// resolve-domain 布尔 → 新对象格式迁移（含注释）
 	// 这里用统一视图判断类型：bool = 旧格式；map = 新格式
@@ -166,16 +138,16 @@ func (app *App) migrateConfig() error {
 		old := view.MihomoOverwriteURL
 
 		// 只替换文件名，不动前缀
-		new := old
+		newURL := old
 
 		if before, ok := strings.CutSuffix(old, "Sinspired_Rules_CDN.yaml"); ok {
-			new = before + "Mihomo-Rules-CDN.yaml"
-		} else if strings.HasSuffix(old, "Sinspired_Rules_Lite_CDN.yaml") {
-			new = strings.TrimSuffix(old, "Sinspired_Rules_Lite_CDN.yaml") + "Mihomo-Rules-Lite-CDN.yaml"
+			newURL = before + "Mihomo-Rules-CDN.yaml"
+		} else if before, ok := strings.CutSuffix(old, "Sinspired_Rules_Lite_CDN.yaml"); ok {
+			newURL = before + "Mihomo-Rules-Lite-CDN.yaml"
 		}
 
-		if new != old {
-			content = rewriteMihomoOverwriteURL(content, new)
+		if newURL != old {
+			content = rewriteMihomoOverwriteURL(content, newURL)
 			needWrite = true
 			migrated = append(migrated, "mihomo-overwrite-url")
 			slog.Debug("mihomo-overwrite-url 已迁移为新规则文件名")
@@ -197,67 +169,119 @@ func (app *App) migrateConfig() error {
 			slog.Error("配置文件迁移失败", "error", err)
 			return err
 		}
-		joined := ""
-		if len(migrated) == 1 {
-			joined = migrated[0]
-		} else if len(migrated) > 1 {
-			joined = strings.Join(migrated, ",")
-		}
-
-		slog.Info("配置文件迁移完成", "config", joined)
+		slog.Info("配置文件迁移完成", "config", strings.Join(migrated, ","))
 	}
 
 	return nil
 }
 
-// parseVersion 提取主版本号（major.minor）
-// 支持：1.14 / 1.14.x / 1.14.33 / v1.14 / v1.14.12 / v1.14
-func parseVersion(raw string) (major int, minor int) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, 0
+// parseVersion 提取主次版本号（major, minor, ok）
+// 支持：1.14 / 1.14.3 / v1.14 / 1.14-lite / 1.14_lite / 1.14-beta.1 / sing-box 1.14
+func parseVersion(raw string) (major, minor int, ok bool) {
+	s := strings.TrimSpace(raw)
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			continue
+		}
+		if i > 0 && s[i-1] == '.' {
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j < len(s) && s[j] == '.' {
+			k := j + 1
+			for k < len(s) && s[k] >= '0' && s[k] <= '9' {
+				k++
+			}
+			if k > j+1 {
+				maj, err1 := strconv.Atoi(s[i:j])
+				min, err2 := strconv.Atoi(s[j+1 : k])
+				if err1 == nil && err2 == nil {
+					return maj, min, true
+				}
+			}
+		}
+		i = j - 1
 	}
-
-	// 提取数字版本：匹配 1.14 / v1.14 / 1.14.x / 1.14.33
-	re := regexp.MustCompile(`(\d+)\.(\d+)`)
-	m := re.FindStringSubmatch(raw)
-	if len(m) < 3 {
-		return 0, 0
-	}
-
-	major, _ = strconv.Atoi(m[1])
-	minor, _ = strconv.Atoi(m[2])
-	return
+	return 0, 0, false
 }
 
-// versionLess 判断是否低于目标版本（major.minor）
-func versionLess(raw string, targetMajor, targetMinor int) bool {
-	major, minor := parseVersion(raw)
-	if major == 0 && minor == 0 {
-		return true // 无效版本 → 视为过旧
+func versionBelow(major, minor, targetMajor, targetMinor int) bool {
+	return major < targetMajor || (major == targetMajor && minor < targetMinor)
+}
+
+func isOfficialTemplate(u string) bool {
+	return strings.Contains(strings.ToLower(u), officialTemplateSlug)
+}
+
+// extractOfficialTemplateVersion 从官方模板 URL 中提取目录版本号（如 .../1.14.x/sing-box.json → 1, 14, true）
+func extractOfficialTemplateVersion(u string) (major, minor int, ok bool) {
+	lower := strings.ToLower(u)
+	idx := strings.Index(lower, officialTemplateSlug)
+	if idx < 0 {
+		return 0, 0, false
 	}
-	if major < targetMajor {
-		return true
+	rest := lower[idx+len(officialTemplateSlug):]
+	if pos := strings.Index(rest, ".x/"); pos > 0 {
+		if segStart := strings.LastIndexByte(rest[:pos], '/'); segStart >= 0 {
+			return parseVersion(rest[segStart+1 : pos])
+		}
 	}
-	if major == targetMajor && minor < targetMinor {
-		return true
+	return 0, 0, false
+}
+
+// checkOfficialSingboxUpgrade 判断配置是否指向官方模板且低于目标主次版本
+func checkOfficialSingboxUpgrade(cfg singBoxConfigUnified, minMajor, minMinor int) (isOfficial, needUpgrade bool) {
+	jsonURL := extractString(cfg.JSON)
+	jsURL := extractString(cfg.JS)
+
+	officialJSON := isOfficialTemplate(jsonURL)
+	officialJS := isOfficialTemplate(jsURL)
+
+	// 仅在确实使用官方模板且未混用第三方自定义地址时才触发迁移
+	isOfficial = (officialJSON && (officialJS || jsURL == "")) ||
+		(officialJS && (officialJSON || jsonURL == ""))
+	if !isOfficial {
+		return false, false
 	}
-	return false
+
+	maj, min, ok := parseVersion(cfg.Version)
+	if !ok || versionBelow(maj, min, minMajor, minMinor) {
+		return true, true
+	}
+	if uMaj, uMin, uOk := extractOfficialTemplateVersion(jsonURL); uOk && versionBelow(uMaj, uMin, minMajor, minMinor) {
+		return true, true
+	}
+	if uMaj, uMin, uOk := extractOfficialTemplateVersion(jsURL); uOk && versionBelow(uMaj, uMin, minMajor, minMinor) {
+		return true, true
+	}
+	return true, false
 }
 
 // 提取字符串或列表的第一个元素
 func extractString(v any) string {
 	switch val := v.(type) {
 	case string:
-		return val
+		return strings.TrimSpace(val)
 	case []any:
 		if len(val) > 0 {
 			if s, ok := val[0].(string); ok {
-				return s
+				return strings.TrimSpace(s)
 			}
 		}
 	}
 	return ""
+}
+
+func isBlockKeyLine(trimmed, blockKey string) bool {
+	prefix := blockKey + ":"
+	if !strings.HasPrefix(trimmed, prefix) {
+		return false
+	}
+	rest := strings.TrimSpace(trimmed[len(prefix):])
+	return rest == "" || strings.HasPrefix(rest, "#")
 }
 
 // rewriteSingboxBlock 在原始 yaml 文本中找到指定 singbox 块并替换。
@@ -268,12 +292,21 @@ func rewriteSingboxBlock(content, blockKey, newBlockKey string, v1 singBoxConfig
 	inBlock := false
 	blockIndent := -1
 
+	jsonVal := `""`
+	if len(v1.JSON) > 0 && v1.JSON[0] != "" {
+		jsonVal = v1.JSON[0]
+	}
+	jsVal := `""`
+	if len(v1.JS) > 0 && v1.JS[0] != "" {
+		jsVal = v1.JS[0]
+	}
+
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
 
 		// 匹配目标块的起始位置
-		if !inBlock && trimmed == blockKey+":" {
+		if !inBlock && isBlockKeyLine(trimmed, blockKey) {
 			inBlock = true
 			blockIndent = len(line) - len(strings.TrimLeft(line, " \t"))
 
@@ -303,13 +336,13 @@ func rewriteSingboxBlock(content, blockKey, newBlockKey string, v1 singBoxConfig
 					continue
 
 				case strings.HasPrefix(trimmed, "json:"):
-					newLines = append(newLines, keyIndent+"json: "+v1.JSON[0])
+					newLines = append(newLines, keyIndent+"json: "+jsonVal)
 					// 清除多行数组残余
 					i = skipArrayElements(lines, i+1, indent)
 					continue
 
 				case strings.HasPrefix(trimmed, "js:"):
-					newLines = append(newLines, keyIndent+"js: "+v1.JS[0])
+					newLines = append(newLines, keyIndent+"js: "+jsVal)
 					// 清除多行数组残余
 					i = skipArrayElements(lines, i+1, indent)
 					continue
