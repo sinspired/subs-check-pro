@@ -66,6 +66,9 @@ type App struct {
 	// currentTheme 存储用户选择的主题，"auto"/"dark"/"light"
 	currentTheme string
 	themeMu      sync.RWMutex
+
+	timerMu       sync.RWMutex
+	nextCheckTime atomic.Int64 // 间隔模式下存储下次检测的 Unix 秒级时间戳
 }
 
 type lastCheckResult struct {
@@ -273,22 +276,34 @@ func (app *App) formatNextRunTime(next time.Time, loc *time.Location) string {
 
 // setTimer 根据配置设置定时器
 func (app *App) setTimer() {
+	app.timerMu.Lock()
+	defer app.timerMu.Unlock()
+
+	// 若已进入退出流程，不再重建定时器或重开 done 通道
+	if app.ctx.Err() != nil {
+		return
+	}
+
 	// 停止现有定时器
 	if app.ticker != nil {
-		// 应该先发送停止信号，防止被=nil后panic
-		close(app.done)                // 发送停止信号
-		app.done = make(chan struct{}) // 创建新通道
+		select {
+		case <-app.done:
+		default:
+			close(app.done)
+		}
+		app.done = make(chan struct{})
 		app.ticker.Stop()
 		app.ticker = nil
 	}
+	app.nextCheckTime.Store(0)
 
-	// 停止现有cron
+	// 停止现有 cron
 	if app.cron != nil {
 		app.cron.Stop()
 		app.cron = nil
 	}
 
-	// 检查是否设置了cron表达式
+	// 检查是否设置了 cron 表达式
 	if config.GlobalConfig.CronExpression != "" {
 		slog.Info("设置 cron 定时计划", "cron", config.GlobalConfig.CronExpression)
 		app.cron = cron.New()
@@ -297,9 +312,9 @@ func (app *App) setTimer() {
 		})
 		if err != nil {
 			app.cron.Stop()
+			app.cron = nil
 			slog.Error("cron 表达式 '" + config.GlobalConfig.CronExpression + "' 解析失败: " + err.Error() + "，将使用检测间隔时间")
-			// 使用间隔时间
-			app.useIntervalTimer()
+			app.useIntervalTimerLocked()
 		} else {
 			app.cron.Start()
 			for _, entry := range app.cron.Entries() {
@@ -309,24 +324,25 @@ func (app *App) setTimer() {
 			}
 		}
 	} else {
-		// 使用间隔时间
-		app.useIntervalTimer()
+		app.useIntervalTimerLocked()
 	}
 }
 
-// useIntervalTimer 使用间隔时间模式运行
-func (app *App) useIntervalTimer() {
-	// 初始化定时器
-	app.ticker = time.NewTicker(time.Duration(app.interval) * time.Minute)
+// useIntervalTimerLocked 使用间隔时间模式运行（调用方需持有 timerMu 写锁）
+func (app *App) useIntervalTimerLocked() {
+	dur := time.Duration(app.interval) * time.Minute
+	app.ticker = time.NewTicker(dur)
+	app.nextCheckTime.Store(time.Now().Add(dur).Unix())
 	done := app.done
-	// 启动一个goroutine监听定时器事件
+	ticker := app.ticker
+
 	go func() {
 		for {
 			select {
-			case <-app.ticker.C:
+			case <-ticker.C:
 				app.triggerCheck()
 			case <-done:
-				return // 收到停止信号，退出goroutine
+				return
 			}
 		}
 	}()
@@ -359,16 +375,17 @@ func (app *App) triggerCheck() {
 		slog.Error("检测代理失败", "error", checkErr)
 	}
 
-	// 检测主体结束后显示下次检测时间
+	// 检测完成后显示并记录下次检测时间
+	app.timerMu.RLock()
 	if app.ticker != nil {
-		// 使用间隔时间模式
-		app.ticker.Reset(time.Duration(app.interval) * time.Minute)
-		nextCheck := time.Now().Add(time.Duration(app.interval) * time.Minute)
+		dur := time.Duration(app.interval) * time.Minute
+		app.ticker.Reset(dur)
+		nextCheck := time.Now().Add(dur)
+		app.nextCheckTime.Store(nextCheck.Unix())
 		slog.Info("下次检测时间", "time", app.formatNextRunTime(nextCheck, time.Local))
 	} else if app.cron != nil {
-		// 使用cron模式
 		entries := app.cron.Entries()
-		if len(entries) > 0 {
+		if len(entries) > 0 && entries[0].Valid() && !entries[0].Next.IsZero() {
 			slog.Info("下次检测时间", "time", app.formatNextRunTime(entries[0].Next, app.cron.Location()))
 		}
 	}
@@ -376,6 +393,8 @@ func (app *App) triggerCheck() {
 	// 清理阶段仍持有检测锁，避免新任务重置全局进度或共享资源。
 	check.CurrentStepName.Store("清理内存")
 	releaseMemory()
+
+	app.timerMu.RUnlock()
 
 	if checkErr != nil {
 		check.CurrentStepName.Store("检测失败")
@@ -497,6 +516,33 @@ func cleanupMihomo() {
 	resolver.ClearCache()
 }
 
+// GetNextCheckTime 返回下一次定时检测时间及其调度模式（"cron" | "interval" | ""）。
+// 间隔模式下若正在检测中（尚未重置定时器），返回零值时间。
+func (app *App) GetNextCheckTime() (time.Time, string) {
+	app.timerMu.RLock()
+	defer app.timerMu.RUnlock()
+
+	if app.cron != nil {
+		entries := app.cron.Entries()
+		if len(entries) > 0 && entries[0].Valid() && !entries[0].Next.IsZero() {
+			return entries[0].Next.In(app.cron.Location()), "cron"
+		}
+		return time.Time{}, "cron"
+	}
+
+	if app.ticker != nil {
+		if app.checking.Load() {
+			return time.Time{}, "interval"
+		}
+		if ts := app.nextCheckTime.Load(); ts > 0 {
+			return time.Unix(ts, 0).Local(), "interval"
+		}
+		return time.Time{}, "interval"
+	}
+
+	return time.Time{}, ""
+}
+
 // Shutdown 尝试优雅关闭所有子服务与资源
 func (app *App) Shutdown() error {
 	slog.Debug("开始关闭应用...")
@@ -513,13 +559,26 @@ func (app *App) Shutdown() error {
 		app.cancel()
 	}
 
-	// 停止 ticker/cron/updateCron/watcher（如果存在）
+	// 加锁停止定时任务并清理状态，防止与 GetNextCheckTime / setTimer 并发冲突
+	app.timerMu.Lock()
 	if app.ticker != nil {
 		app.ticker.Stop()
+		app.ticker = nil
 	}
 	if app.cron != nil {
 		app.cron.Stop()
+		app.cron = nil
 	}
+	app.nextCheckTime.Store(0)
+
+	// 关闭 done 通道以通知定时 goroutine 退出（如果仍在）
+	select {
+	case <-app.done:
+	default:
+		close(app.done)
+	}
+	app.timerMu.Unlock()
+
 	if app.updateCron != nil {
 		app.updateCron.Stop()
 	}
@@ -540,16 +599,7 @@ func (app *App) Shutdown() error {
 		}
 	}
 
-	// 关闭 done 通道以通知定时 goroutine 退出（如果仍在）
-	select {
-	case <-app.done:
-		// already closed or receiving
-	default:
-		// 保护性关闭 done，避免 panic
-		close(app.done)
-	}
-
-	// 等待短时间，给子 goroutine 清理时间（作为最小可行方案）
+	// 等待短时间，给子 goroutine 清理时间
 	time.Sleep(500 * time.Millisecond)
 
 	slog.Info("应用已关闭")
