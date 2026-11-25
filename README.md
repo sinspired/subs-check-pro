@@ -250,6 +250,19 @@ speed-test-url: https://custom-domain/speedtest?bytes=1073741824
 
 完整配置请见 Wiki：[Cloudflare Tunnel](https://github.com/sinspired/subs-check-pro/wiki/Cloudflare-Tunnel)
 
+### 🌐 Sub-Store 公网入口可选配置
+
+自建部署需要使用独立公网地址时，可通过配置项 `sub-store-public-url` 指定 Sub-Store 公网基础地址。WebUI 首页入口和订阅分享链接将优先使用该地址；未配置时继续使用原有自动探测逻辑。
+
+```yaml
+# 标准 443/80 端口反代或 Cloudflare Tunnel（无需写端口）
+sub-store-public-url: 'https://sub.example.com'
+# 若使用非标端口或子路径前缀，可按需加上，例如：
+# sub-store-public-url: 'https://example.com:8443/substore'
+```
+
+也可通过环境变量 `SUB_STORE_PUBLIC_URL` 设置。支持 HTTP(S) 地址及路径前缀，不接受 URL 查询参数或片段。该配置不会写入任何固定域名或个人服务器地址。
+
 ## 🔔 通知渠道配置
 
 完整文档请见 Wiki：[通知渠道](https://github.com/sinspired/subs-check-pro/wiki/Notifications)

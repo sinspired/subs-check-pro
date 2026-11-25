@@ -581,10 +581,11 @@ func (app *App) getStatus(c *gin.Context) {
 		"subStoreUpdateMsg": updateMsg,
 		"eta":               check.ETASeconds.Load(), // -1=计算中, 0=完成, >0=剩余秒
 
-		"subStorePort":  config.GlobalConfig.SubStorePort,
-		"subStorePath":  config.GlobalConfig.SubStorePath,
-		"singboxExtra":  substore.ExtraSingboxVersion,
-		"singboxLatest": substore.LatestSingboxVersion,
+		"subStorePort":      config.GlobalConfig.SubStorePort,
+		"subStorePath":      config.GlobalConfig.SubStorePath,
+		"subStorePublicUrl": config.GlobalConfig.SubStorePublicURL,
+		"singboxExtra":      substore.ExtraSingboxVersion,
+		"singboxLatest":     substore.LatestSingboxVersion,
 	})
 }
 
