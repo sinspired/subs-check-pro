@@ -180,6 +180,9 @@ sub-store-path: ''
 # Sub-Store 公网访问入口（可选）。设置后，WebUI 首页入口和分享链接优先使用此地址。
 # 仅填写 http(s)://主机:端口，可带路径前缀；不要填写查询参数或 URL 片段。
 # 也可在配置文件留空，通过环境变量 SUB_STORE_PUBLIC_URL 设置。
+# 若使用非标端口或子路径前缀，可按需加上端口，例如：
+# sub-store-public-url: 'https://example.com:8443/substore'
+# 标准 443/80 端口反代或 Cloudflare Tunnel（无需写端口）
 sub-store-public-url: ''
 
 # 覆写订阅的url，这个的作用是生成带指定规则的mihomo/clash.meta订阅链接

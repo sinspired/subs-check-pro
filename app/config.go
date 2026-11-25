@@ -57,7 +57,8 @@ func (app *App) loadConfig() error {
 	if publicURL != "" {
 		parsedURL, parseErr := url.Parse(publicURL)
 		if parseErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") ||
-			parsedURL.Host == "" || parsedURL.User != nil || parsedURL.RawQuery != "" || parsedURL.Fragment != "" {
+			parsedURL.Hostname() == "" || parsedURL.User != nil ||
+			parsedURL.RawQuery != "" || parsedURL.ForceQuery || parsedURL.Fragment != "" {
 			slog.Warn("Sub-Store 公网入口格式无效，已忽略；请使用不含查询参数和片段的 HTTP(S) URL")
 			newConfig.SubStorePublicURL = ""
 		} else {
