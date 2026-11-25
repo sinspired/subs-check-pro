@@ -31,6 +31,7 @@ High-performance proxy subscription checker.
 - [x] 🕒 [保存并加载历次可用节点](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
 - [x] 📊 [统计订阅链接总数、可用节点数量、成功率](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
 - [x] 🚦 [自动检测本地代理环境](https://github.com/sinspired/subs-check-pro/wiki/System-Proxy)
+- [x] ⏱️ 支持测活 HTTP 响应延迟上限筛选
 - [x] 🎁 [自动检查更新，无缝升级新版本](https://github.com/sinspired/subs-check-pro/wiki/Features-Details)
 - [x] 📦 [自动生成开箱即用的 sing-box 配置](https://github.com/sinspired/subs-check-pro/wiki/Subscriptions)
 - [x] 🔒 [优化文件分享，支持分享码](https://github.com/sinspired/subs-check-pro/wiki/File-Service)
