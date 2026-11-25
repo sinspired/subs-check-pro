@@ -62,9 +62,9 @@ type Config struct {
 	// 专用于解析节点域名的策略
 	ProxyServerNameserverPolicy map[string]any `mapstructure:"proxy-server-nameserver-policy" yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
 
-	CheckInterval        int     `yaml:"check-interval"`
-	CronExpression       string  `yaml:"cron-expression"`
-	Timeout              int     `yaml:"timeout"`
+	CheckInterval  int    `yaml:"check-interval"`
+	CronExpression string `yaml:"cron-expression"`
+	Timeout        int    `yaml:"timeout"`
 	// MaxLatency 测活 HTTP 请求最大允许响应耗时（毫秒），0 表示不限制。
 	MaxLatency           int     `yaml:"max-latency"`
 	SpeedTestURL         string  `yaml:"speed-test-url"`
@@ -216,7 +216,7 @@ var OriginDefaultConfig = &Config{
 		"youtube",
 	},
 	DownloadMB:       20,
-	MaxLatency:       300,
+	MaxLatency:       0,
 	EnableSelfUpdate: true,
 	CronCheckUpdate:  "0 0,9,21 * * *",
 
