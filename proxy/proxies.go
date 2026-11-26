@@ -88,7 +88,50 @@ var (
 
 	// totalRawHits 统计「层 1」：解析阶段产出的全部候选节点数。
 	totalRawHits atomic.Int64
+
+	// 记录本轮所有订阅链接上出现过的 #tag（如 googSUb、bbgo、History 等），
+	// 供检测重命名阶段精准剥离旧的订阅标签，避免残留叠加，同时不误伤节点原名。
+	knownSubTagsMu sync.RWMutex
+	knownSubTags   = make(map[string]struct{})
 )
+
+func resetKnownSubTags() {
+	knownSubTagsMu.Lock()
+	knownSubTags = make(map[string]struct{})
+	knownSubTagsMu.Unlock()
+}
+
+func recordKnownSubTag(tag string) {
+	if tag == "" {
+		return
+	}
+	knownSubTagsMu.Lock()
+	knownSubTags[tag] = struct{}{}
+	knownSubTagsMu.Unlock()
+}
+
+// SnapshotSubTags 返回本轮所有订阅链接上出现过的 #tag 副本
+func SnapshotSubTags() map[string]struct{} {
+	knownSubTagsMu.RLock()
+	defer knownSubTagsMu.RUnlock()
+	out := make(map[string]struct{}, len(knownSubTags))
+	for k := range knownSubTags {
+		out[k] = struct{}{}
+	}
+	return out
+}
+
+// IsLocalHistorySource 判断 URL 是否为本程序生成的本地 all.yaml / history.yaml 源，
+// 避免把外部订阅（如 https://sub.example.org/all.yaml#bbgo 或 https://vip.icu/...#History）误判为本地历史节点。
+func IsLocalHistorySource(subURL string) bool {
+	if subURL == "" {
+		return false
+	}
+	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
+	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
+	isLatest, isHistory, _ := identifyLocalSubType(subURL, listenPort, subStorePort)
+	return isLatest || isHistory
+}
 
 // logSubscriptionStats 打印订阅数量统计
 func logSubscriptionStats(total, local, remote, history int) {
@@ -280,8 +323,9 @@ type stageLimiter struct {
 
 // GetProxies 主入口：获取、解析、去重及统计代理节点
 func GetProxies(progressCallback func(stepName string, done, total, available int)) ([]map[string]any, int, int, int, error) {
-	// 每次进入先清空上次的连接池
+	// 每次进入先清空上次的连接池与标签记录
 	ClearCache()
+	resetKnownSubTags()
 
 	if progressCallback != nil {
 		progressCallback("配置代理环境", 0, 0, 0)
@@ -391,10 +435,29 @@ func GetProxies(progressCallback func(stepName string, done, total, available in
 
 				// 单次 Map 寻址即完成检查和覆盖
 				key := b.keys[i]
-				if existing, exists := uniqueMap[key]; !exists || b.level > existing.Level {
+				if existing, exists := uniqueMap[key]; !exists {
 					uniqueMap[key] = NodeEntry{
 						Data:  proxy,
 						Level: b.level,
+					}
+				} else if b.level > existing.Level {
+					// 高优先级来源（如 all.yaml）覆盖低优先级来源（如 history.yaml）时，
+					// 若前者不携带 history_score，保留已有条目的 history_score，避免高分被重置。
+					if _, hasNew := proxy["history_score"]; !hasNew {
+						if oldScore, hasOld := existing.Data["history_score"]; hasOld {
+							proxy["history_score"] = oldScore
+						}
+					}
+					uniqueMap[key] = NodeEntry{
+						Data:  proxy,
+						Level: b.level,
+					}
+				} else if b.level < existing.Level {
+					// 若 all.yaml 先到达、history.yaml 后到达，同样补回 history_score
+					if _, hasOld := existing.Data["history_score"]; !hasOld {
+						if newScore, hasNew := proxy["history_score"]; hasNew {
+							existing.Data["history_score"] = newScore
+						}
 					}
 				}
 			}
@@ -417,6 +480,7 @@ func GetProxies(progressCallback func(stepName string, done, total, available in
 		// 占用一个拉取名额；由 processSubscription 在拉取结束后负责释放
 		lim.fetch <- struct{}{}
 		isSucced, isHistory, tag := identifyLocalSubType(subURL, listenPort, subStorePort)
+		recordKnownSubTag(tag)
 		go func(u, t string, succ, hist bool) {
 			defer wg.Done()
 			hasValid := processSubscription(u, t, succ, hist, proxyChan, batchSize, lim)
@@ -927,7 +991,9 @@ func identifyLocalSubType(subURL, listenPort, storePort string) (isLatest, isHis
 	}
 
 	// 端口必须匹配当前服务端口或存储端口
-	if port != listenPort && port != storePort {
+	matchListen := listenPort != "" && port == listenPort
+	matchStore := storePort != "" && port == storePort
+	if port == "" || (!matchListen && !matchStore) {
 		return false, false, tag
 	}
 

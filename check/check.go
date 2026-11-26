@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -64,6 +65,14 @@ var (
 	progressWeight ProgressWeight
 )
 
+// 用于精准剥离节点名称前缀与尾部生成标签的预编译正则
+var (
+	reOldPiratePrefix = regexp.MustCompile(`^(?:🏴‍☠️?_\d+_?)+`)
+	reSegSpeedTag     = regexp.MustCompile(`^[\d.]+[KMG]?B/s$`)
+	reSegMediaTag     = regexp.MustCompile(`^(?:NF|D\+|GPT[⁺]?|CP[⁻]?|GM[⁺⁻]?[ˀ]?(?:-[A-Z]{2})?|X|YT[⁻]?(?:-[A-Z]{2}[⁻]?)?|TK[⁻]?(?:-[^|]+)?|\d+%)$`)
+	reSegISPTag       = regexp.MustCompile(`^\[[^\[\]]+\]$`)
+)
+
 const MediaCheckMaxRetries = 3
 
 // Result 存储节点检测结果
@@ -106,6 +115,8 @@ type ProxyChecker struct {
 	mediaChan chan *ProxyJob
 
 	pt *ProgressTracker
+
+	knownSubTags map[string]struct{}
 
 	// 用于回收失败但还有分数的历史节点、以及本次成功的节点
 	historyChan chan map[string]any
@@ -238,6 +249,8 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 
 		// 设置进度跟踪
 		pt: NewProgressTracker(proxyCount),
+
+		knownSubTags: proxyutils.SnapshotSubTags(),
 
 		historyChan: make(chan map[string]any, proxyCount), // 缓冲设为最大值防止阻塞
 		HistoryPool: make([]map[string]any, 0),
@@ -567,9 +580,9 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, []map[string]an
 	pc.historyWg.Wait()
 
 	sort.Slice(pc.HistoryPool, func(i, j int) bool {
-		scoreI, _ := pc.HistoryPool[i]["history_score"].(int)
-		scoreJ, _ := pc.HistoryPool[j]["history_score"].(int)
-		return scoreI > scoreJ // 降序，最高分的排在前面
+		scoreI, _ := extractScore(pc.HistoryPool[i]["history_score"])
+		scoreJ, _ := extractScore(pc.HistoryPool[j]["history_score"])
+		return scoreI > scoreJ
 	})
 
 	CurrentStepName.Store("处理结果")
@@ -841,6 +854,7 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 					case pc.speedChan <- job:
 
 					case <-ctx.Done():
+						pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil)
 						job.Close()
 					}
 				} else {
@@ -851,6 +865,7 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context, db *maxminddb.Reader)
 					select {
 					case pc.mediaChan <- job:
 					case <-ctx.Done():
+						pc.scoreAndRecycle(job.Result.Proxy, "untested", 0, nil)
 						job.Close()
 					}
 				}
@@ -997,11 +1012,9 @@ func (pc *ProxyChecker) runMediaStageAndCollect(db *maxminddb.Reader, ctx contex
 							Successlimited.Store(true)
 							pc.pt.FinishAliveStage()
 							if mediaON {
-								Successlimited.Store(true)
 								slog.Warn(fmt.Sprintf("达到成功节点数量限制 %d, 等待媒体检测任务完成...", config.GlobalConfig.SuccessLimit))
 								slog.Warn("测活模式将丢弃多余结果")
 							} else {
-								Successlimited.Store(true)
 								slog.Warn(fmt.Sprintf("达到成功节点数量限制 %d, 等待节点重命名任务完成...", config.GlobalConfig.SuccessLimit))
 								slog.Warn("测活模式将丢弃多余结果")
 							}
@@ -1279,8 +1292,53 @@ func checkOnePlatform(job *ProxyJob, plat string, mediaClient *http.Client, db *
 	}
 }
 
+// splitTagSegments 按 '|' 分段，但保持闭合的 [...]（例如 [广播|机房]）不被拆开
+func splitTagSegments(s string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[':
+			if closeIdx := strings.IndexByte(s[i+1:], ']'); closeIdx >= 0 {
+				i += closeIdx + 1
+			}
+		case '|':
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
+}
+
+// stripTrailingGeneratedTags 从节点名称末尾逐段剥离由本工具追加的标签（速度/媒体/ISP/sub_tag），
+// 遇到非生成标签（例如节点原名自带的 "HK 01 | IPLC"）立即停止，防止误删原名。
+func stripTrailingGeneratedTags(name string, currentSubTag string, knownTags map[string]struct{}) string {
+	parts := splitTagSegments(name)
+	for len(parts) > 1 {
+		seg := strings.TrimSpace(parts[len(parts)-1])
+		isGenerated := seg == "LastResult" ||
+			seg == "History" ||
+			(currentSubTag != "" && seg == currentSubTag) ||
+			reSegSpeedTag.MatchString(seg) ||
+			reSegMediaTag.MatchString(seg) ||
+			reSegISPTag.MatchString(seg)
+		if !isGenerated && knownTags != nil {
+			_, isGenerated = knownTags[seg]
+		}
+		if !isGenerated {
+			break
+		}
+		parts = parts[:len(parts)-1]
+	}
+	return strings.TrimSpace(strings.Join(parts, "|"))
+}
+
 // updateProxyName 更新代理名称
 func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, speed int, db *maxminddb.Reader, cfLoc string, cfIP string, jctx context.Context) {
+	originName, _ := res.Proxy["name"].(string)
+	subTag, _ := res.Proxy["sub_tag"].(string)
+
 	// 以节点IP查询位置重命名（如果开启）
 	if config.GlobalConfig.RenameNode {
 		if res.Country == "" {
@@ -1302,20 +1360,41 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 		if res.Country != "" {
 			res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(res.Country, res.CountryCodeTag)
 		} else {
-			originName := res.Proxy["name"].(string)
-			res.Proxy["name"] = config.GlobalConfig.NodePrefix + proxyutils.Rename(res.Country, res.CountryCodeTag) + originName
+			// 先清干净尾部旧标签，再剥掉可能多次残留的 NodePrefix 和 🏴‍☠_N 前缀
+			cleaned := stripTrailingGeneratedTags(originName, subTag, pc.knownSubTags)
+			for {
+				prev := cleaned
+				if config.GlobalConfig.NodePrefix != "" {
+					cleaned = strings.TrimPrefix(cleaned, config.GlobalConfig.NodePrefix)
+				}
+				cleaned = reOldPiratePrefix.ReplaceAllString(cleaned, "")
+				cleaned = strings.TrimLeft(cleaned, "_")
+				if cleaned == prev {
+					break
+				}
+			}
+			cleaned = strings.TrimSpace(cleaned)
+
+			newPrefix := config.GlobalConfig.NodePrefix + proxyutils.Rename(res.Country, res.CountryCodeTag)
+			if cleaned != "" {
+				res.Proxy["name"] = newPrefix + "_" + cleaned
+			} else {
+				res.Proxy["name"] = newPrefix
+			}
 		}
 	}
 
-	name := ""
-	if v, ok := res.Proxy["name"].(string); ok {
-		name = strings.TrimSpace(v)
+	name, _ := res.Proxy["name"].(string)
+	name = strings.TrimSpace(name)
+
+	// 未开启节点重命名，或位置获取失败保留了原名时，统一清理尾部旧 tag
+	if !config.GlobalConfig.RenameNode || res.Country == "" {
+		name = stripTrailingGeneratedTags(name, subTag, pc.knownSubTags)
 	}
 
 	var tags []string
 	// 速度标签
 	if config.GlobalConfig.SpeedTestURL != "" && speed > 0 {
-		name = regexp.MustCompile(`\s*\|(?:\s*[\d.]+[KM]B/s)`).ReplaceAllString(name, "")
 		var speedStr string
 		if speed < 100 {
 			speedStr = strconv.Itoa(speed) + "KB/s"
@@ -1324,13 +1403,6 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 		}
 
 		tags = append(tags, speedStr)
-	}
-
-	if config.GlobalConfig.MediaCheck {
-		// 移除旧标签
-		name = regexp.MustCompile(
-			`\s*\|(?:NF|D\+|GPT[⁺]?|CP[⁻]?|GM[⁺]?[ˀ]?(?:-[A-Z]{2})?|X|YT[⁻]?(?:-[A-Z]{2}[⁻]?)?|TK[⁻]?(?:-[^|]+)?|\d+%)`).
-			ReplaceAllString(name, "")
 	}
 
 	// 平台标签（按用户配置顺序）
@@ -1349,7 +1421,7 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 				tags = append(tags, "CP⁻")
 			}
 		case "x":
-			if res.X && !strings.Contains(name, "⁻¹") && !strings.Contains(name, "🏴‍☠️") {
+			if res.X && !strings.Contains(name, "⁻¹") && !strings.Contains(name, "🏴‍☠") {
 				tags = append(tags, "X")
 			}
 		case "netflix":
@@ -1362,20 +1434,16 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 			}
 		case "youtube":
 			yt := res.Youtube
-			switch yt {
-			case "":
-				// 不可达或封锁，无标签
-			default:
-				// 分离地区和 Premium 标记
+			if yt != "" {
 				region := strings.TrimSuffix(yt, "⁻")
 				noPremium := strings.HasSuffix(yt, "⁻")
 
 				tag := "YT"
+				if region != "" && region != res.Country {
+					tag += "-" + region
+				}
 				if noPremium {
 					tag += "⁻"
-				}
-				if region != "" && region != res.Country {
-					tag = "YT-" + region
 				}
 				tags = append(tags, tag)
 			}
@@ -1415,8 +1483,8 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 		}
 	}
 
-	if tag, ok := res.Proxy["sub_tag"].(string); ok && tag != "" {
-		tags = append(tags, tag)
+	if subTag != "" {
+		tags = append(tags, subTag)
 	}
 
 	// 运营商标签
@@ -1764,14 +1832,40 @@ func containsLocation(filterLocs []string, country string) bool {
 	})
 }
 
+// extractScore 安全提取 history_score，兼容 goccy/go-yaml 反序列化的 uint64/int64 及其他数值类型
+func extractScore(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case uint64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	case uint:
+		return int(n), true
+	case int32:
+		return int(n), true
+	case uint32:
+		return int(n), true
+	default:
+		return 0, false
+	}
+}
+
 // scoreAndRecycle 计算节点健康度分数。若分数 > 0，回收至 historyChan 以便后续统一排序保存。
 func (pc *ProxyChecker) scoreAndRecycle(proxy map[string]any, state string, speed int, result *Result) {
-	// 识别是否是历史节点或刚成功的节点
-	tag, _ := proxy["sub_tag"].(string)
+	if proxy == nil {
+		return
+	}
+	// 仅把本地 all.yaml / history.yaml 视为历史来源，外部订阅的 #History 或 /all.yaml#bbgo 失败时不入历史池
 	urlStr, _ := proxy["sub_url"].(string)
-	isHistory := tag == "#History" || tag == "#Succeed" || strings.Contains(urlStr, "/history.yaml") || strings.Contains(urlStr, "/all.yaml")
+	isHistory := proxyutils.IsLocalHistorySource(urlStr)
 
-	// 如果是全新抓取来的节点，且本次检测失败，直接无视不记录入历史
+	// 如果是外部抓取来的节点，且本次检测失败，直接无视不记录入历史
 	if !isHistory && state != "success" {
 		return
 	}
@@ -1779,11 +1873,8 @@ func (pc *ProxyChecker) scoreAndRecycle(proxy map[string]any, state string, spee
 	// 提取当前分数，首次打分赋予初始值 10
 	score := 10
 	if scoreRaw, exists := proxy["history_score"]; exists {
-		switch v := scoreRaw.(type) {
-		case int:
-			score = v
-		case float64:
-			score = int(v) // yaml 反序列化后数值可能是 float64
+		if parsed, ok := extractScore(scoreRaw); ok {
+			score = parsed
 		}
 	}
 
@@ -1795,10 +1886,10 @@ func (pc *ProxyChecker) scoreAndRecycle(proxy map[string]any, state string, spee
 		score -= 1 // 速度不达标，轻罚 (-1)
 	case "success":
 		score += 1 // 存活奖励 (+1)
-		// 速度奖励附加
-		if speed > 50*1024*1024 { // > 50MB/s 额外 +2
+		// 速度奖励附加（speed 单位为 KB/s）
+		if speed > 50*1024 { // > 50MB/s 额外 +2
 			score += 2
-		} else if speed > 20*1024*1024 { // > 20MB/s 额外 +1
+		} else if speed > 20*1024 { // > 20MB/s 额外 +1
 			score += 1
 		}
 		// 流媒体与AI高质量奖励附加
@@ -1816,7 +1907,11 @@ func (pc *ProxyChecker) scoreAndRecycle(proxy map[string]any, state string, spee
 
 	// 如果扣除后大于 0 就能留在历史库中
 	if score > 0 {
-		proxy["history_score"] = score
-		pc.historyChan <- proxy
+		// 克隆一份 map，避免后续 CleanupMetadata / RenameDuplicateNodes 对 pc.results 的原地修改污染 HistoryPool
+		cloned := maps.Clone(proxy)
+		cloned["history_score"] = score
+		delete(cloned, "sub_url")
+		delete(cloned, "sub_tag")
+		pc.historyChan <- cloned
 	}
 }
