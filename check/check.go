@@ -1907,11 +1907,13 @@ func (pc *ProxyChecker) scoreAndRecycle(proxy map[string]any, state string, spee
 
 	// 如果扣除后大于 0 就能留在历史库中
 	if score > 0 {
-		// 克隆一份 map，避免后续 CleanupMetadata / RenameDuplicateNodes 对 pc.results 的原地修改污染 HistoryPool
+		// 克隆一份 map，避免后续 RenameDuplicateNodes 对 pc.results 的原地修改污染 HistoryPool
+		// 按 CleanupMetadata 设计保留 sub_url、sub_tag 与 history_score
 		cloned := maps.Clone(proxy)
 		cloned["history_score"] = score
-		delete(cloned, "sub_url")
-		delete(cloned, "sub_tag")
+		// 历史记录文件中保留原始来源和标签
+		// delete(cloned, "sub_url")
+		// delete(cloned, "sub_tag")
 		pc.historyChan <- cloned
 	}
 }
