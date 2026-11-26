@@ -467,7 +467,7 @@ func releaseMemory() {
 	substore.ReleaseIdleWorkers()
 
 	// 等待底层 xhttp/tcp goroutine 退出释放缓冲区
-	waitGoroutinesDrain(30 * time.Second)
+	waitGoroutinesDrain(10 * time.Second)
 
 	// 连续触发两次 GC，彻底清空 go-yaml 等库的 sync.Pool
 	// 第一次 GC：将 sync.Pool 中的存活对象降级到 victim cache
