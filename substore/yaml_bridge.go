@@ -4,6 +4,7 @@ package substore
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
@@ -14,8 +15,8 @@ import (
 )
 
 var (
-	unquotedShortIDLineRe = regexp.MustCompile(`(?m)^([ \t]*(?:-[ \t]+)?(?:["']?short-id["']?)[ \t]*:[ \t]*)([^"'\r\n#,{}\[\]]+?)([ \t]*(?:#.*)?)$`)
-	inlineShortIDRe       = regexp.MustCompile(`(["']?short-id["']?\s*:\s*)([^"',}\]\r\n#]+)`)
+	unquotedShortIDLineRe = regexp.MustCompile(`(?m)^([ \t]*(?:-[ \t]+)?(?:["']?short-id["']?)[ \t]*:[ \t]*)([^\s"'\r\n#,{}\[\]][^"'\r\n#,{}\[\]]*?)([ \t]*(?:#.*)?)$`)
+	inlineShortIDRe       = regexp.MustCompile(`(["']?short-id["']?[ \t]*:[ \t]*)([^\s"',}\]\r\n#][^"',}\]\r\n#]*)`)
 )
 
 // YAMLDumpOptions 控制 Go YAML 输出格式，可由默认值/环境变量/JS opts 共同决定。
@@ -310,9 +311,9 @@ func goClashExtractProxyLines(raw string) string {
 	normalized := normalizeClashShortIDForGo(raw)
 	var doc clashExtractDoc
 	if err := yaml.Unmarshal([]byte(normalized), &doc); err != nil {
+		slog.Debug("goClashExtractProxyLines 回退到 JS", "err", err)
 		return ""
 	}
-
 	if doc.Proxies == nil && doc.ProxyGroups == nil {
 		return "0"
 	}
@@ -385,8 +386,9 @@ func normalizeClashShortIDForGo(raw string) string {
 			if isSafeShortIDScalarGo(val) {
 				return m
 			}
+			trail := sub[2][len(val):]
 			q, _ := json.Marshal(val)
-			return sub[1] + string(q)
+			return sub[1] + string(q) + trail
 		})
 	}
 

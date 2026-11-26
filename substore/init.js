@@ -1025,7 +1025,7 @@ globalThis.__wrap_clash_pre = function (orig) {
             lastLines = null;
             return orig.test(raw);
         },
-        parse: function (raw, includeProxies) {
+        parse: function (raw, includeProxies, match) {
             if (lastRaw === raw && typeof lastLines === 'string') {
                 const lines = lastLines;
                 lastRaw = null;
@@ -1040,7 +1040,7 @@ globalThis.__wrap_clash_pre = function (orig) {
                     return formatLines(res.slice(2), includeProxies);
                 }
             }
-            return orig.parse(raw, includeProxies);
+            return orig.parse(raw, includeProxies, match);
         }
     };
 };
@@ -1107,6 +1107,7 @@ globalThis.__go_needs_short_id_norm = function (raw) {
             j++;
         }
         const val = raw.slice(i, j).trim();
+        if (val === 'null' || val === '~') continue;
         if (!val || !/^[0-9a-fA-F]+$/.test(val) || /^[0-9]+$/.test(val) || /^0[xXbBoO]/.test(val) || /^[0-9]+[eE][0-9]+$/.test(val)) {
             return true;
         }

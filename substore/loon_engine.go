@@ -162,6 +162,7 @@ var (
 	rePatchStore           = regexp.MustCompile(`=\s*new\s+([A-Za-z0-9_$]+)\(\s*["']sub-store["']\s*\)`)
 	rePatchRCache          = regexp.MustCompile(`this\._cleanup\(\)\s*;?\s*\}`)
 	rePatchShortID         = regexp.MustCompile(`if\s*\(\s*typeof ([A-Za-z0-9_$]+)\s*!==?\s*["']string["']\s*\|\|\s*!([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*\)\s*return ([A-Za-z0-9_$]+)\s*;`)
+	rePatchShortIDHelper   = regexp.MustCompile(`function\s+([A-Za-z0-9_$]+)\s*\(\s*([A-Za-z0-9_$]+)\s*\)\s*\{\s*return\s+typeof\s+([A-Za-z0-9_$]+)\s*===?\s*["']string["']\s*&&\s*([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*;?\s*\}`)
 	rePatchClashPre        = regexp.MustCompile(`\{\s*name\s*:\s*["']Clash Pre-processor["']`)
 	rePatchClashPreVarName = regexp.MustCompile(`["']Clash Pre-processor["'][^;{}]*;\s*return\s*(\{\s*name\s*:\s*[A-Za-z0-9_$]+\s*,)`)
 	rePatchClashPreReturn  = regexp.MustCompile(`return\s*(\{\s*name(?:\s*:\s*[A-Za-z0-9_$]+)?\s*,)`)
@@ -201,7 +202,10 @@ func patchSubStoreScript(src string) (string, bool, patchStatus) {
 	st.yamlWrap = patched != prev
 
 	prev = patched
-	patched = rePatchShortID.ReplaceAllString(patched, `if(typeof $1!="string"||!$1.includes("short-id"))return $1;if(globalThis.__go_needs_short_id_norm&&!globalThis.__go_needs_short_id_norm($1))return $1;`)
+	patched = rePatchShortIDHelper.ReplaceAllString(patched, `function $1($2){return typeof $3=="string"&&$4.includes("short-id")&&(!globalThis.__go_needs_short_id_norm||globalThis.__go_needs_short_id_norm($2))}`)
+	if patched == prev {
+		patched = rePatchShortID.ReplaceAllString(patched, `if(typeof $1!="string"||!$1.includes("short-id"))return $1;if(globalThis.__go_needs_short_id_norm&&!globalThis.__go_needs_short_id_norm($1))return $1;`)
+	}
 	st.shortID = patched != prev
 
 	clashOpenIdx := -1
@@ -332,7 +336,7 @@ func (s *jsWorkerSlot) loop() {
 	if maxReuse <= 0 {
 		maxReuse = 150
 	}
-	idleTTL := 45 * time.Second
+	idleTTL := 180 * time.Second
 	if sec := envInt("SUBSTORE_IDLE_SEC"); sec > 0 {
 		idleTTL = time.Duration(sec) * time.Second
 	}

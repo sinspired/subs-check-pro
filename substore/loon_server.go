@@ -496,7 +496,7 @@ func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req 
 			if cacheable && call.err == nil && call.resp != nil && call.resp.Status >= 200 && call.resp.Status < 400 {
 				s.responseCache.Store(key, cachedResponse{
 					resp:      call.resp,
-					expiresAt: time.Now().Add(60 * time.Second),
+					expiresAt: time.Now().Add(15 * time.Minute),
 				})
 			}
 
