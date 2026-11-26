@@ -711,7 +711,7 @@ func readSubscriptionBody(resp *http.Response) ([]byte, *fetchFailure) {
 	warnedSize := false
 	if resp.ContentLength >= warnLimitSize {
 		slog.Warn(
-			"注意订阅文件体积",
+			"建议关注订阅文件体积",
 			"URL", resp.Request.URL,
 			"size_mb", fmt.Sprintf("%.1f", float64(resp.ContentLength)/(1<<20)),
 			"warn_mb", warnLimitSize>>20,
@@ -789,7 +789,7 @@ func readSubscriptionBody(resp *http.Response) ([]byte, *fetchFailure) {
 	// 如果之前因为没有 Content-Length 没触发警告，读完后发现文件很大，这里补报
 	if !warnedSize && size >= warnLimitSize {
 		slog.Warn(
-			"注意订阅文件体积",
+			"建议关注订阅文件体积",
 			"URL", resp.Request.URL,
 			"size_mb", fmt.Sprintf("%.1f", float64(size)/(1<<20)),
 			"warn_mb", warnLimitSize>>20,
