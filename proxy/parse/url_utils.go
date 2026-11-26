@@ -28,7 +28,8 @@ func EnsureScheme(s string) string {
 	}
 
 	// 本地环境默认 HTTP
-	if utils.IsLocalURL(strings.Split(s, ":")[0]) {
+	host, _, _ := strings.Cut(s, ":")
+	if utils.IsLocalURL(host) {
 		return "http://" + s
 	}
 
@@ -51,7 +52,7 @@ func CleanURL(raw string) string {
 	// ]  : 右方括号
 	// }  : 右大括号
 	// >  : 大于号 (Email/引用常用)
-	cutset := "\"'`,;.)]}>"
+	const cutset = "\"'`,;.)]}>"
 
 	// 3. 循环移除尾部所有属于 cutset 的字符，直到遇到非 cutset 字符为止
 	return strings.TrimRight(s, cutset)
@@ -71,14 +72,22 @@ func IsIgnoredURL(rawURL string) bool {
 	}
 
 	// 2. 检查 Host 特征 (常见的公共 DNS 域名)
-	host := strings.ToLower(parsed.Host)
-	if host == "dns.google" ||
-		host == "doh.pub" ||
-		host == "cloudflare-dns.com" ||
-		host == "dns.alidns.com" ||
-		host == "1.1.1.1" ||
-		host == "8.8.8.8" ||
-		host == "223.5.5.5" {
+	host := strings.ToLower(parsed.Hostname())
+	switch host {
+	case "dns.google",
+		"doh.pub",
+		"cloudflare-dns.com",
+		"dns.alidns.com",
+		"dns.quad9.net",
+		"doh.opendns.com",
+		"dns.nextdns.io",
+		"1.1.1.1",
+		"1.0.0.1",
+		"8.8.8.8",
+		"8.8.4.4",
+		"9.9.9.9",
+		"223.5.5.5",
+		"223.6.6.6":
 		return true
 	}
 

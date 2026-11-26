@@ -191,6 +191,8 @@ func getErrorReason(err error) string {
 		return "内容非文本(二进制文件)"
 	case errors.Is(err, errTooLarge):
 		return "订阅文件过大"
+	case errors.Is(err, errEmptySubscription):
+		return "订阅内容为空"
 	}
 
 	// 增加对网络底层波动的抓取
@@ -843,7 +845,8 @@ func processSubscription(
 			serverStr = strings.TrimSpace(fmt.Sprintf("%v", sv))
 		}
 		port := parse.ToIntPort(node["port"])
-		if serverStr == "" || serverStr == "<nil>" || port <= 0 || port > 65535 || node["type"] == nil || node["type"] == "invalid" {
+		hasValidPortRange := node["type"] == "mieru" && node["port-range"] != nil
+		if serverStr == "" || serverStr == "<nil>" || (!hasValidPortRange && (port <= 0 || port > 65535)) || node["type"] == nil || node["type"] == "invalid" {
 			slog.Debug("过滤掉无效的畸形节点", "订阅", urlStr, "数据", node)
 			return true
 		}

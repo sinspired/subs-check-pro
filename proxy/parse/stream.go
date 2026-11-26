@@ -9,18 +9,17 @@ import (
 	"github.com/sinspired/subs-check-pro/v3/utils"
 )
 
-// ParseSubscriptionDataStream 流式解析订阅数据，避免在单次调用内构造完整的
-// []map[string]any
-//
-// yield 返回 false 时立即停止后续解析（函数返回 nil，不是 error）。
-// 若所有解析器都未识别该格式，返回非 nil error，调用方应 fallback 到
-// FallbackExtractV2Ray（兜底命中量通常很小，不需要流式处理）。
+// ParseSubscriptionDataStream 流式解析订阅数据，支持前置多层解码与分块流式输出
 func ParseSubscriptionDataStream(
 	data []byte,
 	subURL string,
 	yield func(map[string]any) bool,
 ) (map[string]int, error) {
 	stats := make(map[string]int, 6)
+
+	// ── 0. 超级解包：剥离 BOM / Data URI / 多层嵌套 Base64
+	//    让 Base64 编码的 Clash / Sing-Box / Xray / Surge / Loon / 链接列表都能命中最佳路径
+	data = unwrapBase64Layers(data, 3)
 
 	drain := func(nodes []map[string]any, key string) bool {
 		for i, n := range nodes {
@@ -36,15 +35,14 @@ func ParseSubscriptionDataStream(
 		return true
 	}
 
-	// ── 1. Sing-Box with metadata
+	// ── 1. Sing-Box / Xray with metadata
 	if nodes := ParseSingBoxWithMetadata(data); len(nodes) > 0 {
-		slog.Debug("解析成功", "订阅", subURL, "格式", "Sing-Box(Metadata)")
+		slog.Debug("解析成功", "订阅", subURL, "格式", "Sing-Box/Xray(Metadata)")
 		drain(nodes, "SingBox-Metadata")
 		return stats, nil
 	}
 
-	// ── 2a. 标准 Clash/Mihomo 配置：定位 proxies 块，分块流式解析（峰值内存与订阅大小无关）。
-	//    不适用或没有解析出节点时原样退回下面的整体解析，行为与改动前一致。
+	// ── 2a. 标准 Clash/Mihomo 配置分块流式解析
 	if streamClashProxies(data, func(node map[string]any) bool {
 		if !yield(node) {
 			return false
@@ -56,7 +54,7 @@ func ParseSubscriptionDataStream(
 		return stats, nil
 	}
 
-	// ── 2a'. 整份文档是节点映射列表（- {name: …}）：同样分块解析
+	// ── 2a'. 根级节点列表分块解析
 	if streamRootList(data, func(node map[string]any) bool {
 		if !yield(node) {
 			return false
@@ -69,8 +67,6 @@ func ParseSubscriptionDataStream(
 	}
 
 	// ── 2b. YAML / JSON 整体解析
-	//    base64 / 逐行链接 / ip:port / 网页等内容不可能解析成 map 或 list，直接跳过，
-	//    省下对整份数据构建一遍 YAML AST 的时间和内存。
 	var generic any
 	if !looksStructured(data) {
 		generic = nil
@@ -93,16 +89,41 @@ func ParseSubscriptionDataStream(
 				}
 				return stats, nil
 			}
+
+			var sbNodes []map[string]any
 			if outbounds, ok := val["outbounds"].([]any); ok {
+				if isXrayOutbounds(outbounds) {
+					slog.Debug("解析成功", "订阅", subURL, "格式", "Xray/V2Ray(JSON)")
+					drain(ConvertXrayOutbounds(outbounds), "Xray-JSON")
+					return stats, nil
+				}
+				sbNodes = ConvertSingBoxOutbounds(outbounds)
+			}
+			if endpoints, ok := val["endpoints"].([]any); ok {
+				sbNodes = append(sbNodes, ConvertSingBoxOutbounds(endpoints)...)
+			}
+			if len(sbNodes) > 0 {
 				slog.Debug("解析成功", "订阅", subURL, "格式", "Sing-Box(JSON)")
-				drain(ConvertSingBoxOutbounds(outbounds), "SingBox-JSON")
+				drain(sbNodes, "SingBox-JSON")
 				return stats, nil
 			}
+
+			if _, hasProto := val["protocol"]; hasProto {
+				if node := convertXrayOutbound(val); node != nil {
+					slog.Debug("解析成功", "订阅", subURL, "格式", "Xray Single Outbound")
+					if yield(node) {
+						stats["Xray-JSON"]++
+					}
+					return stats, nil
+				}
+			}
+
 			if nodes := ConvertProtocolMap(val); len(nodes) > 0 {
 				slog.Debug("解析成功", "订阅", subURL, "格式", "Non-Standard JSON")
 				drain(nodes, "NonStandard-JSON")
 				return stats, nil
 			}
+
 		case []any:
 			if len(val) == 0 {
 				return stats, nil
@@ -128,8 +149,7 @@ func ParseSubscriptionDataStream(
 		}
 	}
 
-	// ── 3. 行级格式：多解析器可能命中同一节点，必须跨解析器去重
-	//    去重 key 与全局去重保持一致，使用 GenerateProxyKey
+	// ── 3. 行级格式：多解析器协同提取 + 跨解析器去重
 	lineSeen := make(map[string]struct{}, 4096)
 	lineDeduped := 0
 
@@ -158,6 +178,7 @@ func ParseSubscriptionDataStream(
 	v2rayOK := false // 整体 ConvertsV2Ray 是否成功：成功时逐行解析可跳过已转换过的标准链接行
 
 	if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
+		patchMihomoNodesFromBytes(nodes, data)
 		anyHit = true
 		v2rayOK = true
 		slog.Debug("使用了convert.ConvertsV2Ray", "长度", len(nodes))

@@ -66,10 +66,12 @@ func looksStructured(data []byte) bool {
 	return false
 }
 
-// hasYamlAlias 粗略检测 YAML 别名引用（*name）。
-// 别名可能跨块引用前面定义的锚点，分块解析会丢失上下文，检测到时退回整体解析。
-// 判定偏保守：只要 '*' 前是分隔符、后紧跟字母/下划线就视为别名（"*.example.com" 这类通配符不受影响）。
+// hasYamlAlias 检测是否真正存在跨块 YAML 锚点/别名。
+// 必须先存在 '&'（YAML 锚点语法），否则节点名中的 '*VIP' 不可能是 YAML 别名。
 func hasYamlAlias(data []byte) bool {
+	if bytes.IndexByte(data, '&') < 0 {
+		return false
+	}
 	for off := 0; off < len(data); {
 		i := bytes.IndexByte(data[off:], '*')
 		if i < 0 {
@@ -93,6 +95,22 @@ func hasYamlAlias(data []byte) bool {
 		}
 	}
 	return false
+}
+
+// hasMultipleYamlDocs 检测是否存在多个 YAML 文档分隔符（允许文档头部有单个 "---"）
+func hasMultipleYamlDocs(data []byte) bool {
+	docMarkers := 0
+	forEachLine(data, func(line []byte) bool {
+		t := bytes.TrimSpace(line)
+		if bytes.Equal(t, []byte("---")) || bytes.HasPrefix(t, []byte("--- ")) {
+			docMarkers++
+			if docMarkers > 1 {
+				return false
+			}
+		}
+		return true
+	})
+	return docMarkers > 1
 }
 
 // indentOf 返回行首空格数；行首出现 Tab 时返回 -1（YAML 不允许 Tab 缩进，交给整体解析去报错/容错）。
@@ -163,7 +181,7 @@ func streamYamlSeq(data []byte, mode yamlSeqMode, yield func(map[string]any) boo
 	if !root && !bytes.Contains(data, []byte("proxies:")) {
 		return false
 	}
-	if bytes.Contains(data, []byte("\n---")) || hasYamlAlias(data) {
+	if hasMultipleYamlDocs(data) || hasYamlAlias(data) {
 		return false
 	}
 
@@ -241,7 +259,7 @@ func streamYamlSeq(data []byte, mode yamlSeqMode, yield func(map[string]any) boo
 		return false
 	}
 
-	// ── 第 2 遍：按块解析
+		// ── 第 2 遍：按块解析
 	type seqDoc struct {
 		Proxies []any `yaml:"proxies"`
 	}
