@@ -464,6 +464,7 @@ func (app *App) checkProxies() error {
 // releaseMemory 释放mihomo检测内存
 func releaseMemory() {
 	cleanupMihomo()
+	substore.ReleaseIdleWorkers()
 
 	// 等待底层 xhttp/tcp goroutine 退出释放缓冲区
 	waitGoroutinesDrain(30 * time.Second)

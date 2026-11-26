@@ -67,7 +67,6 @@ func (t *netTiming) trace() *httptrace.ClientTrace {
 }
 
 type LoonEngine struct {
-	scriptSrc  string
 	store      *LoonKVStore
 	scriptTag  string
 	timeout    time.Duration
@@ -146,9 +145,16 @@ func (w *workerRuntime) close() {
 	w.state = nil
 }
 
+type jsWorkerSlot struct {
+	taskCh  chan jsTask
+	evictCh chan struct{}
+}
+
 var (
 	jsPoolOnce sync.Once
-	jsTaskCh   chan jsTask
+	jsPoolSem  chan struct{}
+	jsPoolMu   sync.Mutex
+	jsPoolIdle []*jsWorkerSlot
 
 	rePatchAppStart        = regexp.MustCompile(`([A-Za-z0-9_$]+\.start)\s*=\s*\(\s*\)\s*=>\s*\{\s*([A-Za-z0-9_$]+)\(\$request\)\s*\}`)
 	rePatchYAMLWrap        = regexp.MustCompile(`(\{\s*safeLoad\s*:\s*[A-Za-z0-9_$]+\s*,\s*load\s*:\s*[A-Za-z0-9_$]+\s*,\s*safeDump\s*:\s*[A-Za-z0-9_$]+\s*,\s*dump\s*:\s*[A-Za-z0-9_$]+\s*,\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})`)
@@ -198,7 +204,7 @@ func patchSubStoreScript(src string) (string, bool, patchStatus) {
 	patched = rePatchShortID.ReplaceAllString(patched, `if(typeof $1!="string"||!$1.includes("short-id"))return $1;if(globalThis.__go_needs_short_id_norm&&!globalThis.__go_needs_short_id_norm($1))return $1;`)
 	st.shortID = patched != prev
 
-clashOpenIdx := -1
+	clashOpenIdx := -1
 	if loc := rePatchClashPre.FindStringIndex(patched); loc != nil {
 		clashOpenIdx = loc[0]
 	} else if loc := rePatchClashPreVarName.FindStringSubmatchIndex(patched); len(loc) >= 4 {
@@ -257,21 +263,67 @@ func findMatchingBrace(s string, start int) int {
 	return -1
 }
 
-// 全局常驻固定 OS 线程 Worker 池：避免并发峰值引发 OOM，同时不随 UpdateEngine 泄漏协程
+// 初始化按需创建的 LIFO Worker 并发闸门：顺序请求集中命中同一热实例，避免多核各自持有冗余 C 堆。
 func initJSPool() {
 	jsPoolOnce.Do(func() {
-		workers := max(4, min(runtime.NumCPU(), 8))
-		if runtime.GOOS == "android" {
-			workers = max(2, min(runtime.NumCPU(), 4))
+		workers := envInt("SUBSTORE_WORKERS")
+		if workers <= 0 {
+			workers = 2
+			if runtime.NumCPU() >= 4 && runtime.GOOS != "android" {
+				workers = 3
+			}
 		}
-		jsTaskCh = make(chan jsTask, workers*4)
-		for range workers {
-			go jsWorkerLoop()
-		}
+		jsPoolSem = make(chan struct{}, workers)
 	})
 }
 
-func jsWorkerLoop() {
+func acquireWorkerSlot(ctx context.Context) (*jsWorkerSlot, error) {
+	initJSPool()
+	select {
+	case jsPoolSem <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	jsPoolMu.Lock()
+	if n := len(jsPoolIdle); n > 0 {
+		slot := jsPoolIdle[n-1]
+		jsPoolIdle[n-1] = nil
+		jsPoolIdle = jsPoolIdle[:n-1]
+		jsPoolMu.Unlock()
+		return slot, nil
+	}
+	jsPoolMu.Unlock()
+
+	slot := &jsWorkerSlot{
+		taskCh:  make(chan jsTask, 1),
+		evictCh: make(chan struct{}, 1),
+	}
+	go slot.loop()
+	return slot, nil
+}
+
+func releaseWorkerSlot(slot *jsWorkerSlot) {
+	jsPoolMu.Lock()
+	jsPoolIdle = append(jsPoolIdle, slot)
+	jsPoolMu.Unlock()
+	<-jsPoolSem
+}
+
+// ReleaseIdleWorkers 通知当前空闲的 QuickJS Worker 释放其底层 C 堆运行时，
+// 不影响后续新请求按需重新拉起。
+func ReleaseIdleWorkers() {
+	jsPoolMu.Lock()
+	for _, slot := range jsPoolIdle {
+		select {
+		case slot.evictCh <- struct{}{}:
+		default:
+		}
+	}
+	jsPoolMu.Unlock()
+}
+
+func (s *jsWorkerSlot) loop() {
 	// 常驻绑定固定 OS 线程，满足 QuickJS 栈边界检测且消除线程反复销毁创建开销
 	runtime.LockOSThread()
 	var wr *workerRuntime
@@ -280,6 +332,10 @@ func jsWorkerLoop() {
 	if maxReuse <= 0 {
 		maxReuse = 150
 	}
+	idleTTL := 45 * time.Second
+	if sec := envInt("SUBSTORE_IDLE_SEC"); sec > 0 {
+		idleTTL = time.Duration(sec) * time.Second
+	}
 
 	defer func() {
 		if wr != nil {
@@ -287,40 +343,88 @@ func jsWorkerLoop() {
 		}
 	}()
 
-	for task := range jsTaskCh {
-		if task.execCtx.Err() != nil {
-			select {
-			case task.failCh <- task.execCtx.Err():
-			default:
+	var idleTimer *time.Timer
+	stopTimer := func() {
+		if idleTimer != nil {
+			if !idleTimer.Stop() {
+				select {
+				case <-idleTimer.C:
+				default:
+				}
 			}
-			continue
+			idleTimer = nil
+		}
+	}
+
+	for {
+		var timerCh <-chan time.Time
+		if wr != nil {
+			idleTimer = time.NewTimer(idleTTL)
+			timerCh = idleTimer.C
 		}
 
-		// 仅对真实 Sub-Store 应用启用常驻复用；普通短脚本每轮重建保证隔离
-		canReuse := task.engine.isSubStoreApp && !reuseDisabled
-		if !canReuse || wr == nil || wr.engine != task.engine || wr.runCount >= maxReuse {
+		var task jsTask
+		select {
+		case task = <-s.taskCh:
+			stopTimer()
+			// 若与驱逐信号同时到达，优先执行新任务
+			select {
+			case <-s.evictCh:
+			default:
+			}
+		case <-timerCh:
+			idleTimer = nil
 			if wr != nil {
 				wr.close()
 				wr = nil
 			}
-			var err error
-			wr, err = task.engine.newWorkerRuntime()
-			if err != nil {
-				select {
-				case task.failCh <- err:
-				default:
-				}
-				continue
+			continue
+		case <-s.evictCh:
+			stopTimer()
+			if wr != nil {
+				wr.close()
+				wr = nil
 			}
+			continue
 		}
 
-		ok := task.engine.runTaskInWorker(wr, task.execCtx, task.req, task.argument, task.doneCh, task.failCh)
-		if !ok || !canReuse {
-			wr.close()
-			wr = nil
-		} else {
-			wr.runCount++
-		}
+		func() {
+			defer releaseWorkerSlot(s)
+
+			if task.execCtx.Err() != nil {
+				select {
+				case task.failCh <- task.execCtx.Err():
+				default:
+				}
+				return
+			}
+
+			// 仅对真实 Sub-Store 应用启用常驻复用；普通短脚本每轮重建保证隔离
+			canReuse := task.engine.isSubStoreApp && !reuseDisabled
+			if !canReuse || wr == nil || wr.engine != task.engine || wr.runCount >= maxReuse {
+				if wr != nil {
+					wr.close()
+					wr = nil
+				}
+				var err error
+				wr, err = task.engine.newWorkerRuntime()
+				if err != nil {
+					select {
+					case task.failCh <- err:
+					default:
+					}
+					return
+				}
+			}
+
+			ok := task.engine.runTaskInWorker(wr, task.execCtx, task.req, task.argument, task.doneCh, task.failCh)
+			if !ok || !canReuse {
+				wr.close()
+				wr = nil
+			} else {
+				wr.runCount++
+			}
+		}()
 	}
 }
 
@@ -347,7 +451,8 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 
 	bScript, _ := json.Marshal(map[string]any{"name": scriptTag, "startTime": time.Now().UnixMilli()})
 
-	patchedSrc, isSubStoreApp, pStatus := patchSubStoreScript(string(scriptSrc))
+	srcStr := string(scriptSrc)
+	patchedSrc, isSubStoreApp, pStatus := patchSubStoreScript(srcStr)
 	if isSubStoreApp && os.Getenv("SUBSTORE_NET_DEBUG") == "1" {
 		logger.Info("Sub-Store 补丁命中状态",
 			"app", pStatus.isApp,
@@ -384,14 +489,13 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 	rt.Close()
 
 	engine := &LoonEngine{
-		scriptSrc:        string(scriptSrc),
 		store:            store,
 		scriptTag:        scriptTag,
 		timeout:          3 * time.Minute,
 		logger:           logger,
 		httpClient:       httpClient,
 		netDebug:         os.Getenv("SUBSTORE_NET_DEBUG") == "1",
-		defaultUAs:       extractScriptDefaultUAs(string(scriptSrc)),
+		defaultUAs:       extractScriptDefaultUAs(srcStr),
 		subStoreBytecode: bytecode,
 		isSubStoreApp:    isSubStoreApp,
 	}
@@ -405,24 +509,22 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 
 func (e *LoonEngine) Execute(execCtx context.Context, req *LoonHTTPRequest, argument string) (*LoonHTTPResponse, error) {
 	execStart := time.Now()
-	initJSPool()
+
+	slot, err := acquireWorkerSlot(execCtx)
+	if err != nil {
+		return nil, err
+	}
 
 	doneCh := make(chan loonResult, 1)
 	failCh := make(chan error, 1)
 
-	task := jsTask{
+	slot.taskCh <- jsTask{
 		engine:   e,
 		execCtx:  execCtx,
 		req:      req,
 		argument: argument,
 		doneCh:   doneCh,
 		failCh:   failCh,
-	}
-
-	select {
-	case jsTaskCh <- task:
-	case <-execCtx.Done():
-		return nil, execCtx.Err()
 	}
 
 	var resp *LoonHTTPResponse
@@ -501,9 +603,9 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 	rt.SetMemoryLimit(memLimit)
 	rt.SetMaxStackSize(stackSize)
 	if runtime.GOOS == "android" {
-		rt.SetGCThreshold(32 << 20)
+		rt.SetGCThreshold(8 << 20)
 	} else {
-		rt.SetGCThreshold(64 << 20)
+		rt.SetGCThreshold(16 << 20)
 	}
 
 	ctx := rt.NewContext()

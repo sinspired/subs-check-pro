@@ -28,6 +28,7 @@ type storeNoCacheInfo struct {
 	subNoCache  map[string]bool
 	colNoCache  map[string]bool
 	fileNoCache map[string]bool
+	fileNames   map[string]bool
 }
 
 type LoonKVStore struct {
@@ -185,9 +186,11 @@ func (s *LoonKVStore) Write(value *string, key string) bool {
 		}
 
 		content := *value
-		var buf bytes.Buffer
-		if json.Indent(&buf, []byte(content), "", "  ") == nil {
-			content = buf.String()
+		if len(content) <= 256<<10 {
+			var buf bytes.Buffer
+			if json.Indent(&buf, []byte(content), "", "  ") == nil {
+				content = buf.String()
+			}
 		}
 
 		s.mu.Lock()
@@ -373,12 +376,18 @@ func (s *LoonKVStore) TargetHasNoCache(strippedPath string) bool {
 	return false
 }
 
+func (s *LoonKVStore) HasFile(name string) bool {
+	info := s.NoCacheSnapshot()
+	return info.fileNames[name]
+}
+
 func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 	info := storeNoCacheInfo{
 		urls:        make(map[string]struct{}),
 		subNoCache:  make(map[string]bool),
 		colNoCache:  make(map[string]bool),
 		fileNoCache: make(map[string]bool),
+		fileNames:   make(map[string]bool),
 	}
 	if strings.TrimSpace(raw) == "" {
 		return info
@@ -481,8 +490,11 @@ func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 					}
 				}
 			}
-			if name, _ := m["name"].(string); name != "" && hasNC {
-				info.fileNoCache[name] = true
+			if name, _ := m["name"].(string); name != "" {
+				info.fileNames[name] = true
+				if hasNC {
+					info.fileNoCache[name] = true
+				}
 			}
 		}
 	}
@@ -637,7 +649,8 @@ func collectNoCacheFromAny(v any, urls map[string]struct{}, uas map[string]struc
 		}
 
 		for k, subVal := range val {
-			if k == "ua" || k == "noCache" || k == "url" || k == "content" {
+			if k == "ua" || k == "noCache" || k == "url" || k == "content" ||
+				strings.EqualFold(k, "subUserinfo") || strings.EqualFold(k, "subInfoUrl") {
 				continue
 			}
 			if collectNoCacheFromAny(subVal, urls, uas) {

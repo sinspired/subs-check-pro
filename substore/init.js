@@ -433,7 +433,7 @@
     const rePlain = new Map();
     const reI = new Map();
     const reOther = new Map();
-    const MAX_PER_BUCKET = 2048;
+    const MAX_PER_BUCKET = 512;
 
     function getOrSet(map, key, pattern, f) {
         let hit = map.get(key);
@@ -1048,6 +1048,10 @@ globalThis.__wrap_clash_pre = function (orig) {
 globalThis.__wrap_json5 = function (orig) {
     let lastStr = null;
     let lastObj = null;
+    globalThis.__clear_json5_cache = function () {
+        lastStr = null;
+        lastObj = null;
+    };
     return {
         parse: function (str, reviver) {
             if (!reviver && typeof str === 'string') {
@@ -1179,12 +1183,20 @@ function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources, clea
         const timeoutId = setTimeout(() => {
             reject(new Error("Sub-Store script timeout inside QuickJS"));
         }, 179000);
-        globalThis.__resolve_done = function () {
+        const cleanupDispatchState = () => {
             clearTimeout(timeoutId);
+            $request = {};
+            $argument = "";
+            if (typeof globalThis.__clear_json5_cache === 'function') {
+                globalThis.__clear_json5_cache();
+            }
+        };
+        globalThis.__resolve_done = function () {
+            cleanupDispatchState();
             resolve();
         };
         globalThis.__reject_done = function (reason) {
-            clearTimeout(timeoutId);
+            cleanupDispatchState();
             reject(new Error(reason || "Sub-Store script aborted"));
         };
         try {

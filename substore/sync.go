@@ -108,6 +108,12 @@ const (
 // 全局锁防止 save 包并发推送和前端修改并发写冲突
 var subStoreMu sync.Mutex
 
+// 记录最近一次完整同步过 mihomo/singbox 的配置签名，避免每次检测重复推未变更的规则文件
+var (
+	lastFilesSyncMu  sync.Mutex
+	lastFilesSyncSig string
+)
+
 // 全局运行时变量
 var (
 	IsGithubProxy   bool
@@ -888,7 +894,10 @@ func createResource(endpoint string, data any, name string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("创建 %s 失败，状态码: %d", name, resp.StatusCode)
 	}
@@ -914,7 +923,10 @@ func syncResource(endpoint string, data any, name string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("同步 %s 失败，状态码: %d", name, resp.StatusCode)
 	}
@@ -1021,10 +1033,47 @@ func (f file) syncSubStoreFile() error {
 
 // 入口
 
+func buildFilesSyncSignature() string {
+	InitSingboxVersion()
+	c := config.GlobalConfig
+	return strings.Join([]string{
+		c.ListenPort,
+		c.SubStorePort,
+		c.SubStorePath,
+		c.GithubProxy,
+		c.MihomoOverwriteURL,
+		c.SingboxLatest.Version, c.SingboxLatest.JS, c.SingboxLatest.JSON,
+		c.SingboxExtra.Version, c.SingboxExtra.JS, c.SingboxExtra.JSON,
+	}, "|")
+}
+
 // SyncSubStore 同步 Sub-Store 全部订阅
-// 执行检测完毕后如果有新节点，无脑进行四个维度的全量推送
+// 若 mihomo / singbox 文件已存在且配置未变更，本轮仅同步 sub，避免冗余 HTTP 与 JS 重载。
 func SyncSubStore(yamlData []byte) {
-	SyncSubStorePartial(yamlData, true, true, true, true)
+	store := currentLoonStore.Load()
+	if store == nil {
+		SyncSubStorePartial(yamlData, true, true, true, true)
+		return
+	}
+
+	curSig := buildFilesSyncSignature()
+	lastFilesSyncMu.Lock()
+	sigMatched := lastFilesSyncSig == curSig
+	lastFilesSyncMu.Unlock()
+
+	needMihomo := !sigMatched || !store.HasFile(MihomoName)
+	needSbLatest := !sigMatched || !store.HasFile(SingboxName+"-"+LatestSingboxVersion)
+	needSbOld := !sigMatched || !store.HasFile(SingboxName+"-"+ExtraSingboxVersion)
+
+	SyncSubStorePartial(yamlData, true, needMihomo, needSbLatest, needSbOld)
+
+	if store.HasFile(MihomoName) &&
+		store.HasFile(SingboxName+"-"+LatestSingboxVersion) &&
+		store.HasFile(SingboxName+"-"+ExtraSingboxVersion) {
+		lastFilesSyncMu.Lock()
+		lastFilesSyncSig = curSig
+		lastFilesSyncMu.Unlock()
+	}
 }
 
 // 判断是否需要做耗时的 GetGhProxy 探活

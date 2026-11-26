@@ -72,6 +72,31 @@ func envBoolDefault(key string, def bool) bool {
 	return b
 }
 
+// hasYAMLCommentLine 仅在存在真实 YAML 注释行（或非列表项行内的空白+#）时返回 true，
+// 避免节点名（如 "HK #1"）或 URL（如 "#noCache"）中的 # 误触发昂贵的 CommentToMap。
+func hasYAMLCommentLine(s string) bool {
+	for len(s) > 0 {
+		line := s
+		if nl := strings.IndexByte(s, '\n'); nl >= 0 {
+			line = s[:nl]
+			s = s[nl+1:]
+		} else {
+			s = ""
+		}
+		trimmed := strings.TrimLeft(line, " \t")
+		if len(trimmed) == 0 {
+			continue
+		}
+		if trimmed[0] == '#' {
+			return true
+		}
+		if trimmed[0] != '-' && (strings.Contains(trimmed, " #") || strings.Contains(trimmed, "\t#")) {
+			return true
+		}
+	}
+	return false
+}
+
 // goYAMLToJSON 将 YAML 转为 JSON 字符串供 JS 直接 JSON.parse；
 // 若传入 commentSink 且源 YAML 含注释，会提取安全路径（非数组下标）上的注释用于后续 dump 回填。
 func goYAMLToJSON(raw string, commentSink yaml.CommentMap) string {
@@ -88,7 +113,7 @@ func goYAMLToJSON(raw string, commentSink yaml.CommentMap) string {
 	normalized := normalizeClashShortIDForGo(raw)
 
 	var v any
-	if commentSink != nil && strings.Contains(normalized, "#") {
+	if commentSink != nil && hasYAMLCommentLine(normalized) {
 		cm := yaml.CommentMap{}
 		if err := yaml.UnmarshalWithOptions([]byte(normalized), &v, yaml.CommentToMap(cm)); err != nil {
 			return ""
