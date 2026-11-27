@@ -1,12 +1,21 @@
 # 适配 Glibc 动态链接
 FROM golang:1.27-bookworm AS builder
 
-# 安装 UPX（Debian 系列包名是 upx-ucl）
-RUN apt-get update -o Acquire::Check-Valid-Until=false \
-    && apt-get install -y wget xz-utils \
+# Debian 镜像地址，可通过构建参数替换
+ARG DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn
+
+# 安装 UPX
+RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) \
+    -exec sed -i \
+    -e "s|https\?://deb\.debian\.org/debian|${DEBIAN_MIRROR}/debian|g" \
+    -e "s|https\?://security\.debian\.org/debian-security|${DEBIAN_MIRROR}/debian-security|g" \
+    {} + \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends wget xz-utils \
     && wget https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-amd64_linux.tar.xz \
     && tar -xf upx-4.2.2-amd64_linux.tar.xz \
-    && mv upx-4.2.2-amd64_linux/upx /usr/local/bin/upx
+    && mv upx-4.2.2-amd64_linux/upx /usr/local/bin/upx \
+    && rm -rf upx-4.2.2-amd64_linux* /var/lib/apt/lists/*
 
 WORKDIR /src
 ENV GOPROXY=https://goproxy.cn,direct
