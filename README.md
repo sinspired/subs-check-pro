@@ -247,6 +247,30 @@ speed-test-url: https://custom-domain/speedtest?bytes=1073741824
 
 </details>
 
+## 🧠 内存监控与问题排查（可选）
+
+默认关闭。发现内存占用异常时，可在启动程序前设置环境变量 `SUB_CHECK_MEM_MONITOR` 开启。
+
+| 设置值  | 日志内容                                                     |
+| ------- | ------------------------------------------------------------ |
+| `1`     | 普通监控：应用内存、Go 堆；每 30 秒及每轮检测清理前后记录。  |
+| `debug` | 详细诊断：在普通监控基础上，增加 Go Runtime 和系统内存明细。 |
+
+Linux / macOS：
+
+```bash
+SUB_CHECK_MEM_MONITOR=1 ./subs-check-pro -f ./config/config.yaml
+```
+
+Windows PowerShell：
+
+```powershell
+$env:SUB_CHECK_MEM_MONITOR = "1"
+.\subs-check-pro.exe -f .\config\config.yaml
+```
+
+需要详细信息时，把 `1` 改为 `debug`
+
 ## ⚙️ Cloudflare Tunnel 外网访问
 
 完整配置请见 Wiki：[Cloudflare Tunnel](https://github.com/sinspired/subs-check-pro/wiki/Cloudflare-Tunnel)

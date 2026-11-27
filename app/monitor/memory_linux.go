@@ -9,31 +9,36 @@ import (
 	"strings"
 )
 
-// readProcessMemoryStats 读取 Linux 当前进程的驻留内存统计。
+// readProcessMemoryStats 读取 Linux 当前进程内存。
+// 主指标优先使用 smaps_rollup 的 Pss_Anon，避免把 ELF/共享库文件映射
+// 全额计入应用自身内存；老内核缺少该字段时退回 RssAnon。
 func readProcessMemoryStats() (processMemoryStats, error) {
 	var stats processMemoryStats
 
-	file, err := os.Open("/proc/self/status")
+	status, err := os.Open("/proc/self/status")
 	if err != nil {
 		return stats, err
 	}
-	defer file.Close()
+	defer status.Close()
 
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(status)
+	hasStatusAnon := false
 	for scanner.Scan() {
 		key, value, ok := parseProcMemoryLine(scanner.Text())
 		if !ok {
 			continue
 		}
-
 		switch key {
 		case "VmRSS:":
-			stats.WorkingSetBytes = value
-			stats.HasWorkingSet = true
+			stats.ResidentBytes = value
+			stats.HasResident = true
 		case "RssAnon:":
-			stats.AnonBytes = value
+			stats.RssAnonBytes = value
+			hasStatusAnon = true
 		case "RssFile:":
-			stats.FileBytes = value
+			stats.RssFileBytes = value
+		case "RssShmem:":
+			stats.RssShmemBytes = value
 		case "VmSwap:":
 			stats.SwapBytes = value
 		}
@@ -41,54 +46,65 @@ func readProcessMemoryStats() (processMemoryStats, error) {
 	if err := scanner.Err(); err != nil {
 		return stats, err
 	}
-	stats.HasLinuxBreakdown = true
 
-	// smaps_rollup 提供 PSS、USS 和共享驻留内存。
-	// 部分旧内核没有该文件，此时保留 /proc/self/status 中的数据。
-	file, err = os.Open("/proc/self/smaps_rollup")
-	if err != nil {
-		return stats, nil
+	// 先设置低版本内核的回退值，后续 smaps_rollup 有更准确字段时覆盖。
+	if hasStatusAnon {
+		stats.AppMemoryBytes = stats.RssAnonBytes
+		stats.AppMemoryMetric = "RssAnonFallback"
+		stats.AppMemoryLabel = "匿名驻留（兼容回退）"
+		stats.HasAppMemory = true
 	}
-	defer file.Close()
+	stats.HasLinuxDetail = true
 
-	scanner = bufio.NewScanner(file)
-	var privateClean, privateDirty uint64
-	var hasPrivateClean, hasPrivateDirty bool
+	rollup, err := os.Open("/proc/self/smaps_rollup")
+	if err != nil {
+		if stats.HasAppMemory || stats.HasResident {
+			return stats, nil
+		}
+		return stats, err
+	}
+	defer rollup.Close()
 
+	scanner = bufio.NewScanner(rollup)
+	var hasPSSAnon bool
 	for scanner.Scan() {
 		key, value, ok := parseProcMemoryLine(scanner.Text())
 		if !ok {
 			continue
 		}
-
 		switch key {
+		case "Rss:":
+			stats.ResidentBytes = value
+			stats.HasResident = true
 		case "Pss:":
 			stats.PSSBytes = value
-			stats.HasPSS = true
-		case "Private_Clean:":
-			privateClean = value
-			hasPrivateClean = true
-		case "Private_Dirty:":
-			privateDirty = value
-			hasPrivateDirty = true
+		case "Pss_Anon:":
+			stats.PSSAnonBytes = value
+			hasPSSAnon = true
+		case "Pss_File:":
+			stats.PSSFileBytes = value
+		case "Pss_Shmem:":
+			stats.PSSShmemBytes = value
 		case "LazyFree:":
 			stats.LazyFreeBytes = value
-			stats.HasLazyFree = true
+		case "Swap:":
+			stats.SwapBytes = value
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return stats, err
 	}
 
-	if hasPrivateClean || hasPrivateDirty {
-		stats.PrivateResidentBytes = privateClean + privateDirty
-		stats.HasPrivateResident = true
+	if hasPSSAnon {
+		stats.AppMemoryBytes = stats.PSSAnonBytes
+		stats.AppMemoryMetric = "Pss_Anon"
+		stats.AppMemoryLabel = "匿名驻留（PSS 分摊）"
+		stats.HasAppMemory = true
 	}
-
 	return stats, nil
 }
 
-// parseProcMemoryLine 解析 /proc 中以 kB 表示的内存统计行并转换为字节。
+// parseProcMemoryLine 解析 /proc 内存统计行，转换为字节。
 func parseProcMemoryLine(line string) (string, uint64, bool) {
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
@@ -100,5 +116,6 @@ func parseProcMemoryLine(line string) (string, uint64, bool) {
 		return "", 0, false
 	}
 
+	// /proc/status 和 smaps_rollup 的内存单位均为 kB。
 	return fields[0], value * 1024, true
 }
