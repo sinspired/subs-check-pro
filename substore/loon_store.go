@@ -23,12 +23,13 @@ import (
 var inlineNoCacheURLPattern = regexp.MustCompile(`https?://[^\s"'` + "`" + `<>]+`)
 
 type storeNoCacheInfo struct {
-	urls        map[string]struct{}
-	uas         []string
-	subNoCache  map[string]bool
-	colNoCache  map[string]bool
-	fileNoCache map[string]bool
-	fileNames   map[string]bool
+	urls             map[string]struct{}
+	uas              []string
+	subNoCache       map[string]bool
+	colNoCache       map[string]bool
+	fileNoCache      map[string]bool
+	fileNames        map[string]bool
+	hasPassThroughUA bool
 }
 
 type LoonKVStore struct {
@@ -318,6 +319,10 @@ func (s *LoonKVStore) NoCacheSnapshot() storeNoCacheInfo {
 	return info
 }
 
+func (s *LoonKVStore) HasPassThroughUA() bool {
+	return s.NoCacheSnapshot().hasPassThroughUA
+}
+
 func (s *LoonKVStore) TargetHasNoCache(strippedPath string) bool {
 	info := s.NoCacheSnapshot()
 
@@ -423,6 +428,9 @@ func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 			m, ok := item.(map[string]any)
 			if !ok {
 				continue
+			}
+			if ptua, ok := m["passThroughUA"].(bool); ok && ptua {
+				info.hasPassThroughUA = true
 			}
 			hasNC := collectNoCacheFromAny(m, info.urls, uaSet)
 			if hasNC {

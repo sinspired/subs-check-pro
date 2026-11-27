@@ -24,13 +24,15 @@ import (
 )
 
 const (
-	responseCacheTTL          = 15 * time.Minute
+	responseCacheFreshTTL     = 15 * time.Minute
 	responseCacheRefreshAhead = 5 * time.Minute
+	responseCacheStaleTTL     = 12 * time.Hour
 )
 
 type cachedResponse struct {
-	resp      *LoonHTTPResponse
-	expiresAt time.Time
+	resp       *LoonHTTPResponse
+	freshUntil time.Time
+	staleUntil time.Time
 }
 
 // LoonServer 现在只持有单个 engine
@@ -92,7 +94,7 @@ func (s *LoonServer) cleanupResponseCache() {
 			return
 		case now := <-ticker.C:
 			s.responseCache.Range(func(k, v any) bool {
-				if cached, ok := v.(cachedResponse); ok && now.After(cached.expiresAt) {
+				if entry, ok := v.(*cachedResponse); ok && now.After(entry.staleUntil) {
 					s.responseCache.Delete(k)
 				}
 				return true
@@ -134,6 +136,64 @@ func hasNoCacheRequest(r *http.Request) bool {
 	}
 	if strings.Contains(strings.ToLower(r.Header.Get("Pragma")), "no-cache") {
 		return true
+	}
+	return false
+}
+
+// detectSubStorePlatform 与 sub-store.min.js 的 UA 平台探测规则保持一致
+func detectSubStorePlatform(h http.Header) string {
+	ua := h.Get("User-Agent")
+	lowerUA := strings.ToLower(ua)
+	accept := h.Get("Accept")
+
+	switch {
+	case strings.Contains(ua, "Quantumult%20X"):
+		return "QX"
+	case strings.Contains(lowerUA, "egern"):
+		return "Egern"
+	case strings.Contains(ua, "Surfboard"):
+		return "Surfboard"
+	case strings.Contains(ua, "Surge Mac"):
+		return "SurgeMac"
+	case strings.Contains(ua, "Surge"):
+		return "Surge"
+	case strings.Contains(ua, "Decar"), strings.Contains(ua, "Loon"):
+		return "Loon"
+	case strings.Contains(ua, "Shadowrocket"):
+		return "Shadowrocket"
+	case strings.Contains(ua, "Stash"):
+		return "Stash"
+	case lowerUA == "meta",
+		strings.Contains(lowerUA, "clash") && strings.Contains(lowerUA, "meta"),
+		strings.Contains(lowerUA, "clash-verge"),
+		strings.Contains(lowerUA, "flclash"):
+		return "ClashMeta"
+	case strings.Contains(lowerUA, "clash"):
+		return "Clash"
+	case strings.Contains(lowerUA, "v2ray"):
+		return "V2Ray"
+	case strings.Contains(lowerUA, "sing-box"), strings.Contains(lowerUA, "singbox"):
+		return "sing-box"
+	case strings.HasPrefix(accept, "application/json"):
+		return "JSON"
+	default:
+		return "V2Ray"
+	}
+}
+
+func hasExplicitTarget(strippedPath string, q url.Values) bool {
+	if strings.TrimSpace(q.Get("target")) != "" || strings.TrimSpace(q.Get("platform")) != "" {
+		return true
+	}
+	if rest, ok := strings.CutPrefix(strippedPath, "/download/collection/"); ok {
+		return strings.Contains(strings.Trim(rest, "/"), "/")
+	}
+	if rest, ok := strings.CutPrefix(strippedPath, "/download/"); ok {
+		return strings.Contains(strings.Trim(rest, "/"), "/")
+	}
+	if rest, ok := strings.CutPrefix(strippedPath, "/share/"); ok {
+		parts := strings.Split(strings.Trim(rest, "/"), "/")
+		return len(parts) >= 3 && parts[2] != ""
 	}
 	return false
 }
@@ -244,6 +304,7 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 	engine := s.engine.Load()
 	reqNoCache := hasNoCacheRequest(r)
 	targetNoCache := engine != nil && engine.store != nil && engine.store.TargetHasNoCache(strippedPath)
+	isWarmup := r.Header.Get("X-SubStore-Warmup") == "1"
 
 	if reqNoCache || targetNoCache {
 		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -251,7 +312,7 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	detach := (isReadMethod || r.Method == http.MethodPost) && (isDownloadOrFile || isSyncAction)
-	// 仅对幂等只读下载/文件查询且未启用 noCache 时启用 Go 层 15 分钟缓存
+	// 仅对幂等只读下载/文件查询且未启用 noCache 时启用 Go 层 SWR 缓存
 	cacheable := isReadMethod && isDownloadOrFile && !reqNoCache && !targetNoCache
 
 	isMutation := r.Method == http.MethodPut ||
@@ -264,17 +325,38 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 	var resp *LoonHTTPResponse
 	if detach {
 		var cfgVer uint64
+		hasPassThroughUA := false
 		if engine != nil && engine.store != nil {
 			cfgVer = engine.store.ConfigVersion()
+			hasPassThroughUA = engine.store.HasPassThroughUA()
 		}
-		key := fmt.Sprintf("%s|%s|%s|%s|%d", r.Method, fullURL, r.Header.Get("User-Agent"), argument, cfgVer)
+
+		// 归一化缓存 Key：剥离 Host 和 cors Origin，并在安全时按目标/平台收敛 UA，
+		// 使 Cron 预热、测速后预热与不同来源的客户端共享同一份缓存。
+		uaKey := r.Header.Get("User-Agent")
+		if !hasPassThroughUA {
+			if strings.HasPrefix(strippedPath, "/api/file/") || strings.HasPrefix(strippedPath, "/share/file/") {
+				uaKey = "*"
+			} else if hasExplicitTarget(strippedPath, r.URL.Query()) {
+				uaKey = "*"
+			} else {
+				uaKey = "plat:" + detectSubStorePlatform(r.Header)
+			}
+		}
+
+		reqPathWithQuery := strippedPath
+		if r.URL.RawQuery != "" {
+			reqPathWithQuery += "?" + r.URL.RawQuery
+		}
+
+		key := fmt.Sprintf("%s|%s|%s|%d", r.Method, reqPathWithQuery, uaKey, cfgVer)
 		if reqNoCache {
 			key += "|nc"
 		}
 		if r.Method == http.MethodPost {
 			key += "|" + req.Body
 		}
-		resp, err = s.executeDetached(r.Context(), key, req, argument, cacheable)
+		resp, err = s.executeDetached(r.Context(), key, req, argument, cacheable, isWarmup)
 	} else {
 		if engine == nil {
 			err = fmt.Errorf("Sub-Store 引擎未初始化")
@@ -478,7 +560,22 @@ func (s *LoonServer) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-func (s *LoonServer) startInflightLocked(key string, req *LoonHTTPRequest, argument string, cacheable bool, startGen uint64) *inflightCall {
+// releaseIdleWorkersIfEmpty 在后台预热/续期任务彻底收尾且无并发任务时，立即释放 QuickJS CGo 堆内存。
+func (s *LoonServer) releaseIdleWorkersIfEmpty() {
+	time.AfterFunc(250*time.Millisecond, func() {
+		if s.baseCtx.Err() != nil {
+			return
+		}
+		s.inflightMu.Lock()
+		empty := len(s.inflight) == 0
+		s.inflightMu.Unlock()
+		if empty {
+			ReleaseIdleWorkers()
+		}
+	})
+}
+
+func (s *LoonServer) startInflightLocked(key string, req *LoonHTTPRequest, argument string, cacheable bool, isWarmup bool, startGen uint64) *inflightCall {
 	call := &inflightCall{done: make(chan struct{})}
 	s.inflight[key] = call
 	engine := s.engine.Load()
@@ -489,8 +586,13 @@ func (s *LoonServer) startInflightLocked(key string, req *LoonHTTPRequest, argum
 			}
 			s.inflightMu.Lock()
 			delete(s.inflight, key)
+			empty := len(s.inflight) == 0
 			s.inflightMu.Unlock()
 			close(call.done)
+
+			if isWarmup && empty {
+				s.releaseIdleWorkersIfEmpty()
+			}
 		}()
 
 		if engine == nil {
@@ -502,9 +604,11 @@ func (s *LoonServer) startInflightLocked(key string, req *LoonHTTPRequest, argum
 		if cacheable && call.err == nil && call.resp != nil &&
 			call.resp.Status >= 200 && call.resp.Status < 400 &&
 			s.cacheGen.Load() == startGen {
-			s.responseCache.Store(key, cachedResponse{
-				resp:      call.resp,
-				expiresAt: time.Now().Add(responseCacheTTL),
+			now := time.Now()
+			s.responseCache.Store(key, &cachedResponse{
+				resp:       call.resp,
+				freshUntil: now.Add(responseCacheFreshTTL),
+				staleUntil: now.Add(responseCacheStaleTTL),
 			})
 		}
 
@@ -518,23 +622,28 @@ func (s *LoonServer) startInflightLocked(key string, req *LoonHTTPRequest, argum
 func (s *LoonServer) triggerBackgroundRefresh(key string, req *LoonHTTPRequest, argument string, startGen uint64) {
 	s.inflightMu.Lock()
 	if _, exists := s.inflight[key]; !exists {
-		s.startInflightLocked(key, req, argument, true, startGen)
+		s.startInflightLocked(key, req, argument, true, true, startGen)
 	}
 	s.inflightMu.Unlock()
 }
 
 // executeDetached 在与客户端连接无关的 Context 中执行脚本，并合并相同 key 的并发请求。
-func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req *LoonHTTPRequest, argument string, cacheable bool) (*LoonHTTPResponse, error) {
+func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req *LoonHTTPRequest, argument string, cacheable bool, isWarmup bool) (*LoonHTTPResponse, error) {
 	startGen := s.cacheGen.Load()
-	if cacheable {
+	if cacheable && !isWarmup {
 		if val, ok := s.responseCache.Load(key); ok {
-			cached := val.(cachedResponse)
+			entry := val.(*cachedResponse)
 			now := time.Now()
-			if now.Before(cached.expiresAt) {
-				if cached.expiresAt.Sub(now) <= responseCacheRefreshAhead {
+			if now.Before(entry.freshUntil) {
+				if entry.freshUntil.Sub(now) <= responseCacheRefreshAhead {
 					s.triggerBackgroundRefresh(key, req, argument, startGen)
 				}
-				return cached.resp, nil
+				return entry.resp, nil
+			}
+			// SWR 宽容期：配置未变（cfgVer 一致）且未超 12 小时，先毫秒级返回上一版并后台静默刷新
+			if now.Before(entry.staleUntil) {
+				s.triggerBackgroundRefresh(key, req, argument, startGen)
+				return entry.resp, nil
 			}
 			s.responseCache.Delete(key)
 		}
@@ -543,7 +652,7 @@ func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req 
 	s.inflightMu.Lock()
 	call, ok := s.inflight[key]
 	if !ok {
-		call = s.startInflightLocked(key, req, argument, cacheable, startGen)
+		call = s.startInflightLocked(key, req, argument, cacheable, isWarmup, startGen)
 	}
 	s.inflightMu.Unlock()
 
@@ -573,6 +682,7 @@ func callLocalSubStore(task, target string) {
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Subs-Check-Pro-Cron/1.0")
 	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("X-SubStore-Warmup", "1")
 
 	resp, err := cronHTTPClient.Do(req)
 	if err != nil {
@@ -614,6 +724,114 @@ func callLocalSubStore(task, target string) {
 	slog.Debug("定时任务执行成功", "task", task)
 }
 
+type produceCronTarget struct {
+	cronExpr string
+	typ      string
+	name     string
+	url      string
+}
+
+func escapePathSegments(s string) string {
+	parts := strings.Split(s, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
+}
+
+func parseProduceCronTargets(apiBase, produceCronStr string) []produceCronTarget {
+	if produceCronStr == "" {
+		return nil
+	}
+	var out []produceCronTarget
+	for taskStr := range strings.SplitSeq(produceCronStr, ";") {
+		taskStr = strings.TrimSpace(taskStr)
+		if taskStr == "" {
+			continue
+		}
+
+		parts := strings.Split(taskStr, ",")
+		if len(parts) < 3 {
+			slog.Error("Sub-Store Produce Cron 配置格式错误(参数不足)", "task", taskStr)
+			continue
+		}
+
+		var cronExpr, typ, namesStr string
+		for i := 1; i < len(parts)-1; i++ {
+			t := strings.TrimSpace(parts[i])
+			if t == "sub" || t == "col" || t == "file" {
+				cronExpr = strings.TrimSpace(strings.Join(parts[:i], ","))
+				typ = t
+				namesStr = strings.TrimSpace(strings.Join(parts[i+1:], ","))
+				break
+			}
+		}
+
+		if typ == "" {
+			slog.Error("Sub-Store Produce Cron 配置格式错误(未找到 sub、col 或 file 类型标识)", "task", taskStr)
+			continue
+		}
+
+		for name := range strings.SplitSeq(namesStr, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+
+			var targetURL string
+			switch typ {
+			case "col":
+				targetURL = apiBase + "/download/collection/" + escapePathSegments(name)
+			case "file":
+				targetURL = apiBase + "/api/file/" + url.PathEscape(name)
+			default:
+				targetURL = apiBase + "/download/" + escapePathSegments(name)
+			}
+			out = append(out, produceCronTarget{
+				cronExpr: cronExpr,
+				typ:      typ,
+				name:     name,
+				url:      targetURL,
+			})
+		}
+	}
+	return out
+}
+
+// TriggerSubStoreProduceWarmup 在节点/订阅同步完成后，后台立即预热已配置的 ProduceCron 目标
+func TriggerSubStoreProduceWarmup() {
+	if !IsSubStoreRunning.Load() || currentLoonServer.Load() == nil {
+		return
+	}
+	produceCronStr := strings.TrimSpace(config.GlobalConfig.SubStoreProduceCron)
+	if produceCronStr == "" {
+		return
+	}
+	subPortOnly := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
+	if subPortOnly == "" {
+		return
+	}
+	apiBase := fmt.Sprintf("http://127.0.0.1:%s%s", subPortOnly, InitSubStorePath)
+	targets := parseProduceCronTargets(apiBase, produceCronStr)
+	if len(targets) == 0 {
+		return
+	}
+
+	go func() {
+		seen := make(map[string]struct{}, len(targets))
+		for _, tgt := range targets {
+			if !IsSubStoreRunning.Load() {
+				return
+			}
+			if _, ok := seen[tgt.url]; ok {
+				continue
+			}
+			seen[tgt.url] = struct{}{}
+			callLocalSubStore("同步后预热"+"「"+tgt.name+"」", tgt.url)
+		}
+	}()
+}
+
 func StartSubStoreCronJobs(serverPort string, backendPath string) *cron.Cron {
 	c := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DiscardLogger)))
 
@@ -635,64 +853,16 @@ func StartSubStoreCronJobs(serverPort string, backendPath string) *cron.Cron {
 	}
 
 	produceCronStr := strings.TrimSpace(config.GlobalConfig.SubStoreProduceCron)
-	if produceCronStr != "" {
-		tasks := strings.SplitSeq(produceCronStr, ";")
-		for taskStr := range tasks {
-			taskStr = strings.TrimSpace(taskStr)
-			if taskStr == "" {
-				continue
-			}
-
-			parts := strings.Split(taskStr, ",")
-			if len(parts) < 3 {
-				slog.Error("Sub-Store Produce Cron 配置格式错误(参数不足)", "task", taskStr)
-				continue
-			}
-
-			var cronExpr, typ, namesStr string
-			for i := 1; i < len(parts)-1; i++ {
-				t := strings.TrimSpace(parts[i])
-				if t == "sub" || t == "col" || t == "file" {
-					cronExpr = strings.TrimSpace(strings.Join(parts[:i], ","))
-					typ = t
-					namesStr = strings.TrimSpace(strings.Join(parts[i+1:], ","))
-					break
-				}
-			}
-
-			if typ == "" {
-				slog.Error("Sub-Store Produce Cron 配置格式错误(未找到 sub、col 或 file 类型标识)", "task", taskStr)
-				continue
-			}
-
-			names := strings.SplitSeq(namesStr, ",")
-			for name := range names {
-				name = strings.TrimSpace(name)
-				if name == "" {
-					continue
-				}
-
-				n := name
-				t := typ
-				_, err := c.AddFunc(cronExpr, func() {
-					slog.Debug("触发定时: 缓存订阅", "type", t, "name", n)
-					var targetURL string
-					switch t {
-					case "col":
-						targetURL = apiBase + "/download/collection/" + url.PathEscape(n)
-					case "file":
-						targetURL = apiBase + "/api/file/" + url.PathEscape(n)
-					default:
-						targetURL = apiBase + "/download/" + url.PathEscape(n)
-					}
-					callLocalSubStore("缓存订阅"+"「"+n+"」", targetURL)
-				})
-				if err != nil {
-					slog.Error("解析 Produce Cron 配置失败", "err", err, "expr", cronExpr, "name", n)
-				} else {
-					hasTask = true
-				}
-			}
+	for _, tgt := range parseProduceCronTargets(apiBase, produceCronStr) {
+		target := tgt
+		_, err := c.AddFunc(target.cronExpr, func() {
+			slog.Debug("触发定时: 缓存订阅", "type", target.typ, "name", target.name)
+			callLocalSubStore("缓存订阅"+"「"+target.name+"」", target.url)
+		})
+		if err != nil {
+			slog.Error("解析 Produce Cron 配置失败", "err", err, "expr", target.cronExpr, "name", target.name)
+		} else {
+			hasTask = true
 		}
 	}
 

@@ -1099,74 +1099,83 @@ func needGhProxy(doSub, doMihomo, doSbLatest, doSbOld bool) bool {
 
 // SyncSubStorePartial 按需精准同步指定的配置 (供 API 调用)
 func SyncSubStorePartial(yamlData []byte, doSub, doMihomo, doSbLatest, doSbOld bool) {
-	subStoreMu.Lock()
-	defer subStoreMu.Unlock()
+	subOK := !doSub
+	func() {
+		subStoreMu.Lock()
+		defer subStoreMu.Unlock()
 
-	// 只有涉及到这几者才做耗时的 GetGhProxy 探活
-	if needGhProxy(doSub, doMihomo, doSbLatest, doSbOld) {
-		IsGithubProxy = utils.GetGhProxy()
-	}
-
-	// 调试时等待 node 启动
-	if os.Getenv("SUB_CHECK_SKIP") != "" && config.GlobalConfig.SubStorePort != "" {
-		time.Sleep(time.Second * 1)
-	}
-
-	// 构建订阅流量信息 URL
-	listenPort := strings.TrimSpace(config.GlobalConfig.ListenPort)
-	if listenPort == "" {
-		listenPort = "8199"
-	}
-	listenPort = strings.TrimPrefix(listenPort, ":")
-	SubUserInfoURL = fmt.Sprintf("http://127.0.0.1:%s%s#noCache", listenPort, SubInfoPath)
-
-	config.GlobalConfig.SubStorePort = formatPort(config.GlobalConfig.SubStorePort)
-	BaseURL = fmt.Sprintf("http://127.0.0.1%s", config.GlobalConfig.SubStorePort)
-	if p := config.GlobalConfig.SubStorePath; p != "" {
-		if !strings.HasPrefix(p, "/") {
-			config.GlobalConfig.SubStorePath = "/" + p
+		// 只有涉及到这几者才做耗时的 GetGhProxy 探活
+		if needGhProxy(doSub, doMihomo, doSbLatest, doSbOld) {
+			IsGithubProxy = utils.GetGhProxy()
 		}
-		BaseURL += config.GlobalConfig.SubStorePath
-	}
 
-	// --- 1. sub ---
-	if doSub {
-		defaultSub := newDefaultSub(yamlData)
-		if err := syncSub(defaultSub); err != nil {
-			slog.Error("同步订阅失败", "name", defaultSub.Name, "error", err)
-			return
+		// 调试时等待 node 启动
+		if os.Getenv("SUB_CHECK_SKIP") != "" && config.GlobalConfig.SubStorePort != "" {
+			time.Sleep(time.Second * 1)
 		}
-		slog.Info("Sub-Store 订阅已同步", "name", defaultSub.Name)
-	}
 
-	// --- 2. mihomo ---
-	if doMihomo {
-		if err := newMihomoFile().syncSubStoreFile(); err != nil {
-			slog.Warn("mihomo 订阅同步失败", "error", err)
+		// 构建订阅流量信息 URL
+		listenPort := strings.TrimSpace(config.GlobalConfig.ListenPort)
+		if listenPort == "" {
+			listenPort = "8199"
 		}
-	}
+		listenPort = strings.TrimPrefix(listenPort, ":")
+		SubUserInfoURL = fmt.Sprintf("http://127.0.0.1:%s%s#noCache", listenPort, SubInfoPath)
 
-	// --- 3. singbox ---
-	if doSbLatest || doSbOld {
-		InitSingboxVersion()
-	}
-
-	if doSbLatest {
-		if err := processSingboxFile(&config.GlobalConfig.SingboxLatest, latestSingboxJS, latestSingboxJSON, LatestSingboxVersion); err != nil {
-			name := SingboxName + "-" + LatestSingboxVersion
-			slog.Warn(name+"订阅同步失败", "error", err)
+		config.GlobalConfig.SubStorePort = formatPort(config.GlobalConfig.SubStorePort)
+		BaseURL = fmt.Sprintf("http://127.0.0.1%s", config.GlobalConfig.SubStorePort)
+		if p := config.GlobalConfig.SubStorePath; p != "" {
+			if !strings.HasPrefix(p, "/") {
+				config.GlobalConfig.SubStorePath = "/" + p
+			}
+			BaseURL += config.GlobalConfig.SubStorePath
 		}
-	}
 
-	if doSbOld {
-		if err := processSingboxFile(&config.GlobalConfig.SingboxExtra, ExtraSingboxJS, ExtraSingboxJSON, ExtraSingboxVersion); err != nil {
-			name := SingboxName + "-" + ExtraSingboxVersion
-			slog.Warn(name+"订阅同步失败", "error", err)
+		// --- 1. sub ---
+		if doSub {
+			defaultSub := newDefaultSub(yamlData)
+			if err := syncSub(defaultSub); err != nil {
+				slog.Error("同步订阅失败", "name", defaultSub.Name, "error", err)
+				return
+			}
+			subOK = true
+			slog.Info("Sub-Store 订阅已同步", "name", defaultSub.Name)
 		}
-	}
 
-	if doSub || doMihomo || doSbLatest || doSbOld {
-		slog.Info("Sub-Store 同步完成")
+		// --- 2. mihomo ---
+		if doMihomo {
+			if err := newMihomoFile().syncSubStoreFile(); err != nil {
+				slog.Warn("mihomo 订阅同步失败", "error", err)
+			}
+		}
+
+		// --- 3. singbox ---
+		if doSbLatest || doSbOld {
+			InitSingboxVersion()
+		}
+
+		if doSbLatest {
+			if err := processSingboxFile(&config.GlobalConfig.SingboxLatest, latestSingboxJS, latestSingboxJSON, LatestSingboxVersion); err != nil {
+				name := SingboxName + "-" + LatestSingboxVersion
+				slog.Warn(name+"订阅同步失败", "error", err)
+			}
+		}
+
+		if doSbOld {
+			if err := processSingboxFile(&config.GlobalConfig.SingboxExtra, ExtraSingboxJS, ExtraSingboxJSON, ExtraSingboxVersion); err != nil {
+				name := SingboxName + "-" + ExtraSingboxVersion
+				slog.Warn(name+"订阅同步失败", "error", err)
+			}
+		}
+
+		if doSub || doMihomo || doSbLatest || doSbOld {
+			slog.Info("Sub-Store 同步完成")
+		}
+	}()
+
+	// 解锁后立即后台预热 ProduceCron 配置的目标，使测速更新后首访即命中热缓存
+	if subOK && (doSub || doMihomo || doSbLatest || doSbOld) {
+		TriggerSubStoreProduceWarmup()
 	}
 }
 
