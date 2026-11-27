@@ -23,6 +23,11 @@ import (
 	"github.com/sinspired/subs-check-pro/v3/config"
 )
 
+const (
+	responseCacheTTL          = 15 * time.Minute
+	responseCacheRefreshAhead = 5 * time.Minute
+)
+
 type cachedResponse struct {
 	resp      *LoonHTTPResponse
 	expiresAt time.Time
@@ -44,8 +49,9 @@ type LoonServer struct {
 	inflightMu sync.Mutex
 	inflight   map[string]*inflightCall
 
-	// 结果缓存器
+	// 结果缓存器（配合 cacheGen 防止并发清理/更新时旧任务回写过期结果）
 	responseCache sync.Map
+	cacheGen      atomic.Uint64
 }
 
 type inflightCall struct {
@@ -63,6 +69,7 @@ func NewLoonServer(addr string, engine *LoonEngine, frontendDir, backendPath str
 		baseCancel:  baseCancel,
 		inflight:    make(map[string]*inflightCall),
 	}
+	s.cacheGen.Store(1)
 	s.engine.Store(engine)
 	go s.cleanupResponseCache()
 
@@ -95,6 +102,7 @@ func (s *LoonServer) cleanupResponseCache() {
 }
 
 func (s *LoonServer) clearResponseCache() {
+	s.cacheGen.Add(1)
 	s.responseCache.Range(func(k, _ any) bool {
 		s.responseCache.Delete(k)
 		return true
@@ -243,13 +251,14 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	detach := (isReadMethod || r.Method == http.MethodPost) && (isDownloadOrFile || isSyncAction)
-	// 仅对幂等只读下载/文件查询且未启用 noCache 时启用 60 秒短效缓存
+	// 仅对幂等只读下载/文件查询且未启用 noCache 时启用 Go 层 15 分钟缓存
 	cacheable := isReadMethod && isDownloadOrFile && !reqNoCache && !targetNoCache
 
 	isMutation := r.Method == http.MethodPut ||
 		r.Method == http.MethodPatch ||
 		r.Method == http.MethodDelete ||
 		(r.Method == http.MethodPost && !strings.HasPrefix(strippedPath, "/api/preview/")) ||
+		strings.HasPrefix(strippedPath, "/api/artifacts/restore") ||
 		(strings.HasPrefix(strippedPath, "/api/utils/") && !strings.HasPrefix(strippedPath, "/api/utils/env"))
 
 	var resp *LoonHTTPResponse
@@ -259,12 +268,19 @@ func (s *LoonServer) handleBackend(w http.ResponseWriter, r *http.Request) {
 			cfgVer = engine.store.ConfigVersion()
 		}
 		key := fmt.Sprintf("%s|%s|%s|%s|%d", r.Method, fullURL, r.Header.Get("User-Agent"), argument, cfgVer)
+		if reqNoCache {
+			key += "|nc"
+		}
 		if r.Method == http.MethodPost {
 			key += "|" + req.Body
 		}
 		resp, err = s.executeDetached(r.Context(), key, req, argument, cacheable)
 	} else {
-		resp, err = engine.Execute(r.Context(), req, argument)
+		if engine == nil {
+			err = fmt.Errorf("Sub-Store 引擎未初始化")
+		} else {
+			resp, err = engine.Execute(r.Context(), req, argument)
+		}
 	}
 	if err != nil {
 		if r.Context().Err() != nil {
@@ -462,12 +478,62 @@ func (s *LoonServer) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
+func (s *LoonServer) startInflightLocked(key string, req *LoonHTTPRequest, argument string, cacheable bool, startGen uint64) *inflightCall {
+	call := &inflightCall{done: make(chan struct{})}
+	s.inflight[key] = call
+	engine := s.engine.Load()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				call.err = fmt.Errorf("脚本执行异常: %v", r)
+			}
+			s.inflightMu.Lock()
+			delete(s.inflight, key)
+			s.inflightMu.Unlock()
+			close(call.done)
+		}()
+
+		if engine == nil {
+			call.err = fmt.Errorf("Sub-Store 引擎未初始化")
+		} else {
+			call.resp, call.err = engine.Execute(s.baseCtx, req, argument)
+		}
+
+		if cacheable && call.err == nil && call.resp != nil &&
+			call.resp.Status >= 200 && call.resp.Status < 400 &&
+			s.cacheGen.Load() == startGen {
+			s.responseCache.Store(key, cachedResponse{
+				resp:      call.resp,
+				expiresAt: time.Now().Add(responseCacheTTL),
+			})
+		}
+
+		if call.err != nil {
+			slog.Debug("后台脱机任务执行失败", "url", req.URL, "err", call.err)
+		}
+	}()
+	return call
+}
+
+func (s *LoonServer) triggerBackgroundRefresh(key string, req *LoonHTTPRequest, argument string, startGen uint64) {
+	s.inflightMu.Lock()
+	if _, exists := s.inflight[key]; !exists {
+		s.startInflightLocked(key, req, argument, true, startGen)
+	}
+	s.inflightMu.Unlock()
+}
+
 // executeDetached 在与客户端连接无关的 Context 中执行脚本，并合并相同 key 的并发请求。
 func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req *LoonHTTPRequest, argument string, cacheable bool) (*LoonHTTPResponse, error) {
+	startGen := s.cacheGen.Load()
 	if cacheable {
 		if val, ok := s.responseCache.Load(key); ok {
 			cached := val.(cachedResponse)
-			if time.Now().Before(cached.expiresAt) {
+			now := time.Now()
+			if now.Before(cached.expiresAt) {
+				if cached.expiresAt.Sub(now) <= responseCacheRefreshAhead {
+					s.triggerBackgroundRefresh(key, req, argument, startGen)
+				}
 				return cached.resp, nil
 			}
 			s.responseCache.Delete(key)
@@ -477,33 +543,7 @@ func (s *LoonServer) executeDetached(clientCtx context.Context, key string, req 
 	s.inflightMu.Lock()
 	call, ok := s.inflight[key]
 	if !ok {
-		call = &inflightCall{done: make(chan struct{})}
-		s.inflight[key] = call
-		engine := s.engine.Load()
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					call.err = fmt.Errorf("脚本执行异常: %v", r)
-				}
-				s.inflightMu.Lock()
-				delete(s.inflight, key)
-				s.inflightMu.Unlock()
-				close(call.done)
-			}()
-
-			call.resp, call.err = engine.Execute(s.baseCtx, req, argument)
-
-			if cacheable && call.err == nil && call.resp != nil && call.resp.Status >= 200 && call.resp.Status < 400 {
-				s.responseCache.Store(key, cachedResponse{
-					resp:      call.resp,
-					expiresAt: time.Now().Add(15 * time.Minute),
-				})
-			}
-
-			if call.err != nil {
-				slog.Debug("后台脱机任务执行失败", "url", req.URL, "err", call.err)
-			}
-		}()
+		call = s.startInflightLocked(key, req, argument, cacheable, startGen)
 	}
 	s.inflightMu.Unlock()
 
@@ -612,7 +652,7 @@ func StartSubStoreCronJobs(serverPort string, backendPath string) *cron.Cron {
 			var cronExpr, typ, namesStr string
 			for i := 1; i < len(parts)-1; i++ {
 				t := strings.TrimSpace(parts[i])
-				if t == "sub" || t == "col" {
+				if t == "sub" || t == "col" || t == "file" {
 					cronExpr = strings.TrimSpace(strings.Join(parts[:i], ","))
 					typ = t
 					namesStr = strings.TrimSpace(strings.Join(parts[i+1:], ","))
@@ -621,7 +661,7 @@ func StartSubStoreCronJobs(serverPort string, backendPath string) *cron.Cron {
 			}
 
 			if typ == "" {
-				slog.Error("Sub-Store Produce Cron 配置格式错误(未找到 sub 或 col 类型标识)", "task", taskStr)
+				slog.Error("Sub-Store Produce Cron 配置格式错误(未找到 sub、col 或 file 类型标识)", "task", taskStr)
 				continue
 			}
 
@@ -636,9 +676,14 @@ func StartSubStoreCronJobs(serverPort string, backendPath string) *cron.Cron {
 				t := typ
 				_, err := c.AddFunc(cronExpr, func() {
 					slog.Debug("触发定时: 缓存订阅", "type", t, "name", n)
-					targetURL := apiBase + "/download/" + url.PathEscape(n)
-					if t == "col" {
+					var targetURL string
+					switch t {
+					case "col":
 						targetURL = apiBase + "/download/collection/" + url.PathEscape(n)
+					case "file":
+						targetURL = apiBase + "/api/file/" + url.PathEscape(n)
+					default:
+						targetURL = apiBase + "/download/" + url.PathEscape(n)
 					}
 					callLocalSubStore("缓存订阅"+"「"+n+"」", targetURL)
 				})

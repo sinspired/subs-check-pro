@@ -399,7 +399,25 @@ func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 	}
 
 	uaSet := make(map[string]struct{})
+	var rawGithubProxy, githubProxy string
+	if settings, ok := root["settings"].(map[string]any); ok {
+		if dua, ok := settings["defaultUserAgent"].(string); ok {
+			if trimmed := strings.TrimSpace(dua); trimmed != "" {
+				uaSet[trimmed] = struct{}{}
+			}
+		}
+		if dfua, ok := settings["defaultFlowUserAgent"].(string); ok {
+			if trimmed := strings.TrimSpace(dfua); trimmed != "" {
+				uaSet[trimmed] = struct{}{}
+			}
+		}
+		if gp, ok := settings["githubProxy"].(string); ok {
+			rawGithubProxy = strings.TrimSpace(gp)
+			githubProxy = strings.TrimRight(rawGithubProxy, "/")
+		}
+	}
 
+	noCacheSubTags := make(map[string]bool)
 	if subs, ok := root["subs"].([]any); ok {
 		for _, item := range subs {
 			m, ok := item.(map[string]any)
@@ -407,8 +425,17 @@ func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 				continue
 			}
 			hasNC := collectNoCacheFromAny(m, info.urls, uaSet)
-			if name, _ := m["name"].(string); name != "" && hasNC {
-				info.subNoCache[name] = true
+			if hasNC {
+				if name, _ := m["name"].(string); name != "" {
+					info.subNoCache[name] = true
+				}
+				if tags, ok := m["tag"].([]any); ok {
+					for _, t := range tags {
+						if ts, ok := t.(string); ok && ts != "" {
+							noCacheSubTags[ts] = true
+						}
+					}
+				}
 			}
 		}
 	}
@@ -424,6 +451,16 @@ func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 				if subNames, ok := m["subscriptions"].([]any); ok {
 					for _, sn := range subNames {
 						if name, ok := sn.(string); ok && info.subNoCache[name] {
+							hasNC = true
+							break
+						}
+					}
+				}
+			}
+			if !hasNC && len(noCacheSubTags) > 0 {
+				if subTags, ok := m["subscriptionTags"].([]any); ok {
+					for _, st := range subTags {
+						if ts, ok := st.(string); ok && noCacheSubTags[ts] {
 							hasNC = true
 							break
 						}
@@ -496,6 +533,38 @@ func buildStoreNoCacheInfo(raw string) storeNoCacheInfo {
 					info.fileNoCache[name] = true
 				}
 			}
+		}
+	}
+
+	if len(info.urls) > 0 {
+		expanded := make([]string, 0, len(info.urls)*3)
+		for u := range info.urls {
+			if githubProxy != "" &&
+				(strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")) &&
+				!strings.HasPrefix(u, githubProxy+"/") {
+				expanded = append(expanded, githubProxy+"/"+u)
+				if rawGithubProxy != githubProxy {
+					expanded = append(expanded, rawGithubProxy+"/"+u)
+				}
+			}
+			if len(u) > 8 {
+				for _, scheme := range []string{"https://", "http://"} {
+					if idx := strings.Index(u[8:], scheme); idx > 0 {
+						inner := u[8+idx:]
+						expanded = append(expanded, inner)
+						if githubProxy != "" && !strings.HasPrefix(inner, githubProxy+"/") {
+							expanded = append(expanded, githubProxy+"/"+inner)
+							if rawGithubProxy != githubProxy {
+								expanded = append(expanded, rawGithubProxy+"/"+inner)
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+		for _, eu := range expanded {
+			info.urls[eu] = struct{}{}
 		}
 	}
 

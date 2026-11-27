@@ -102,6 +102,7 @@ type activeReqState struct {
 	noCacheURLs        map[string]struct{}
 	extraUASet         map[string]struct{}
 	maskedCacheEntries map[string]map[string]json.RawMessage
+	selfCacheWrites    atomic.Uint64
 	timersMu           sync.Mutex
 	goTimers           map[string]*time.Timer
 	yamlComments       yaml.CommentMap
@@ -156,16 +157,16 @@ var (
 	jsPoolMu   sync.Mutex
 	jsPoolIdle []*jsWorkerSlot
 
-	rePatchAppStart        = regexp.MustCompile(`([A-Za-z0-9_$]+\.start)\s*=\s*\(\s*\)\s*=>\s*\{\s*([A-Za-z0-9_$]+)\(\$request\)\s*\}`)
-	rePatchYAMLWrap        = regexp.MustCompile(`(\{\s*safeLoad\s*:\s*[A-Za-z0-9_$]+\s*,\s*load\s*:\s*[A-Za-z0-9_$]+\s*,\s*safeDump\s*:\s*[A-Za-z0-9_$]+\s*,\s*dump\s*:\s*[A-Za-z0-9_$]+\s*,\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})`)
-	rePatchJSON5           = regexp.MustCompile(`(\{\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})(\s*,\s*[A-Za-z0-9_$]+\s*=\s*[A-Za-z0-9_$]+\s*,\s*[A-Za-z0-9_$]+\s*=\s*[A-Za-z0-9_$]+\s*;\s*return\s+[A-Za-z0-9_$]+)`)
-	rePatchStore           = regexp.MustCompile(`=\s*new\s+([A-Za-z0-9_$]+)\(\s*["']sub-store["']\s*\)`)
-	rePatchRCache          = regexp.MustCompile(`this\._cleanup\(\)\s*;?\s*\}`)
-	rePatchShortID         = regexp.MustCompile(`if\s*\(\s*typeof ([A-Za-z0-9_$]+)\s*!==?\s*["']string["']\s*\|\|\s*!([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*\)\s*return ([A-Za-z0-9_$]+)\s*;`)
-	rePatchShortIDHelper   = regexp.MustCompile(`function\s+([A-Za-z0-9_$]+)\s*\(\s*([A-Za-z0-9_$]+)\s*\)\s*\{\s*return\s+typeof\s+([A-Za-z0-9_$]+)\s*===?\s*["']string["']\s*&&\s*([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*;?\s*\}`)
-	rePatchClashPre        = regexp.MustCompile(`\{\s*name\s*:\s*["']Clash Pre-processor["']`)
-	rePatchClashPreVarName = regexp.MustCompile(`["']Clash Pre-processor["'][^;{}]*;\s*return\s*(\{\s*name\s*:\s*[A-Za-z0-9_$]+\s*,)`)
-	rePatchClashPreReturn  = regexp.MustCompile(`return\s*(\{\s*name(?:\s*:\s*[A-Za-z0-9_$]+)?\s*,)`)
+	rePatchAppStart       = regexp.MustCompile(`([A-Za-z0-9_$]+\.start)\s*=\s*(?:\(\s*\)\s*=>|function\s*\(\s*\))\s*\{\s*([A-Za-z0-9_$]+)\(\s*\$request\s*\)\s*;?\s*\}`)
+	rePatchYAMLWrap       = regexp.MustCompile(`(\{\s*safeLoad\s*:\s*[A-Za-z0-9_$]+\s*,\s*load\s*:\s*[A-Za-z0-9_$]+\s*,\s*safeDump\s*:\s*[A-Za-z0-9_$]+\s*,\s*dump\s*:\s*[A-Za-z0-9_$]+\s*,\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})`)
+	rePatchJSON5          = regexp.MustCompile(`(\{\s*parse\s*:\s*[A-Za-z0-9_$]+\s*,\s*stringify\s*:\s*[A-Za-z0-9_$]+\s*\})(\s*,\s*[A-Za-z0-9_$]+\s*=\s*[A-Za-z0-9_$]+\s*,\s*[A-Za-z0-9_$]+\s*=\s*[A-Za-z0-9_$]+\s*;\s*return\s+[A-Za-z0-9_$]+)`)
+	rePatchStore          = regexp.MustCompile(`=\s*new\s+([A-Za-z0-9_$]+)\(\s*["']sub-store["']\s*\)`)
+	rePatchRCache         = regexp.MustCompile(`this\._cleanup\(\)\s*;?\s*\}`)
+	rePatchDLCache        = regexp.MustCompile(`!\s*[A-Za-z0-9_$]+\s*&&\s*([A-Za-z0-9_$]+)\.has\(\s*([A-Za-z0-9_$]+)\s*\)`)
+	rePatchShortID        = regexp.MustCompile(`if\s*\(\s*typeof ([A-Za-z0-9_$]+)\s*!==?\s*["']string["']\s*\|\|\s*!([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*\)\s*return ([A-Za-z0-9_$]+)\s*;`)
+	rePatchShortIDHelper  = regexp.MustCompile(`function\s+([A-Za-z0-9_$]+)\s*\(\s*([A-Za-z0-9_$]+)\s*\)\s*\{\s*return\s+typeof\s+([A-Za-z0-9_$]+)\s*===?\s*["']string["']\s*&&\s*([A-Za-z0-9_$]+)\.includes\(\s*["']short-id["']\s*\)\s*;?\s*\}`)
+	rePatchClashPre       = regexp.MustCompile(`\{\s*name\s*:\s*["']Clash Pre-processor["']`)
+	rePatchClashReturnObj = regexp.MustCompile(`^return\s*(\{\s*name(?:\s*:\s*[A-Za-z0-9_$]+)?\s*,)`)
 )
 
 type patchStatus struct {
@@ -190,11 +191,26 @@ func patchSubStoreScript(src string) (string, bool, patchStatus) {
 	st.store = patched != prev
 
 	prev = patched
-	patched = rePatchRCache.ReplaceAllString(patched, `this._cleanup();(globalThis.__substore_rcaches=globalThis.__substore_rcaches||[]).push(this)}`)
+	patched = rePatchRCache.ReplaceAllString(patched, `this._cleanup();globalThis.__register_rcache&&globalThis.__register_rcache(this)}`)
 	st.rCache = patched != prev
 
+	// 通过 !<flag> && <map>.has(<id>) 且紧随 <map>.get(<id>) 的语义结构精确定位 download.js 的 tasks Map，
+	// 避免受 esbuild 非 ASCII 转义或盲替首个 "=new Map" 的误伤。
 	prev = patched
-	patched = strings.Replace(patched, `=new Map`, `=globalThis.__substore_dlCache=new Map`, 1)
+	if locs := rePatchDLCache.FindAllStringSubmatchIndex(patched, -1); len(locs) > 0 {
+		for _, loc := range locs {
+			tasksVar := patched[loc[2]:loc[3]]
+			idVar := patched[loc[4]:loc[5]]
+			tail := patched[loc[1]:min(len(patched), loc[1]+160)]
+			getRe := regexp.MustCompile(regexp.QuoteMeta(tasksVar) + `\s*\.get\(\s*` + regexp.QuoteMeta(idVar) + `\s*\)`)
+			if getRe.MatchString(tail) {
+				patched = patched[:loc[0]] +
+					"((globalThis.__substore_dlCache=" + tasksVar + ")," + patched[loc[0]:loc[1]] + ")" +
+					patched[loc[1]:]
+				break
+			}
+		}
+	}
 	st.dlCache = patched != prev
 
 	prev = patched
@@ -211,13 +227,8 @@ func patchSubStoreScript(src string) (string, bool, patchStatus) {
 	clashOpenIdx := -1
 	if loc := rePatchClashPre.FindStringIndex(patched); loc != nil {
 		clashOpenIdx = loc[0]
-	} else if loc := rePatchClashPreVarName.FindStringSubmatchIndex(patched); len(loc) >= 4 {
-		clashOpenIdx = loc[2]
 	} else if idx := strings.Index(patched, "Clash Pre-processor"); idx != -1 {
-		windowEnd := min(len(patched), idx+2000)
-		if loc := rePatchClashPreReturn.FindStringSubmatchIndex(patched[idx:windowEnd]); len(loc) >= 4 {
-			clashOpenIdx = idx + loc[2]
-		}
+		clashOpenIdx = findClashPreReturnBrace(patched, idx+len("Clash Pre-processor"))
 	}
 	if clashOpenIdx >= 0 {
 		if closeIdx := findMatchingBrace(patched, clashOpenIdx); closeIdx > clashOpenIdx {
@@ -231,6 +242,56 @@ func patchSubStoreScript(src string) (string, bool, patchStatus) {
 	st.json5 = patched != prev
 
 	return patched, st.isApp, st
+}
+
+// findClashPreReturnBrace 从 "Clash Pre-processor" 字面量后方按括号平衡查找同层级的 return { name... }，
+// 避免硬编码字节窗口或被内嵌函数中的花括号/分号干扰。
+func findClashPreReturnBrace(s string, start int) int {
+	if start < len(s) && (s[start] == '"' || s[start] == '\'') {
+		start++
+	}
+	depth := 0
+	inStr := byte(0)
+	escaped := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inStr != 0 {
+			if c == '\\' {
+				escaped = true
+			} else if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+		switch c {
+		case '"', '\'', '`':
+			inStr = c
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth < 0 {
+				return -1
+			}
+		case 'r':
+			if depth == 0 && strings.HasPrefix(s[i:], "return") {
+				if i > 0 {
+					prev := s[i-1]
+					if (prev >= 'a' && prev <= 'z') || (prev >= 'A' && prev <= 'Z') || (prev >= '0' && prev <= '9') || prev == '_' || prev == '$' {
+						continue
+					}
+				}
+				if loc := rePatchClashReturnObj.FindStringSubmatchIndex(s[i:min(len(s), i+80)]); len(loc) >= 4 {
+					return i + loc[2]
+				}
+			}
+		}
+	}
+	return -1
 }
 
 func findMatchingBrace(s string, start int) int {
@@ -457,23 +518,28 @@ func NewLoonEngine(scriptSrc []byte, scriptTag string, store *LoonKVStore, logge
 
 	srcStr := string(scriptSrc)
 	patchedSrc, isSubStoreApp, pStatus := patchSubStoreScript(srcStr)
-	if isSubStoreApp && os.Getenv("SUBSTORE_NET_DEBUG") == "1" {
-		logger.Info("Sub-Store 补丁命中状态",
-			"app", pStatus.isApp,
-			"store", pStatus.store,
-			"rCache", pStatus.rCache,
-			"dlCache", pStatus.dlCache,
-			"yaml", pStatus.yamlWrap,
-			"shortID", pStatus.shortID,
-			"clashPre", pStatus.clashPre,
-			"json5", pStatus.json5,
-		)
-		if !pStatus.clashPre {
-			if idx := strings.Index(patchedSrc, "Clash Pre-processor"); idx != -1 {
-				start := max(0, idx-80)
-				end := min(len(patchedSrc), idx+140)
-				logger.Info("ClashPre上下文", "snippet", patchedSrc[start:end])
-			}
+	if isSubStoreApp {
+		if !pStatus.store || !pStatus.rCache || !pStatus.dlCache || !pStatus.yamlWrap || !pStatus.clashPre {
+			logger.Warn("Sub-Store 部分关键补丁未命中，缓存或性能加速可能降级",
+				"store", pStatus.store,
+				"rCache", pStatus.rCache,
+				"dlCache", pStatus.dlCache,
+				"yaml", pStatus.yamlWrap,
+				"shortID", pStatus.shortID,
+				"clashPre", pStatus.clashPre,
+				"json5", pStatus.json5,
+			)
+		} else if os.Getenv("SUBSTORE_NET_DEBUG") == "1" {
+			logger.Info("Sub-Store 补丁命中状态",
+				"app", pStatus.isApp,
+				"store", pStatus.store,
+				"rCache", pStatus.rCache,
+				"dlCache", pStatus.dlCache,
+				"yaml", pStatus.yamlWrap,
+				"shortID", pStatus.shortID,
+				"clashPre", pStatus.clashPre,
+				"json5", pStatus.json5,
+			)
 		}
 	}
 
@@ -932,6 +998,10 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 					if removed {
 						if b, mErr := json.Marshal(cacheMap); mErr == nil {
 							str = string(b)
+							cleaned := str
+							if e.store.Write(&cleaned, key) {
+								st.selfCacheWrites.Add(1)
+							}
 						}
 					}
 				}
@@ -968,7 +1038,13 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 			}
 			valPtr = &str
 		}
-		return ctx.NewBool(e.store.Write(valPtr, key))
+		ok := e.store.Write(valPtr, key)
+		if ok && key != "sub-store" {
+			if st := wr.state; st != nil {
+				st.selfCacheWrites.Add(1)
+			}
+		}
+		return ctx.NewBool(ok)
 	}))
 
 	globals.Set("__notify_post", ctx.NewFunction(func(ctx *quickjs.Context, this *quickjs.Value, args []*quickjs.Value) *quickjs.Value {
@@ -1295,8 +1371,12 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 					if len(snippet) > 200 {
 						snippet = snippet[:200] + "..."
 					}
-					slog.Debug("API 请求被拒绝", "status", httpResp.StatusCode, "response", snippet)
-					e.logger.Error("API 请求被拒绝", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+					if isDnsReq {
+						e.logger.Debug("DNS 请求返回异常状态（将尝试回退）", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+					} else {
+						slog.Debug("API 请求被拒绝", "status", httpResp.StatusCode, "response", snippet)
+						e.logger.Error("API 请求被拒绝", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+					}
 				}
 
 				res.Response = &ResponseObject{
@@ -1608,10 +1688,11 @@ func (e *LoonEngine) runTaskInWorker(
 			extraUASet[ua] = struct{}{}
 		}
 	}
+	bodyHasNoCache := false
 	if trimmedBody := strings.TrimSpace(req.Body); strings.HasPrefix(trimmedBody, "{") || strings.HasPrefix(trimmedBody, "[") {
 		var bodyObj any
 		if json.Unmarshal([]byte(trimmedBody), &bodyObj) == nil {
-			collectNoCacheFromAny(bodyObj, noCacheURLs, extraUASet)
+			bodyHasNoCache = collectNoCacheFromAny(bodyObj, noCacheURLs, extraUASet)
 		}
 	}
 	if e.store != nil {
@@ -1694,9 +1775,9 @@ func (e *LoonEngine) runTaskInWorker(
 		cacheVer = e.store.CacheVersion()
 	}
 	reloadMain := e.isSubStoreApp && (configVer != wr.lastConfigVer)
-	reloadRes := e.isSubStoreApp && (globalNoCache || wr.dirtyResources ||
-		(len(noCacheURLs) > 0 && (cacheVer != wr.lastCacheVer || configVer != wr.lastConfigVer)))
-	clearDlCache := e.isSubStoreApp && (globalNoCache || len(noCacheURLs) > 0)
+	reloadRes := e.isSubStoreApp && (globalNoCache || bodyHasNoCache || wr.dirtyResources ||
+		cacheVer != wr.lastCacheVer || (len(noCacheURLs) > 0 && configVer != wr.lastConfigVer))
+	clearDlCache := e.isSubStoreApp
 
 	reqVal := wr.ctx.String(string(bReq))
 	argVal := wr.ctx.String(argument)
@@ -1741,9 +1822,18 @@ func (e *LoonEngine) runTaskInWorker(
 	}
 	resVal.Free()
 
-	// 记录本次同步后的状态，保证下一次请求对 globalNoCache 的屏蔽还原
+	// 记录本次同步后的状态：若仅本 Worker 自身写入过缓存且未全局遮蔽，直接同步到 afterCacheVer 避免下次自我触发全量重载
 	wr.lastConfigVer = configVer
-	wr.lastCacheVer = cacheVer
+	if e.store != nil {
+		afterCacheVer := e.store.CacheVersion()
+		if !globalNoCache && afterCacheVer == cacheVer+st.selfCacheWrites.Load() {
+			wr.lastCacheVer = afterCacheVer
+		} else {
+			wr.lastCacheVer = cacheVer
+		}
+	} else {
+		wr.lastCacheVer = cacheVer
+	}
 	if globalNoCache {
 		wr.dirtyResources = true
 	} else if reloadRes {
@@ -1812,8 +1902,9 @@ func extractScriptDefaultUAs(src string) []string {
 
 func isResourceCacheKey(key string) bool {
 	return key == "sub-store-cached-resource" ||
+		key == "sub-store-cached-headers-resource" ||
 		key == "sub-store-cached-script-resource" ||
-		(strings.HasPrefix(key, "sub-store-cached-") && !strings.Contains(key, "custom-imm"))
+		(strings.HasPrefix(key, "sub-store-cached-") && !strings.Contains(key, "custom-"))
 }
 
 func hasNoCacheQueryParam(rawURL string) (global bool, paramURL string) {
@@ -1840,19 +1931,40 @@ func hasNoCacheQueryParam(rawURL string) (global bool, paramURL string) {
 }
 
 func extractCachedLogURLUA(msg string) (string, string, bool) {
-	idx := strings.Index(msg, "使用缓存:")
-	if idx < 0 {
-		return "", "", false
+	if idx := strings.Index(msg, "使用缓存:"); idx >= 0 {
+		rest := strings.TrimSpace(msg[idx+len("使用缓存:"):])
+		splitAt := -1
+		if jsonIdx := strings.Index(rest, ", {"); jsonIdx > 0 {
+			splitAt = jsonIdx
+		} else {
+			splitAt = strings.LastIndex(rest, ",")
+		}
+		if splitAt <= 0 {
+			return "", "", false
+		}
+		u := strings.TrimSpace(rest[:splitAt])
+		ua := strings.TrimSpace(rest[splitAt+1:])
+		if u == "" || ua == "" {
+			return "", "", false
+		}
+		return u, ua, true
 	}
-	rest := strings.TrimSpace(msg[idx+len("使用缓存:"):])
-	comma := strings.LastIndex(rest, ",")
-	if comma <= 0 {
-		return "", "", false
+
+	if strings.HasPrefix(msg, "Downloading...") {
+		var ua, u string
+		for line := range strings.SplitSeq(msg, "\n") {
+			line = strings.TrimSpace(line)
+			if v, ok := strings.CutPrefix(line, "User-Agent:"); ok {
+				ua = strings.TrimSpace(v)
+			} else if v, ok := strings.CutPrefix(line, "URL:"); ok {
+				u = strings.TrimSpace(v)
+			} else if strings.HasPrefix(line, "{") && ua == "" {
+				ua = line
+			}
+		}
+		if u != "" && ua != "" {
+			return u, ua, true
+		}
 	}
-	u := strings.TrimSpace(rest[:comma])
-	ua := strings.TrimSpace(rest[comma+1:])
-	if u == "" || ua == "" {
-		return "", "", false
-	}
-	return u, ua, true
+	return "", "", false
 }

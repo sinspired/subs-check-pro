@@ -556,11 +556,27 @@ var $argument = "";
 
 const $persistentStore = {
     read: function (key) {
+        if (typeof key === 'string' && key.startsWith('sub-store-cached-') && !key.includes('custom-')) {
+            globalThis.__last_rcache_key = key;
+        }
         const val = __ps_read(key);
         return val === undefined ? null : val;
     },
     write: function (val, key) {
         return __ps_write(val, key) !== false;
+    }
+};
+
+globalThis.__register_rcache = function (cacheObj) {
+    const key = globalThis.__last_rcache_key;
+    globalThis.__last_rcache_key = null;
+    if (!cacheObj) return;
+    if (key && !cacheObj._cacheKey) {
+        cacheObj._cacheKey = key;
+    }
+    const list = (globalThis.__substore_rcaches = globalThis.__substore_rcaches || []);
+    if (list.indexOf(cacheObj) === -1) {
+        list.push(cacheObj);
     }
 };
 
@@ -712,6 +728,14 @@ function __uint8array_to_base64(u8) {
     return out.join("");
 }
 
+function _bodyToString(body) {
+    if (typeof body === 'string') return body;
+    if (!body) return '';
+    if (typeof Buffer !== 'undefined') return Buffer.from(body).toString();
+    if (body instanceof Uint8Array && typeof TextDecoder !== 'undefined') return new TextDecoder().decode(body);
+    return String.fromCharCode.apply(null, body);
+}
+
 const $httpClient = {};
 const __http_callbacks = {};
 let __http_req_id = 0;
@@ -731,13 +755,34 @@ let __http_req_id = 0;
 
         const reqId = "req_" + (++__http_req_id);
         const originalCallback = callback;
+        const isTencentUrl = typeof req.url === 'string' && req.url.indexOf('119.28.28.28/d') !== -1;
+
+        // 防止 Tencent HTTPDNS 返回 401/空包/";"/"0" 时，Sub-Store 把 "".split(";") 当作有效 IP 导致 node.server 被置空
+        const safeOriginalCallback = isTencentUrl
+            ? function (err, resp, body) {
+                if (!err && resp) {
+                    if (resp.status >= 400 || !body) {
+                        if (originalCallback) originalCallback("Tencent DNS HTTP " + (resp.status || 0), resp, body);
+                        return;
+                    }
+                    const strBody = _bodyToString(body);
+                    const validIps = strBody.split(';').map(i => i.split(',')[0].trim()).filter(i => i && i !== '0');
+                    if (validIps.length === 0) {
+                        if (originalCallback) originalCallback("Tencent DNS empty answer", resp, body);
+                        return;
+                    }
+                }
+                if (originalCallback) originalCallback(err, resp, body);
+            }
+            : originalCallback;
+
         let isDoH = false, isAAAA = false, isJSONDoH = false;
         let queryBuf = null;
 
         // 探测 Ali / Tencent 的 JSON DoH 请求格式
         if (req.url && req.url.indexOf('223.6.6.6/resolve') !== -1 && req.url.indexOf('type=AAAA') !== -1) {
             isJSONDoH = 'ali';
-        } else if (req.url && req.url.indexOf('119.28.28.28/d') !== -1 && req.url.indexOf('type=AAAA') !== -1) {
+        } else if (isTencentUrl && req.url.indexOf('type=AAAA') !== -1) {
             isJSONDoH = 'tencent';
         } else {
             const accept = req.headers && (req.headers['accept'] || req.headers['Accept']);
@@ -781,27 +826,39 @@ let __http_req_id = 0;
         if ((isDoH && isAAAA) || isJSONDoH) {
             callback = function (err, resp, body) {
                 let needsFallback = false;
-                if (!err && resp && body) {
+                if (!err && resp) {
                     if (isJSONDoH === 'ali') {
-                        const strBody = typeof body === 'string' ? body : (typeof Buffer !== 'undefined' ? Buffer.from(body).toString() : String.fromCharCode.apply(null, body));
-                        try {
-                            const arr = JSON.parse(strBody);
-                            if (!Array.isArray(arr) || arr.length === 0) needsFallback = true;
-                        } catch (e) { }
+                        if (resp.status >= 400 || !body) {
+                            needsFallback = true;
+                        } else {
+                            const strBody = _bodyToString(body);
+                            try {
+                                const arr = JSON.parse(strBody);
+                                if (!Array.isArray(arr) || arr.length === 0) needsFallback = true;
+                            } catch (e) { needsFallback = true; }
+                        }
                     } else if (isJSONDoH === 'tencent') {
-                        const strBody = typeof body === 'string' ? body : (typeof Buffer !== 'undefined' ? Buffer.from(body).toString() : String.fromCharCode.apply(null, body));
-                        const arr = strBody.split(';').map(i => i.split(',')[0]).filter(i => i && i !== '0');
-                        if (arr.length === 0) needsFallback = true;
+                        if (resp.status >= 400 || !body) {
+                            needsFallback = true;
+                        } else {
+                            const strBody = _bodyToString(body);
+                            const arr = strBody.split(';').map(i => i.split(',')[0].trim()).filter(i => i && i !== '0');
+                            if (arr.length === 0) needsFallback = true;
+                        }
                     } else if (isDoH && isAAAA) {
-                        const u8 = (body instanceof Uint8Array) ? body : ((typeof Buffer !== 'undefined' && Buffer.isBuffer(body)) ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength) : null);
-                        if (u8 && u8.length >= 12) {
-                            const ancount = (u8[6] << 8) | u8[7];
-                            if (ancount === 0) needsFallback = true;
+                        if (resp.status >= 400) {
+                            needsFallback = true;
+                        } else if (body) {
+                            const u8 = (body instanceof Uint8Array) ? body : ((typeof Buffer !== 'undefined' && Buffer.isBuffer(body)) ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength) : null);
+                            if (u8 && u8.length >= 12) {
+                                const ancount = (u8[6] << 8) | u8[7];
+                                if (ancount === 0) needsFallback = true;
+                            }
                         }
                     }
                 }
 
-                if (needsFallback && originalCallback) {
+                if (needsFallback && safeOriginalCallback) {
                     __enableDohFilterCompat();
                     const newReq = Object.assign({}, req);
                     let fallbackRawBody = null;
@@ -834,7 +891,7 @@ let __http_req_id = 0;
                     }
 
                     const fallbackReqId = "req_" + (++__http_req_id);
-                    __http_callbacks[fallbackReqId] = originalCallback;
+                    __http_callbacks[fallbackReqId] = safeOriginalCallback;
                     if (fallbackRawBody) {
                         __go_http_request_async(dohMethod, JSON.stringify(newReq), fallbackReqId, fallbackRawBody);
                     } else {
@@ -843,8 +900,10 @@ let __http_req_id = 0;
                     return;
                 }
 
-                if (originalCallback) originalCallback(err, resp, body);
+                if (safeOriginalCallback) safeOriginalCallback(err, resp, body);
             };
+        } else {
+            callback = safeOriginalCallback;
         }
 
         if (callback) { __http_callbacks[reqId] = callback; }
@@ -992,6 +1051,11 @@ globalThis.__wrap_clash_pre = function (orig) {
     let lastRaw = null;
     let lastLines = null;
 
+    globalThis.__clear_clash_pre_cache = function () {
+        lastRaw = null;
+        lastLines = null;
+    };
+
     function formatLines(lines, includeProxies) {
         if (!includeProxies) return lines;
         if (!lines) return 'proxies:\n';
@@ -1046,31 +1110,18 @@ globalThis.__wrap_clash_pre = function (orig) {
 };
 
 globalThis.__wrap_json5 = function (orig) {
-    let lastStr = null;
-    let lastObj = null;
-    globalThis.__clear_json5_cache = function () {
-        lastStr = null;
-        lastObj = null;
-    };
+    globalThis.__clear_json5_cache = function () { };
     return {
         parse: function (str, reviver) {
             if (!reviver && typeof str === 'string') {
-                if (str === lastStr) return lastObj;
-                if (str.charCodeAt(0) === 123) {
+                const trimmed = str.trimStart();
+                if (trimmed.charCodeAt(0) === 123 || trimmed.charCodeAt(0) === 91) {
                     try {
-                        const obj = JSON.parse(str);
-                        lastStr = str;
-                        lastObj = obj;
-                        return obj;
+                        return JSON.parse(str);
                     } catch (_) { }
                 }
             }
-            const res = orig.parse(str, reviver);
-            if (!reviver && typeof str === 'string') {
-                lastStr = str;
-                lastObj = res;
-            }
-            return res;
+            return orig.parse(str, reviver);
         },
         stringify: orig.stringify
     };
@@ -1137,32 +1188,38 @@ const $done = function (val) {
     }
 };
 
+let __substore_run_seq = 0;
+
 function __reload_substore_caches(reloadMain, reloadResources, clearDlCache) {
+    __substore_run_seq++;
     if (reloadMain && globalThis.__substore_R && typeof globalThis.__substore_R.initCache === 'function') {
         globalThis.__substore_R.initCache();
     }
     if ((reloadResources || clearDlCache) && globalThis.__substore_dlCache && typeof globalThis.__substore_dlCache.clear === 'function') {
         globalThis.__substore_dlCache.clear();
     }
-    if (reloadResources) {
-        const caches = globalThis.__substore_rcaches;
-        if (Array.isArray(caches)) {
-            const keys = [
-                'sub-store-cached-resource',
-                'sub-store-cached-headers-resource',
-                'sub-store-cached-script-resource'
-            ];
-            for (let i = 0; i < caches.length; i++) {
-                const c = caches[i];
-                const k = keys[i];
-                if (c && k) {
-                    try {
-                        const raw = $persistentStore.read(k);
-                        c.resourceCache = raw ? JSON.parse(raw) : {};
-                    } catch (_) {
-                        c.resourceCache = {};
-                    }
+    const caches = globalThis.__substore_rcaches;
+    if (reloadResources && Array.isArray(caches)) {
+        for (let i = 0; i < caches.length; i++) {
+            const c = caches[i];
+            const k = c && c._cacheKey;
+            if (c && k) {
+                try {
+                    const raw = $persistentStore.read(k);
+                    c.resourceCache = raw ? JSON.parse(raw) : {};
+                } catch (_) {
+                    c.resourceCache = {};
                 }
+            }
+        }
+        globalThis.__last_rcache_key = null;
+    }
+    // 每 20 次请求或重载时清理过期缓存，避免常驻 Worker 长期运行导致 cacheData 和 JS 内存膨胀
+    if ((__substore_run_seq % 20 === 0 || reloadResources) && Array.isArray(caches)) {
+        for (let i = 0; i < caches.length; i++) {
+            const c = caches[i];
+            if (c && typeof c._cleanup === 'function') {
+                try { c._cleanup(); } catch (_) { }
             }
         }
     }
@@ -1173,6 +1230,9 @@ function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources, clea
         for (const k in __http_callbacks) delete __http_callbacks[k];
         __http_req_id = 0;
         __log_cache.clear();
+        if (globalThis.__substore_dlCache && typeof globalThis.__substore_dlCache.clear === 'function') {
+            globalThis.__substore_dlCache.clear();
+        }
         if (__doh_fallback_used) {
             Array.prototype.filter = _originalFilter;
             __doh_fallback_used = false;
@@ -1181,17 +1241,29 @@ function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources, clea
             clearTimeout(id);
         }
 
-        const timeoutId = setTimeout(() => {
-            reject(new Error("Sub-Store script timeout inside QuickJS"));
-        }, 179000);
         const cleanupDispatchState = () => {
             clearTimeout(timeoutId);
             $request = {};
             $argument = "";
+            __log_cache.clear();
+            if (__doh_fallback_used) {
+                Array.prototype.filter = _originalFilter;
+                __doh_fallback_used = false;
+            }
+            if (globalThis.__substore_dlCache && typeof globalThis.__substore_dlCache.clear === 'function') {
+                globalThis.__substore_dlCache.clear();
+            }
+            if (typeof globalThis.__clear_clash_pre_cache === 'function') {
+                globalThis.__clear_clash_pre_cache();
+            }
             if (typeof globalThis.__clear_json5_cache === 'function') {
                 globalThis.__clear_json5_cache();
             }
         };
+        const timeoutId = setTimeout(() => {
+            cleanupDispatchState();
+            reject(new Error("Sub-Store script timeout inside QuickJS"));
+        }, 179000);
         globalThis.__resolve_done = function () {
             cleanupDispatchState();
             resolve();
@@ -1211,7 +1283,7 @@ function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources, clea
                 __run_sub_store_script();
             }
         } catch (e) {
-            clearTimeout(timeoutId);
+            cleanupDispatchState();
             if (e && typeof e === 'object' && e.stack && typeof e.message === 'string') {
                 e.message = e.message + '\n' + e.stack;
             }
@@ -1221,7 +1293,7 @@ function __dispatch_sub_store(reqJson, argStr, reloadMain, reloadResources, clea
 }
 
 function __start_sub_store(reqJson, argStr) {
-    return __dispatch_sub_store(reqJson, argStr, false, false);
+    return __dispatch_sub_store(reqJson, argStr, false, false, false);
 }
 
 function __abort_done(reason) {
