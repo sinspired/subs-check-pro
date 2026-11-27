@@ -461,8 +461,10 @@ func (app *App) checkProxies() error {
 	return nil
 }
 
-// releaseMemory 释放mihomo检测内存
+// releaseMemory 释放 mihomo 检测内存
 func releaseMemory() {
+	monitor.LogMemoryStats("检测清理前")
+
 	cleanupMihomo()
 	substore.ReleaseIdleWorkers()
 
@@ -475,14 +477,7 @@ func releaseMemory() {
 	// 第二次 GC：清空 victim cache，并强制将物理内存还给操作系统
 	debug.FreeOSMemory()
 
-	slog.Debug("当前 goroutine 数", "count", runtime.NumGoroutine())
-
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	slog.Debug("内存状态",
-		"HeapInuse", ms.HeapInuse/1024/1024,
-		"HeapReleased", ms.HeapReleased/1024/1024,
-		"Sys", ms.Sys/1024/1024)
+	monitor.LogMemoryStats("检测清理后")
 }
 
 // waitGoroutinesDrain 等待残留 goroutine 退出
