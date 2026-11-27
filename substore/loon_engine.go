@@ -1372,7 +1372,9 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 						snippet = snippet[:200] + "..."
 					}
 					if isDnsReq {
-						e.logger.Debug("DNS 请求返回异常状态（将尝试回退）", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+						if e.netDebug {
+							e.logger.Debug("DNS 请求返回异常状态（将尝试回退）", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
+						}
 					} else {
 						slog.Debug("API 请求被拒绝", "status", httpResp.StatusCode, "response", snippet)
 						e.logger.Error("API 请求被拒绝", "method", httpReq.Method, "url", opts.URL, "status", httpResp.StatusCode, "response", snippet)
