@@ -37,20 +37,55 @@ func ConvertsV2RayExtra(buf []byte) ([]map[string]any, error) {
 			return true
 		}
 
-		scheme := strings.ToLower(string(lineBytes[:idx]))
-		line := string(lineBytes)
-		body := line[idx+3:]
+		schemeBytes := lineBytes[:idx]
+		var isMierus, isMieru, isSnell, isPlainAuthCandidate bool
+		switch len(schemeBytes) {
+		case 4:
+			isPlainAuthCandidate = bytes.EqualFold(schemeBytes, []byte("http"))
+		case 5:
+			switch {
+			case bytes.EqualFold(schemeBytes, []byte("mieru")):
+				isMieru = true
+			case bytes.EqualFold(schemeBytes, []byte("snell")):
+				isSnell = true
+			case bytes.EqualFold(schemeBytes, []byte("https")), bytes.EqualFold(schemeBytes, []byte("socks")):
+				isPlainAuthCandidate = true
+			}
+		case 6:
+			switch {
+			case bytes.EqualFold(schemeBytes, []byte("mierus")):
+				isMierus = true
+			case bytes.EqualFold(schemeBytes, []byte("socks5")):
+				isPlainAuthCandidate = true
+			}
+		case 7:
+			isPlainAuthCandidate = bytes.EqualFold(schemeBytes, []byte("socks5h"))
+		}
 
-		switch scheme {
-		case "mierus":
-			u, err := url.Parse(line)
-			if err != nil {
+		if !isMierus && !isMieru && !isSnell && !isPlainAuthCandidate {
+			return true
+		}
+
+		// 对 http/https/socks* 先做字节级预检，仅有明文 user:pass@ 时才分配 string 并 url.Parse
+		if isPlainAuthCandidate {
+			rest := lineBytes[idx+3:]
+			if pathIdx := bytes.IndexAny(rest, "/?#"); pathIdx >= 0 {
+				rest = rest[:pathIdx]
+			}
+			atIdx := bytes.IndexByte(rest, '@')
+			if atIdx <= 0 || bytes.IndexByte(rest[:atIdx], ':') < 0 {
 				return true
 			}
-			proxies = append(proxies, buildMieruNodes(u, names)...)
+		}
 
-		case "mieru":
-			rawBody, extFrag, _ := strings.Cut(body, "#")
+		line := string(lineBytes)
+		switch {
+		case isMierus:
+			if u, err := url.Parse(line); err == nil {
+				proxies = append(proxies, buildMieruNodes(u, names)...)
+			}
+		case isMieru:
+			rawBody, extFrag, _ := strings.Cut(line[idx+3:], "#")
 			var uriStr string
 			if dcBuf, err := decodeBase64Bytes([]byte(rawBody)); err == nil && isPrintableText(dcBuf) {
 				uriStr = "mieru://" + string(dcBuf)
@@ -72,14 +107,11 @@ func ConvertsV2RayExtra(buf []byte) ([]map[string]any, error) {
 				}
 			}
 			proxies = append(proxies, buildMieruNodes(u, names)...)
-
-		case "snell":
+		case isSnell:
 			if node := parseSnellURI(line, names); node != nil {
 				proxies = append(proxies, node)
 			}
-
-		case "http", "https", "socks", "socks5", "socks5h":
-			// 仅接管带明文 "user:pass@" 的链接（Mihomo 会将其当作 Base64 解坏）
+		default:
 			if node := parsePlainAuthProxyURI(line, names); node != nil {
 				proxies = append(proxies, node)
 			}
@@ -311,13 +343,10 @@ func patchMihomoNodesFromBytes(nodes []map[string]any, data []byte) {
 	var links []string
 	forEachLine(data, func(rawLine []byte) bool {
 		line := bytes.TrimSpace(rawLine)
-		if len(line) == 0 || line[0] == '#' || !bytes.Contains(line, []byte("://")) {
+		if len(line) == 0 || line[0] == '#' || !needsMihomoLinkPatchBytes(line) || !bytes.Contains(line, []byte("://")) {
 			return true
 		}
-		s := string(line)
-		if needsMihomoLinkPatchStr(s) {
-			links = append(links, s)
-		}
+		links = append(links, string(line))
 		return true
 	})
 	patchMihomoNodesFromLinks(nodes, links)
@@ -329,7 +358,7 @@ func patchMihomoNodesFromLinks(nodes []map[string]any, links []string) {
 		return
 	}
 
-	urlIndex := make(map[string]url.Values, len(links))
+	var urlIndex map[string]url.Values
 	for _, raw := range links {
 		if !needsMihomoLinkPatchStr(raw) {
 			continue
@@ -359,6 +388,10 @@ func patchMihomoNodesFromLinks(nodes []map[string]any, links []string) {
 			}
 		}
 		key := strings.ToLower(scheme + "|" + u.Hostname() + "|" + port + "|" + cred)
+
+		if urlIndex == nil {
+			urlIndex = make(map[string]url.Values, 16)
+		}
 		urlIndex[key] = u.Query()
 	}
 

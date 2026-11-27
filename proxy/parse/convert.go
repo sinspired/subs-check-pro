@@ -833,16 +833,6 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 	// 获取文件名推测的协议（作为上下文参考）
 	fileGuessedScheme := guessSchemeByURL(subURL)
 
-	// if len(links) < 2 {
-	// 	// 拼接所有行并进行 Base64 解码
-	// 	joined := strings.Join(links, "")
-	// 	decodedBytes := convert.DecodeBase64([]byte(joined))
-	// 	decodedStr := string(decodedBytes)
-
-	// 	// 按行拆分成 []string
-	// 	links = strings.Split(strings.TrimSpace(decodedStr), "\n")
-	// }
-
 	slog.Debug("统一处理链接列表", "subURL", subURL, "猜测协议", fileGuessedScheme, "条数", len(links))
 
 	// 逐链接的 Debug 日志即使级别未开启，也会为每个参数做一次接口装箱分配；
@@ -857,8 +847,12 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 			continue
 		}
 
-		// 1. 含协议头的标准/非标分享链接
-		if schemeIdx := strings.Index(link, "://"); schemeIdx > 0 {
+		// 1. 含合法协议头的标准/非标分享链接
+		// 必须先校验 scheme 前缀合法性，防止 "IP:Port | tag | https://..." 或 HTML/Markdown 文本
+		// 在 stripInlineTrailingMeta 截断后导致 link[:schemeIdx] 切片越界 panic。
+		if schemeIdx := strings.Index(link, "://"); schemeIdx > 0 && isValidSchemePrefix(link[:schemeIdx]) {
+			scheme := strings.ToLower(link[:schemeIdx])
+
 			cleaned, meta := stripInlineTrailingMeta(link)
 			// 剥离 " | AL | 2631ms | 3d" 后，若原本无 #fragment 则将国家/标签挂到 #，直接交给 Mihomo
 			if meta != "" && !strings.Contains(cleaned, "#") {
@@ -867,8 +861,10 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 				}
 			}
 			link = cleaned
+			if len(link) <= schemeIdx+3 {
+				continue
+			}
 
-			scheme := strings.ToLower(link[:schemeIdx])
 			switch scheme {
 			case "wireguard", "wg":
 				if node := ParseWireGuardURI(link); node != nil {
@@ -920,7 +916,6 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 			link = link[:idx]
 		}
 		host, port := SplitHostPortLoose(link)
-		// slog.Debug("分离端口", "host", host, "port", port)
 
 		// 简单的合法性校验，防止将普通文本误判为节点
 		if host != "" && port != "" && isDigit(port) {
@@ -968,7 +963,7 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 		}
 	}
 
-	// 初始化并发去重工具
+	// 初始化去重工具
 	batchLinks = lo.Uniq(batchLinks)
 	seen := make(map[string]struct{}, len(batchLinks)+len(directNodes)+len(finalNodes))
 	if len(finalNodes) > 0 {
@@ -989,6 +984,9 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 
 	var mu sync.Mutex
 	appendUnique := func(nodes []map[string]any) {
+		if len(nodes) == 0 {
+			return
+		}
 		mu.Lock()
 		defer mu.Unlock()
 		for _, n := range nodes {
@@ -1013,41 +1011,46 @@ func ParseProxyLinksAndConvert(links []string, subURL string) ([]map[string]any,
 		appendUnique(validDirect)
 	}
 
-	// 并发分块转换剩余链接
+	// 转换剩余链接（单块内直接同步处理，避免无谓的 goroutine 调度）
 	if len(batchLinks) > 0 {
 		const chunkSize = 10000
-		var wg sync.WaitGroup
+		processChunk := func(c []string) {
+			data := []byte(strings.Join(c, "\n"))
 
-		for i := 0; i < len(batchLinks); i += chunkSize {
-			end := min(i+chunkSize, len(batchLinks))
-			chunk := batchLinks[i:end]
-
-			wg.Add(1)
-			go func(c []string) {
-				defer wg.Done()
-				data := []byte(strings.Join(c, "\n"))
-
-				var chunkNodes []map[string]any
-				// 标准转换
-				if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
-					slog.Debug("标准转换成功", "数量", len(nodes))
-					if hasPatch {
-						patchMihomoNodesFromLinks(nodes, c)
-					}
+			var chunkNodes []map[string]any
+			// 标准转换
+			if nodes, err := convert.ConvertsV2Ray(data); err == nil && len(nodes) > 0 {
+				slog.Debug("标准转换成功", "数量", len(nodes))
+				if hasPatch {
+					patchMihomoNodesFromLinks(nodes, c)
+				}
+				chunkNodes = append(chunkNodes, ToNormalizeNodes(nodes)...)
+			}
+			// 扩展转换
+			if hasExtra {
+				if nodes, err := ConvertsV2RayExtra(data); err == nil && len(nodes) > 0 {
+					slog.Debug("扩展转换成功", "数量", len(nodes))
 					chunkNodes = append(chunkNodes, ToNormalizeNodes(nodes)...)
 				}
-				// 扩展转换：
-				if hasExtra {
-					if nodes, err := ConvertsV2RayExtra(data); err == nil && len(nodes) > 0 {
-						slog.Debug("扩展转换成功", "数量", len(nodes))
-						chunkNodes = append(chunkNodes, ToNormalizeNodes(nodes)...)
-					}
-				}
+			}
 
-				appendUnique(chunkNodes)
-			}(chunk)
+			appendUnique(chunkNodes)
 		}
-		wg.Wait()
+
+		if len(batchLinks) <= chunkSize {
+			processChunk(batchLinks)
+		} else {
+			var wg sync.WaitGroup
+			for i := 0; i < len(batchLinks); i += chunkSize {
+				end := min(i+chunkSize, len(batchLinks))
+				wg.Add(1)
+				go func(c []string) {
+					defer wg.Done()
+					processChunk(c)
+				}(batchLinks[i:end])
+			}
+			wg.Wait()
+		}
 	}
 
 	slog.Debug("解析数量", "finalNodes", len(finalNodes), "批次去重", batchDeduped)
@@ -1132,7 +1135,10 @@ func ParseWireGuardURI(link string) map[string]any {
 
 // ParseSSRURI 解析 ssr:// 链接 (Base64解码 + 参数提取)
 func ParseSSRURI(link string) map[string]any {
-	content := strings.TrimPrefix(link, "ssr://")
+	content := link
+	if len(link) >= 6 && strings.EqualFold(link[:6], "ssr://") {
+		content = link[6:]
+	}
 	// 清理末尾可能的备注标记
 	if idx := strings.Index(content, "#"); idx > 0 {
 		content = content[:idx]
@@ -1516,7 +1522,7 @@ func ParseBracketKVProxies(data []byte) []map[string]any {
 
 		// 字节预检：跳过不含 '=' 或链接型 '=' 的行（避免 string 分配）
 		eqIdx := bytes.IndexByte(lineBytes, '=')
-		if eqIdx <= 0 {
+		if eqIdx <= 0 || eqIdx == len(lineBytes)-1 {
 			return true
 		}
 		if bytes.Contains(lineBytes[:eqIdx], []byte("://")) {
@@ -1866,4 +1872,22 @@ func ExtractMarkdownURLs(data []byte) []string {
 	}
 
 	return out
+}
+
+// isValidSchemePrefix 校验 s 是否为合法的 URI scheme 前缀（[a-zA-Z][a-zA-Z0-9+.-]*）
+func isValidSchemePrefix(s string) bool {
+	if s == "" {
+		return false
+	}
+	c := s[0]
+	if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		c = s[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	return true
 }

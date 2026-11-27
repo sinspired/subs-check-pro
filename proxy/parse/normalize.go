@@ -267,15 +267,17 @@ func FixupProxyLink(link string) string {
 	if strings.Contains(link, "&amp;") {
 		link = strings.ReplaceAll(link, "&amp;", "&")
 	}
-	switch {
-	case strings.HasPrefix(link, "hy://"):
-		return "hysteria://" + link[len("hy://"):]
-	case strings.HasPrefix(link, "hy2://"):
-		return "hysteria2://" + link[len("hy2://"):]
-	case strings.HasPrefix(link, "tuic5://"):
-		return "tuic://" + link[len("tuic5://"):]
-	case strings.HasPrefix(link, "socks5h://"):
-		return "socks5://" + link[len("socks5h://"):]
+	if idx := strings.Index(link, "://"); idx > 0 {
+		switch strings.ToLower(link[:idx]) {
+		case "hy":
+			return "hysteria://" + link[idx+3:]
+		case "hy2":
+			return "hysteria2://" + link[idx+3:]
+		case "tuic5":
+			return "tuic://" + link[idx+3:]
+		case "socks5h":
+			return "socks5://" + link[idx+3:]
+		}
 	}
 	return link
 }

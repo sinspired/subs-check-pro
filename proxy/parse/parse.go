@@ -182,46 +182,59 @@ func parseLineBasedFormats(data []byte, subURL string) ([]map[string]any, error)
 	return nil, fmt.Errorf("未知格式")
 }
 
-// coveredByStdConvert 判断一行是否已被 convert.ConvertsV2Ray(整份数据) 完整处理。
-// 返回 false 的行会继续交给 parseRawLinesOpt -> ParseProxyLinksAndConvert / ConvertsV2RayExtra 处理。
-func coveredByStdConvert(raw string) bool {
-	if raw == "" {
-		return false
-	}
-	if c := raw[0]; !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') {
-		return false
-	}
-	i := strings.Index(raw, "://")
+// coveredByStdConvertBytes 判断一行是否已被 convert.ConvertsV2Ray(整份数据) 完整处理。
+// 直接在 []byte 上判断，避免对已覆盖行产生 string 分配。
+func coveredByStdConvertBytes(raw []byte) bool {
+	i := bytes.Index(raw, []byte("://"))
 	if i <= 0 {
 		return false
 	}
-	for j := 0; j < i; j++ {
+	c0 := raw[0]
+	if !((c0 >= 'a' && c0 <= 'z') || (c0 >= 'A' && c0 <= 'Z')) {
+		return false
+	}
+	for j := 1; j < i; j++ {
 		c := raw[j]
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '+' || c == '-' || c == '.') {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') {
 			return false
 		}
 	}
 
 	// 若 '#' 之前存在空格或 '|' 注释（如 "http://1.2.3.4:8080 | AL | 2631ms"），
 	// 整份数据直接进 ConvertsV2Ray 会解析失败，不能跳过。
-	head, _, _ := strings.Cut(raw, "#")
-	if strings.ContainsAny(head, " \t|") {
+	head := raw
+	if fragIdx := bytes.IndexByte(raw, '#'); fragIdx >= 0 {
+		head = raw[:fragIdx]
+	}
+	if bytes.IndexAny(head, " \t|") >= 0 {
 		return false
 	}
 
-	scheme := strings.ToLower(raw[:i])
-	switch scheme {
+	// 栈上转小写，避免堆分配
+	var buf [16]byte
+	if i > len(buf) {
+		return true
+	}
+	for j := 0; j < i; j++ {
+		c := raw[j]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		buf[j] = c
+	}
+
+	switch string(buf[:i]) {
 	// Mihomo 不支持、前缀需重写、或需走专用/扩展解析器的协议
 	case "wireguard", "wg", "ssr", "mieru", "mierus", "snell", "socks4", "hy", "hy2", "tuic5":
 		return false
 	case "http", "https", "socks", "socks5", "socks5h":
 		// 含明文 "user:pass@" 时，Mihomo 会把它当 Base64 解坏，必须留给 ConvertsV2RayExtra
 		rest := head[i+3:]
-		if pathIdx := strings.IndexAny(rest, "/?"); pathIdx >= 0 {
+		if pathIdx := bytes.IndexAny(rest, "/?"); pathIdx >= 0 {
 			rest = rest[:pathIdx]
 		}
-		if atIdx := strings.IndexByte(rest, '@'); atIdx > 0 {
-			if strings.IndexByte(rest[:atIdx], ':') >= 0 {
+		if atIdx := bytes.IndexByte(rest, '@'); atIdx > 0 {
+			if bytes.IndexByte(rest[:atIdx], ':') >= 0 {
 				return false
 			}
 		}
@@ -233,32 +246,34 @@ func coveredByStdConvert(raw string) bool {
 func parseRawLinesOpt(data []byte, subURL string, skipStd bool) ([]map[string]any, int) {
 	var lines []string
 	forEachLine(data, func(rawBytes []byte) bool {
-		raw := string(rawBytes)
-		if skipStd && coveredByStdConvert(raw) {
+		lineBytes := bytes.TrimSpace(rawBytes)
+		if len(lineBytes) == 0 || lineBytes[0] == '#' || (len(lineBytes) >= 2 && lineBytes[0] == '/' && lineBytes[1] == '/') {
 			return true
 		}
-		line := strings.TrimSpace(raw)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+		if skipStd && coveredByStdConvertBytes(lineBytes) {
 			return true
 		}
-		if after, ok := strings.CutPrefix(line, "- "); ok {
-			line = strings.TrimSpace(after)
+		if bytes.HasPrefix(lineBytes, []byte("- ")) {
+			lineBytes = bytes.TrimSpace(lineBytes[2:])
+			if len(lineBytes) == 0 {
+				return true
+			}
 		}
 
 		// 兼容文本中夹杂单行 Base64 编码节点块（无 "://" 且无 ":"）
-		if len(line) >= 16 && !strings.Contains(line, "://") && !strings.Contains(line, ":") {
-			lb := []byte(line)
-			if looksLikeBase64(lb) {
-				if dec, err := decodeBase64Bytes(lb); err == nil && isPrintableText(dec) && bytes.Contains(dec, []byte("://")) {
+		if len(lineBytes) >= 16 && !bytes.Contains(lineBytes, []byte("://")) && bytes.IndexByte(lineBytes, ':') < 0 {
+			if looksLikeBase64(lineBytes) {
+				if dec, err := decodeBase64Bytes(lineBytes); err == nil && isPrintableText(dec) && bytes.Contains(dec, []byte("://")) {
 					forEachLine(dec, func(dl []byte) bool {
-						s := strings.TrimSpace(string(dl))
-						if s != "" && !strings.HasPrefix(s, "#") {
-							if after, ok := strings.CutPrefix(s, "- "); ok {
-								s = strings.TrimSpace(after)
-							}
-							if s != "" {
-								lines = append(lines, s)
-							}
+						d := bytes.TrimSpace(dl)
+						if len(d) == 0 || d[0] == '#' {
+							return true
+						}
+						if bytes.HasPrefix(d, []byte("- ")) {
+							d = bytes.TrimSpace(d[2:])
+						}
+						if len(d) > 0 {
+							lines = append(lines, string(d))
 						}
 						return true
 					})
@@ -267,9 +282,7 @@ func parseRawLinesOpt(data []byte, subURL string, skipStd bool) ([]map[string]an
 			}
 		}
 
-		if line != "" {
-			lines = append(lines, line)
-		}
+		lines = append(lines, string(lineBytes))
 		return true
 	})
 

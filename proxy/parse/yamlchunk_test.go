@@ -184,17 +184,73 @@ func TestStreamYieldStops(t *testing.T) {
 	}
 }
 
-func TestCoveredByStdConvert(t *testing.T) {
-	yes := []string{"vless://a@b:1#n", "VLESS://a@b:1", "trojan://p@h:1", "ss://abc@h:1"}
-	no := []string{"", "1.2.3.4:80", "- vless://a@b:1", "  vless://a@b:1", "wireguard://x", "wg://x", "ssr://x", "mieru://x", "hy2://x", "hy://x", "abc"}
+func TestCoveredByStdConvertBytes(t *testing.T) {
+	yes := []string{
+		"vless://a@b:1#n",
+		"VLESS://a@b:1",
+		"trojan://p@h:1",
+		"ss://abc@h:1",
+		"http://1.2.3.4:8080",
+		"socks5://1.2.3.4:1080#tag",
+	}
+	no := []string{
+		"",
+		"1.2.3.4:80",
+		"- vless://a@b:1",
+		"  vless://a@b:1",
+		"wireguard://x",
+		"wg://x",
+		"ssr://x",
+		"mieru://x",
+		"hy2://x",
+		"hy://x",
+		"abc",
+		"http://1.2.3.4:8080 | AL | 100ms",
+		"http://user:pass@1.2.3.4:8080",
+	}
 	for _, s := range yes {
-		if !coveredByStdConvert(s) {
+		if !coveredByStdConvertBytes([]byte(s)) {
 			t.Errorf("应视为已被整体转换覆盖: %q", s)
 		}
 	}
 	for _, s := range no {
-		if coveredByStdConvert(s) {
+		if coveredByStdConvertBytes([]byte(s)) {
 			t.Errorf("不应视为已覆盖: %q", s)
+		}
+	}
+}
+
+func TestParseProxyLinksAndConvertNoPanicOnMetaBeforeScheme(t *testing.T) {
+	links := []string{
+		// 回归测试："://" 出现在空格或 "|" 之后，且截断后长度小于 schemeIdx
+		"192.168.100.1:8080 | HongKong | provider: https://example.com/very/long/path/that/exceeds/short/length",
+		"Some very long description text with spaces before url | https://example.com/sub",
+		`<a href="https://example.com/very/long/url/path/exceeding/prefix">click</a>`,
+		"[Some Markdown Link With Spaces](https://example.com/very/long/subscription/url)",
+		"http://",
+		"HY2://pass@1.2.3.4:443#node",
+	}
+
+	nodes, _ := ParseProxyLinksAndConvert(links, "")
+	if len(nodes) == 0 {
+		t.Fatal("预期至少解析出有效节点，但结果为空")
+	}
+}
+
+func TestFixupProxyLink(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"hy://pass@1.2.3.4:443", "hysteria://pass@1.2.3.4:443"},
+		{"HY2://PassWord@1.2.3.4:443?sni=A.com#Tag", "hysteria2://PassWord@1.2.3.4:443?sni=A.com#Tag"},
+		{"Tuic5://uuid:Pass@1.2.3.4:443", "tuic://uuid:Pass@1.2.3.4:443"},
+		{"SOCKS5H://1.2.3.4:1080", "socks5://1.2.3.4:1080"},
+		{"vless://uuid@1.2.3.4:443?a=1&amp;b=2", "vless://uuid@1.2.3.4:443?a=1&b=2"},
+	}
+	for _, tc := range cases {
+		if got := FixupProxyLink(tc.in); got != tc.want {
+			t.Errorf("FixupProxyLink(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
