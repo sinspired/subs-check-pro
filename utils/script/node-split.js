@@ -21,7 +21,7 @@ function operator(proxies = []) {
     return list
   })
 
-  splitDetails.forEach(detail => console.log(`[节点裂变] ${detail}`))
+  // splitDetails.forEach(detail => console.log(`[节点裂变] ${detail}`))
 
   console.log(
     splitDetails.length
