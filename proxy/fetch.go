@@ -1,3 +1,4 @@
+// proxy\fetch.go
 package proxies
 
 import (
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/common/convert"
@@ -88,6 +90,10 @@ func currentMaxSubscriptionBytes() int64 {
 // Key: proxyAddr (string), Value: *http.Client
 var clientMapCache sync.Map
 
+// githubTokenWarned 每轮检测只打印一次 GitHub Token 失效警告，避免刷屏；
+// 在 ClearCache() 中重置，保证下一轮检测仍会提醒用户修改。
+var githubTokenWarned atomic.Bool
+
 // failClass 描述一次失败「值不值得再试」。
 //
 // 原实现只区分 404/410（fatal）与其它，其余一律整轮重试：
@@ -112,7 +118,7 @@ const (
 type fetchFailure struct {
 	err        error
 	class      failClass
-	fatal      bool // 404/410/文件过大：不再尝试其它策略与重试（日期占位符链接除外），沿用原语义
+	fatal      bool // 404/410/文件过大：不再尝试其它策略与重试（日期占位符链接除外）
 	hostLevel  bool // 连接层失败（DNS/拒绝连接/拨号或 TLS 握手超时），计入熔断
 	proxyLevel bool // 连接的是上游代理本身失败：熔断记在代理上，而不是目标主机上
 	definitive bool // 结论确定（DNS 域名不存在），熔断阈值为 1
@@ -568,6 +574,17 @@ func getClient(proxyAddr string) *http.Client {
 	return actual.(*http.Client)
 }
 
+func handleTransportErr(err error, breakerKey, proxyBreakerKey string) *fetchFailure {
+	f := classifyTransportError(err)
+	switch {
+	case f.proxyLevel && proxyBreakerKey != "":
+		subHostBreaker.fail(proxyBreakerKey, err, false)
+	case f.hostLevel:
+		subHostBreaker.fail(breakerKey, err, f.definitive)
+	}
+	return f
+}
+
 // fetchOnce 执行单次 HTTP 请求 (使用连接池)。成功返回 (body, nil)，失败返回 (nil, 失败描述)。
 func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte, *fetchFailure) {
 	// 1. 确定 Client Key
@@ -651,16 +668,8 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 	// 5. 执行请求
 	resp, err := client.Do(req)
 	if err != nil {
-		f := classifyTransportError(err)
-		switch {
-		case f.proxyLevel && proxyBreakerKey != "":
-			subHostBreaker.fail(proxyBreakerKey, err, false)
-		case f.hostLevel:
-			subHostBreaker.fail(breakerKey, err, f.definitive)
-		}
-		return nil, f
+		return nil, handleTransportErr(err, breakerKey, proxyBreakerKey)
 	}
-	defer resp.Body.Close()
 
 	// 收到 HTTP 响应即证明目标主机/上游代理连接成功。
 	// host breaker 只统计连接层失败，因此此处立即清除旧的连接失败记录。
@@ -668,6 +677,36 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 	if proxyBreakerKey != "" {
 		subHostBreaker.ok(proxyBreakerKey)
 	}
+
+	// 5.1 识别 GitHub Token 失效/无权限导致的假 404（或 api.github.com 的 401）：
+	// raw.githubusercontent.com 携带无效/过期 Token 时，即使是公开仓库也会直接返回 404。
+	// 若携带了 Authorization 且返回 404/401，剥离 Token 匿名复检一次：
+	//   - 若匿名请求成功：实锤为 Token 错误导致的假 404/401，打印警告提醒用户修改 github-token，并直接返回正确内容；
+	//   - 若匿名请求依然 404：说明资源确实不存在，交由下方正常返回 404 走快速短路。
+	if (resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnauthorized) &&
+		isGitHubRequest(req.URL) &&
+		req.Header.Get("Authorization") != "" {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 128*1024))
+		resp.Body.Close()
+
+		retryReq := req.Clone(ctx)
+		retryReq.Header.Del("Authorization")
+
+		retryResp, retryErr := client.Do(retryReq)
+		if retryErr != nil {
+			return nil, handleTransportErr(retryErr, breakerKey, proxyBreakerKey)
+		}
+		resp = retryResp
+
+		if resp.StatusCode < 400 {
+			if githubTokenWarned.CompareAndSwap(false, true) {
+				slog.Warn("检测到 GitHub Token 错误或已失效（触发假 404/401），已自动回退匿名拉取；请及时修改或清空配置中的 github-token", "URL", target)
+			} else {
+				slog.Debug("GitHub Token 触发假 404/401，已自动回退匿名拉取", "URL", target)
+			}
+		}
+	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		// 读取128KB，超过的放弃连接复用

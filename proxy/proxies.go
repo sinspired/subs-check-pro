@@ -1,4 +1,5 @@
 // Package proxies 负责从各类订阅源获取、解析并去重代理节点。
+// proxy\proxies.go
 package proxies
 
 import (
@@ -1063,6 +1064,9 @@ func cleanMetadata(p map[string]any) {
 func ClearCache() {
 	uniqueSubsCount = 0
 	totalRawHits.Store(0)
+
+	// 重置本轮 GitHub Token 失效告警标记
+	githubTokenWarned.Store(false)
 
 	// 清空主机熔断状态，避免上一轮的“主机不可达”结论带到下一轮
 	subHostBreaker.clear()
