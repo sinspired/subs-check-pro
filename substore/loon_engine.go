@@ -1099,7 +1099,7 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 					results := utils.SendNotifyTo(utils.NotifySubStore, recipients, t, pushMsg, "text")
 					for _, res := range results {
 						if res.OK {
-							e.logger.Info(prefix+"[通知] "+"Apprise 推送成功", "target", res.Name, "method", res.Method)
+							e.logger.Info(prefix+"[通知] "+"Apprise 推送成功", "target", res.Name, "method", res.Method, "content", c)
 						} else {
 							e.logger.Warn(prefix+"[通知] "+"Apprise 推送失败", "target", res.Name, "err", res.Error)
 						}
