@@ -90,9 +90,22 @@ func currentMaxSubscriptionBytes() int64 {
 // Key: proxyAddr (string), Value: *http.Client
 var clientMapCache sync.Map
 
-// githubTokenWarned 每轮检测只打印一次 GitHub Token 失效警告，避免刷屏；
-// 在 ClearCache() 中重置，保证下一轮检测仍会提醒用户修改。
-var githubTokenWarned atomic.Bool
+var (
+	// githubTokenWarned 每轮检测只打印一次 GitHub Token 失效警告，避免刷屏；
+	// 在 ClearCache() 中重置，保证下一轮检测仍会提醒用户修改。
+	githubTokenWarned atomic.Bool
+	// githubTokenDisabled 当非细粒度 Token 被实锤失效后，本轮跳过注入，避免重复触发假 404
+	githubTokenDisabled atomic.Bool
+)
+
+// isFineGrainedGitHubToken 判断是否为细粒度 PAT（github_pat_ 前缀）。
+// 细粒度 Token 可能仅授权了部分私有仓库，不能因单个公开仓库 404 而全局停用。
+func isFineGrainedGitHubToken(token string) bool {
+	t := strings.TrimSpace(token)
+	t = strings.TrimPrefix(t, "Bearer ")
+	t = strings.TrimPrefix(t, "token ")
+	return strings.HasPrefix(strings.TrimSpace(t), "github_pat_")
+}
 
 // failClass 描述一次失败「值不值得再试」。
 //
@@ -652,8 +665,10 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 		} else {
 			req.Header.Set("Accept", "*/*")
 		}
-		// GitHub 域名：使用 Token 提升速率限制 (未认证 60次/h → 认证 5000次/h)
-		utils.InjectGitHubToken(req, config.GlobalConfig.GithubToken)
+		if !githubTokenDisabled.Load() {
+			// GitHub 域名：使用 Token 提升速率限制 (未认证 60次/h → 认证 5000次/h)
+			utils.InjectGitHubToken(req, config.GlobalConfig.GithubToken)
+		}
 	}
 
 	// 4.2 处理本地请求特殊 Header
@@ -686,6 +701,7 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 	if (resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnauthorized) &&
 		isGitHubRequest(req.URL) &&
 		req.Header.Get("Authorization") != "" {
+		origStatus := resp.StatusCode
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 128*1024))
 		resp.Body.Close()
 
@@ -699,11 +715,19 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 		resp = retryResp
 
 		if resp.StatusCode < 400 {
-			if githubTokenWarned.CompareAndSwap(false, true) {
-				slog.Warn("检测到 GitHub Token 错误或已失效（触发假 404/401），已自动回退匿名拉取；请及时修改或清空配置中的 github-token", "URL", target)
+			if isFineGrainedGitHubToken(config.GlobalConfig.GithubToken) {
+				// 细粒度 Token：不全局停用，保留给其它已授权的私有仓库使用
+				if githubTokenWarned.CompareAndSwap(false, true) {
+					slog.Warn("细粒度 GitHub Token 对部分仓库无权限，已匿名回退", "提示", "私有仓库不受影响")
+				}
 			} else {
-				slog.Debug("GitHub Token 触发假 404/401，已自动回退匿名拉取", "URL", target)
+				// 经典/其它全局 Token：已实锤失效，本轮停用避免后续链接重复踩坑
+				githubTokenDisabled.Store(true)
+				if githubTokenWarned.CompareAndSwap(false, true) {
+					slog.Warn("GitHub Token 失效，本轮已停用", "建议", "修改或清空github-token")
+				}
 			}
+			slog.Debug("GitHub Token 请求失败，已匿名重试成功", "URL", target, "原状态码", origStatus)
 		}
 	}
 	defer resp.Body.Close()

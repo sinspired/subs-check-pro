@@ -1067,6 +1067,7 @@ func ClearCache() {
 
 	// 重置本轮 GitHub Token 失效告警标记
 	githubTokenWarned.Store(false)
+	githubTokenDisabled.Store(false)
 
 	// 清空主机熔断状态，避免上一轮的“主机不可达”结论带到下一轮
 	subHostBreaker.clear()
