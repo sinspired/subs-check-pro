@@ -98,6 +98,7 @@ type activeReqState struct {
 	runCtx             context.Context
 	stopped            atomic.Bool
 	doneCh             chan<- loonResult
+	sourceTag          string
 	globalNoCache      bool
 	noCacheURLs        map[string]struct{}
 	extraUASet         map[string]struct{}
@@ -1052,51 +1053,58 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 			title := args[0].String()
 			subtitle := args[1].String()
 			content := args[2].String()
-			e.logger.Info("🔔 [通知] "+title, "subtitle", subtitle, "content", content)
 
-			pushConfig := config.GlobalConfig.SubStorePushService
+			tagPrefix := ""
+			if st := wr.state; st != nil && st.sourceTag != "" {
+				tagPrefix = "[" + st.sourceTag + "] "
+			}
+
+			e.logger.Info("🔔 [通知] "+tagPrefix+title, "subtitle", subtitle, "content", content)
+
+			pushConfig := strings.TrimSpace(config.GlobalConfig.SubStorePushService)
 			if pushConfig != "" {
-				go func(cfg, t, st, c string) {
+				go func(cfg, t, st, c, prefix string) {
 					pushMsg := c
 					if st != "" {
-						pushMsg = st + "  \n" + c
+						pushMsg = st + "\n" + c
 					}
 
-					if strings.Contains(cfg, "[推送内容]") {
-						finalURL := strings.Replace(cfg, "[推送标题]", url.PathEscape(t), 1)
-						finalURL = strings.Replace(finalURL, "[推送内容]", url.PathEscape(pushMsg), 1)
-						pushCtx, pushCancel := context.WithTimeout(context.Background(), 15*time.Second)
-						defer pushCancel()
-						pushReq, err := http.NewRequestWithContext(pushCtx, http.MethodGet, finalURL, nil)
-						if err == nil {
-							var resp *http.Response
-							if resp, err = e.httpClient.Do(pushReq); err == nil {
-								_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-								resp.Body.Close()
+					// 1. 自定义占位符 HTTP GET 模式
+					if strings.Contains(cfg, "[推送内容]") || strings.Contains(cfg, "[推送标题]") {
+						finalURL := renderPushTemplateURL(cfg, t, pushMsg)
+						if method, err := utils.DoHTTPGetWithFallback(finalURL, e.httpClient); err != nil {
+							e.logger.Warn(prefix+"Sub-Store HTTP 推送失败", "err", err)
+						} else {
+							e.logger.Info(prefix+"Sub-Store HTTP 推送成功", "method", method)
+						}
+						return
+					}
+
+					// 2. Apprise 模式："apprise" 复用全局 RecipientURL；否则拆分自定义渠道（如 ntfy://topic）
+					var recipients []string
+					if strings.EqualFold(cfg, "apprise") {
+						recipients = config.GlobalConfig.RecipientURL
+					} else {
+						for item := range strings.SplitSeq(cfg, ",") {
+							if s := strings.TrimSpace(item); s != "" {
+								recipients = append(recipients, s)
 							}
 						}
-						if err != nil {
-							e.logger.Warn("Sub-Store HTTP 推送失败", "err", err)
-						}
+					}
+					if len(recipients) == 0 {
 						return
 					}
 
-					var targetURLs string
-					if strings.ToLower(strings.TrimSpace(cfg)) == "apprise" {
-						targetURLs = strings.Join(config.GlobalConfig.RecipientURL, ",")
-					} else {
-						targetURLs = cfg
+					// 统一使用 text 格式，避免节点名中未闭合的 _ / * / | / [] 破坏下游解析
+					results := utils.SendNotifyTo(utils.NotifySubStore, recipients, t, pushMsg, "text")
+					for _, res := range results {
+						if res.OK {
+							e.logger.Info(prefix+"Sub-Store Apprise 推送成功", "target", res.Name, "method", res.Method)
+						} else {
+							e.logger.Warn(prefix+"Sub-Store Apprise 推送失败", "target", res.Name, "err", res.Error)
+						}
 					}
-					if targetURLs == "" {
-						return
-					}
-					req := utils.NotifyRequest{URLs: targetURLs, Body: pushMsg, Title: t, Format: "markdown"}
-					if err := utils.Notify(req, ""); err != nil {
-						e.logger.Warn("Sub-Store Apprise 推送失败", "err", err)
-					} else {
-						e.logger.Debug("Sub-Store Apprise 推送成功")
-					}
-				}(pushConfig, title, subtitle, content)
+				}(pushConfig, title, subtitle, content, tagPrefix)
 			}
 		}
 		return ctx.Undefined()
@@ -1107,6 +1115,9 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 			return ctx.Undefined()
 		}
 		level, msg := args[0].String(), args[1].String()
+		if strings.TrimSpace(msg) == "" {
+			return ctx.Undefined()
+		}
 		if u, ua, ok := extractCachedLogURLUA(msg); ok {
 			if e.store != nil {
 				e.store.RecordURLUA(u, ua)
@@ -1708,6 +1719,7 @@ func (e *LoonEngine) runTaskInWorker(
 	st := &activeReqState{
 		runCtx:             runCtx,
 		doneCh:             doneCh,
+		sourceTag:          extractSubStoreSourceTag(req.URL),
 		globalNoCache:      globalNoCache,
 		noCacheURLs:        noCacheURLs,
 		extraUASet:         extraUASet,
@@ -1969,4 +1981,34 @@ func extractCachedLogURLUA(msg string) (string, string, bool) {
 		}
 	}
 	return "", "", false
+}
+
+func extractSubStoreSourceTag(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i, seg := range parts {
+		if (seg == "download" || seg == "sub" || seg == "collection") && i+1 < len(parts) {
+			last := parts[len(parts)-1]
+			if decoded, err := url.PathUnescape(last); err == nil && decoded != "" {
+				return decoded
+			}
+			return last
+		}
+	}
+	return ""
+}
+
+func renderPushTemplateURL(tpl, title, msg string) string {
+	base, query, hasQuery := strings.Cut(tpl, "?")
+	base = strings.ReplaceAll(base, "[推送标题]", url.PathEscape(title))
+	base = strings.ReplaceAll(base, "[推送内容]", url.PathEscape(msg))
+	if !hasQuery {
+		return base
+	}
+	query = strings.ReplaceAll(query, "[推送标题]", url.QueryEscape(title))
+	query = strings.ReplaceAll(query, "[推送内容]", url.QueryEscape(msg))
+	return base + "?" + query
 }

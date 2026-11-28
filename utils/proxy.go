@@ -34,6 +34,12 @@ var (
 	IsGhProxyAvailable  bool
 )
 
+var (
+	sysProxyStateMu   sync.RWMutex
+	sysProxyProbeMu   sync.Mutex
+	lastSysProxyProbe time.Time
+)
+
 // commonProxies 常见系统代理端口
 var commonProxies = []string{
 	"http://127.0.0.1:7890",
@@ -127,41 +133,113 @@ func InjectGitHubToken(req *http.Request, token string) {
 	}
 }
 
+// CurrentSysProxy 线程安全地读取当前已知系统代理状态（不触发网络探测）
+func CurrentSysProxy() (proxy string, available bool) {
+	sysProxyStateMu.RLock()
+	defer sysProxyStateMu.RUnlock()
+	return config.GlobalConfig.SystemProxy, IsSysProxyAvailable
+}
+
 // GetSysProxy 检测系统代理是否可用，并设置环境变量
 func GetSysProxy() bool {
-	// 清理所有可能的代理环境变量
-	UnsetAllProxyEnvVars()
+	sysProxyProbeMu.Lock()
+	defer sysProxyProbeMu.Unlock()
+	return probeSysProxyLocked()
+}
+
+// EnsureSysProxy 在冷却时间外按需探测一次系统代理，避免短时间内并发/重复探测
+func EnsureSysProxy(cooldown time.Duration) string {
+	sysProxyStateMu.RLock()
+	cfgProxy := config.GlobalConfig.SystemProxy
+	avail := IsSysProxyAvailable
+	lastProbe := lastSysProxyProbe
+	sysProxyStateMu.RUnlock()
+
+	if isDirectProxyConfig(cfgProxy) {
+		return ""
+	}
+	if cooldown > 0 && !lastProbe.IsZero() && time.Since(lastProbe) < cooldown {
+		if avail && cfgProxy != "" {
+			return cfgProxy
+		}
+		return ""
+	}
+
+	sysProxyProbeMu.Lock()
+	defer sysProxyProbeMu.Unlock()
+
+	// Double-check：等待探测锁期间可能刚被其他协程刷新过
+	sysProxyStateMu.RLock()
+	cfgProxy = config.GlobalConfig.SystemProxy
+	avail = IsSysProxyAvailable
+	lastProbe = lastSysProxyProbe
+	sysProxyStateMu.RUnlock()
+
+	if isDirectProxyConfig(cfgProxy) {
+		return ""
+	}
+	if cooldown > 0 && !lastProbe.IsZero() && time.Since(lastProbe) < cooldown {
+		if avail && cfgProxy != "" {
+			return cfgProxy
+		}
+		return ""
+	}
+
+	if probeSysProxyLocked() {
+		p, _ := CurrentSysProxy()
+		return p
+	}
+	return ""
+}
+
+func probeSysProxyLocked() bool {
+	sysProxyStateMu.RLock()
+	prevProxy := config.GlobalConfig.SystemProxy
+	prevAvailable := IsSysProxyAvailable
+	sysProxyStateMu.RUnlock()
 
 	// "direct" 是显式禁用系统代理的硬开关，不再回退自动探测常见端口。
-	if isDirectProxyConfig(config.GlobalConfig.SystemProxy) {
+	if isDirectProxyConfig(prevProxy) {
+		sysProxyStateMu.Lock()
 		config.GlobalConfig.SystemProxy = "direct"
-		slog.Info("系统代理已禁用", "strategy", "direct")
 		IsSysProxyAvailable = false
+		lastSysProxyProbe = time.Now()
+		sysProxyStateMu.Unlock()
+
+		UnsetAllProxyEnvVars()
+		slog.Info("系统代理已禁用", "strategy", "direct")
 		return false
 	}
 
-	// 优先使用配置文件中的代理，其次检测常见端口
-	proxy := findAvailableSysProxy(config.GlobalConfig.SystemProxy, commonProxies)
+	// findAvailableSysProxy 自行构造 Transport，不依赖环境变量
+	proxy := findAvailableSysProxy(prevProxy, commonProxies)
+
+	sysProxyStateMu.Lock()
+	lastSysProxyProbe = time.Now()
 	if proxy != "" {
-
-		// 设置 HTTP 和 HTTPS 代理
-		os.Setenv("HTTP_PROXY", proxy)
-		os.Setenv("HTTPS_PROXY", proxy)
-		os.Setenv("http_proxy", proxy)
-		os.Setenv("https_proxy", proxy)
-		os.Setenv("ALL_PROXY", proxy)
-
-		// 更新配置中的代理
 		config.GlobalConfig.SystemProxy = proxy
-		slog.Debug("系统代理", "proxy", proxy)
 		IsSysProxyAvailable = true
+	} else {
+		IsSysProxyAvailable = false
+	}
+	sysProxyStateMu.Unlock()
+
+	if proxy != "" {
+		if !prevAvailable || proxy != prevProxy {
+			UnsetAllProxyEnvVars()
+			os.Setenv("HTTP_PROXY", proxy)
+			os.Setenv("HTTPS_PROXY", proxy)
+			os.Setenv("http_proxy", proxy)
+			os.Setenv("https_proxy", proxy)
+			os.Setenv("ALL_PROXY", proxy)
+		}
+		slog.Debug("系统代理", "proxy", proxy)
 		return true
 	}
 
 	// 如果没有找到可用代理，清理所有代理环境变量
 	UnsetAllProxyEnvVars()
 	slog.Debug("未找到可用代理，清除代理环境变量")
-	IsSysProxyAvailable = false
 	return false
 }
 
@@ -551,7 +629,7 @@ func CheckProxy(proxyAddr string) CheckProxyResult {
 
 	// 空值 → 先看启动时是否已探测到，没有则现场探测一次
 	if proxyAddr == "" {
-		detected := config.GlobalConfig.SystemProxy
+		detected, _ := CurrentSysProxy()
 
 		// 已探测到且非 direct，直接用
 		if detected != "" && !isDirectProxyConfig(detected) {

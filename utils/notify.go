@@ -30,12 +30,21 @@ type NotifyTestResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+// NotifyPushResult 供外部模块（如 Sub-Store）使用自定义 logger 记录推送明细
+type NotifyPushResult struct {
+	Name   string
+	Method string
+	OK     bool
+	Error  string
+}
+
 const (
 	NotifyNodeStatus           NotifyKind = iota // 节点状态
 	NotifyGeoDBUpdate                            // GeoDB 更新
 	NotifySubStoreAssetsUpdate                   // Sub-Store 资源更新
 	NotifySelfUpdate                             // 程序自更新
 	NotifyNewRelease                             // 新版本通知
+	NotifySubStore                               // Sub-Store 脚本通知
 )
 
 const (
@@ -108,7 +117,6 @@ func decorateURL(raw string, kind NotifyKind, downloadURL string) string {
 	switch scheme {
 	case "bark", "barks":
 		q.Set("icon", WarpURL(IconURL, IsGhProxyAvailable))
-		q.Set("image", WarpURL(IconURL, IsGhProxyAvailable))
 		q.Set("copy", RepoURL)
 		switch kind {
 		case NotifyNewRelease:
@@ -127,6 +135,9 @@ func decorateURL(raw string, kind NotifyKind, downloadURL string) string {
 		case NotifySelfUpdate:
 			q.Set("group", "scp-selfupdate")
 			q.Set("category", "程序更新")
+		case NotifySubStore:
+			q.Set("group", "scp-sub-store")
+			q.Set("category", "Sub-Store通知")
 		}
 	case "ntfy":
 		q.Set("avatar_url", WarpURL(IconURL, IsGhProxyAvailable))
@@ -146,6 +157,8 @@ func decorateURL(raw string, kind NotifyKind, downloadURL string) string {
 			q.Set("tags", "subs-check-pro,sub-store-update")
 		case NotifySelfUpdate:
 			q.Set("tags", "subs-check-pro,self-update")
+		case NotifySubStore:
+			q.Set("tags", "subs-check-pro,sub-store")
 		}
 	case "discord":
 		if IconURL != "" {
@@ -163,19 +176,20 @@ func decorateURL(raw string, kind NotifyKind, downloadURL string) string {
 			q.Set("footer", "Subs-Check-Pro 主体更新")
 		case NotifySubStoreAssetsUpdate:
 			q.Set("footer", "Subs-Check-Pro 资源更新")
+		case NotifySubStore:
+			q.Set("footer", "Sub-Store 通知")
 		}
 	case "mailto", "mailtos":
 		q.Set("from", "Subs-Check-PRO")
 	}
 
-	// 重新组装 URL
-	// 格式: scheme://body?new_query_string
+	// 重新组装 URL，保留原始标签前缀 (parts[0])
 	newQuery := q.Encode()
 	if newQuery == "" {
 		return parts[0] + "://" + body
 	}
 
-	return schemePart + "://" + body + "?" + newQuery
+	return parts[0] + "://" + body + "?" + newQuery
 }
 
 // getClient 按 proxyURL 返回已缓存的 HTTP/2 客户端，不存在则创建并缓存
@@ -266,9 +280,14 @@ func doNotify(client *http.Client, apiServer string, body []byte) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		bs, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("状态码异常: %d, 响应: %s", resp.StatusCode, strings.TrimSpace(string(bs)))
+	bs, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	respText := strings.TrimSpace(string(bs))
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("状态码异常: %d, 响应: %s", resp.StatusCode, respText)
+	}
+	if respText != "" {
+		slog.Debug("Apprise 响应", "status", resp.StatusCode, "body", respText)
 	}
 	return nil
 }
@@ -288,12 +307,13 @@ func Notify(req NotifyRequest, proxy string) error {
 	return doNotify(getClient(proxy), apiServer, body)
 }
 
-// buildProxyList 构建有序代理尝试列表。
+// buildProxyList 无阻塞构建当前已知的代理尝试列表（仅直连 + 已知有效代理）
 func buildProxyList() []string {
 	proxies := []string{""} // 首选直连
 
-	sysProxy := config.GlobalConfig.SystemProxy
-	if sysProxy != "" && (IsSysProxyAvailable || GetSysProxy()) {
+	sysProxy, avail := CurrentSysProxy()
+	sysProxy = strings.TrimSpace(sysProxy)
+	if sysProxy != "" && !isDirectProxyConfig(sysProxy) && avail {
 		proxies = append(proxies, sysProxy)
 	}
 
@@ -309,13 +329,24 @@ func retryBackoff(attempt int) time.Duration {
 	return retryDelay << attempt
 }
 
-// notifyWithRetry 按 proxies 列表轮换、指数退避地发送通知，返回成功时使用的方式。
-// 每次失败都会淘汰缓存客户端，避免复用已失效的连接。
+// notifyWithRetry 按 proxies 列表轮换、指数退避地发送通知，失败时按冷却窗口按需探测系统代理
 func notifyWithRetry(req NotifyRequest, name string, proxies []string, attempts int) (string, error) {
+	if len(proxies) == 0 {
+		proxies = []string{""}
+	}
+	localProxies := append([]string(nil), proxies...)
+
 	var lastErr error
+	var forceNextProxy string
+	probed := false
 
 	for attempt := range attempts {
-		p := proxies[attempt%len(proxies)]
+		p := localProxies[attempt%len(localProxies)]
+		if forceNextProxy != "" {
+			p = forceNextProxy
+			forceNextProxy = ""
+		}
+
 		method := "直连"
 		if p != "" {
 			method = "代理(" + p + ")"
@@ -329,6 +360,24 @@ func notifyWithRetry(req NotifyRequest, name string, proxies []string, attempts 
 		slog.Debug("通知发送失败", "目标", name, "方法", method, "次数", attempt+1, "错误", err.Error())
 
 		evictClient(p)
+
+		// 直连失败且尚无已知代理，或现有代理也失败时，触发带冷却防抖的代理探测
+		if attempt < attempts-1 && !probed && (p != "" || len(localProxies) == 1) {
+			probed = true
+			if newProxy := EnsureSysProxy(30 * time.Second); newProxy != "" && newProxy != p {
+				exists := false
+				for _, exist := range localProxies {
+					if exist == newProxy {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					localProxies = append(localProxies, newProxy)
+					forceNextProxy = newProxy
+				}
+			}
+		}
 
 		if attempt < attempts-1 {
 			wait := retryBackoff(attempt)
@@ -388,6 +437,116 @@ func broadcastNotify(kind NotifyKind, title, body, downloadURL string) {
 	wg.Wait() // 等待所有通知发送完毕
 }
 
+// SendNotifyTo 向指定渠道列表发送通知并返回各渠道独立结果（供 Sub-Store 等模块使用）
+func SendNotifyTo(kind NotifyKind, recipients []string, title, body, format string) []NotifyPushResult {
+	if config.GlobalConfig.AppriseAPIServer == "" {
+		return []NotifyPushResult{{Name: "apprise", OK: false, Error: "通知服务器地址未配置"}}
+	}
+	if format == "" {
+		format = "text"
+	}
+
+	NetGuard.WaitSettled(context.Background(), 45*time.Second)
+	proxies := buildProxyList()
+
+	results := make([]NotifyPushResult, len(recipients))
+	var wg sync.WaitGroup
+	for i, raw := range recipients {
+		wg.Add(1)
+		go func(idx int, u string) {
+			defer wg.Done()
+			name, _, _ := strings.Cut(u, "://")
+			req := NotifyRequest{
+				URLs:   decorateURL(u, kind, ""),
+				Body:   body,
+				Title:  title,
+				Format: format,
+			}
+			method, err := notifyWithRetry(req, name, proxies, maxRetries)
+			if err != nil {
+				results[idx] = NotifyPushResult{Name: name, OK: false, Error: err.Error()}
+				return
+			}
+			results[idx] = NotifyPushResult{Name: name, Method: method, OK: true}
+		}(i, raw)
+	}
+	wg.Wait()
+	return results
+}
+
+// DoHTTPGetWithFallback 使用直连与代理回退发送 GET 通知请求（用于自定义占位符 URL）
+func DoHTTPGetWithFallback(targetURL string, directClient *http.Client) (string, error) {
+	isLocal := IsLocalURL(targetURL)
+	proxies := []string{""}
+	if !isLocal {
+		proxies = buildProxyList()
+	}
+	localProxies := append([]string(nil), proxies...)
+
+	var lastErr error
+	var forceNextProxy string
+	probed := false
+
+	for attempt := range maxRetries {
+		p := localProxies[attempt%len(localProxies)]
+		if forceNextProxy != "" {
+			p = forceNextProxy
+			forceNextProxy = ""
+		}
+
+		client := directClient
+		method := "直连"
+		if p != "" {
+			client = getClient(p)
+			method = "代理(" + p + ")"
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+		if err == nil {
+			var resp *http.Response
+			resp, err = client.Do(req)
+			if err == nil {
+				bs, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				resp.Body.Close()
+				if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+					cancel()
+					return method, nil
+				}
+				err = fmt.Errorf("状态码异常: %d, 响应: %s", resp.StatusCode, strings.TrimSpace(string(bs)))
+			}
+		}
+		cancel()
+
+		lastErr = err
+		if p != "" {
+			evictClient(p)
+		}
+
+		if attempt < maxRetries-1 && !isLocal && !probed && (p != "" || len(localProxies) == 1) {
+			probed = true
+			if newProxy := EnsureSysProxy(30 * time.Second); newProxy != "" && newProxy != p {
+				exists := false
+				for _, exist := range localProxies {
+					if exist == newProxy {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					localProxies = append(localProxies, newProxy)
+					forceNextProxy = newProxy
+				}
+			}
+		}
+
+		if attempt < maxRetries-1 {
+			time.Sleep(retryBackoff(attempt))
+		}
+	}
+	return "", lastErr
+}
+
 // GetCurrentTime 返回当前时间字符串
 func GetCurrentTime() string {
 	return time.Now().Format("2006-01-02 15:04:05")
@@ -425,7 +584,6 @@ func SendNotifySubStoreAssets(frontendUpdated bool, frontendVer string, backendU
 	title := "🧩 Subs-Check-Pro 资源更新"
 	var lines []string
 
-	// 动态拼接消息体，使用语义化 Emoji 替代重复的 ✅
 	if frontendUpdated {
 		lines = append(lines, "🌐 Sub-Store 前端："+frontendVer)
 	}
