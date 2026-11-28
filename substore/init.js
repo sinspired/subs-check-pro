@@ -609,7 +609,8 @@ function __throttled_log(level) {
     if (count === 1) {
         __console_log(level, msg);
     } else if (count === 2) {
-        __console_log(level, msg + " · 已折叠");
+        // 其实同一种报错只打印一次输出就够了
+        // __console_log(level, msg + " · 已折叠");
     }
 }
 
