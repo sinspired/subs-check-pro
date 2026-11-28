@@ -1059,7 +1059,7 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 				tagPrefix = "[" + st.sourceTag + "] "
 			}
 
-			e.logger.Info("🔔 [通知] "+tagPrefix+title, "subtitle", subtitle, "content", content)
+			e.logger.Info(tagPrefix+"[通知] "+title, "subtitle", subtitle, "content", content)
 
 			pushConfig := strings.TrimSpace(config.GlobalConfig.SubStorePushService)
 			if pushConfig != "" {
@@ -1073,9 +1073,9 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 					if strings.Contains(cfg, "[推送内容]") || strings.Contains(cfg, "[推送标题]") {
 						finalURL := renderPushTemplateURL(cfg, t, pushMsg)
 						if method, err := utils.DoHTTPGetWithFallback(finalURL, e.httpClient); err != nil {
-							e.logger.Warn(prefix+"Sub-Store HTTP 推送失败", "err", err)
+							e.logger.Warn(prefix+"[通知] "+"HTTP 推送失败", "err", err)
 						} else {
-							e.logger.Info(prefix+"Sub-Store HTTP 推送成功", "method", method)
+							e.logger.Info(prefix+"[通知] "+"HTTP 推送成功", "method", method)
 						}
 						return
 					}
@@ -1099,9 +1099,9 @@ func (e *LoonEngine) newWorkerRuntime() (*workerRuntime, error) {
 					results := utils.SendNotifyTo(utils.NotifySubStore, recipients, t, pushMsg, "text")
 					for _, res := range results {
 						if res.OK {
-							e.logger.Info(prefix+"Sub-Store Apprise 推送成功", "target", res.Name, "method", res.Method)
+							e.logger.Info(prefix+"[通知] "+"Apprise 推送成功", "target", res.Name, "method", res.Method)
 						} else {
-							e.logger.Warn(prefix+"Sub-Store Apprise 推送失败", "target", res.Name, "err", res.Error)
+							e.logger.Warn(prefix+"[通知] "+"Apprise 推送失败", "target", res.Name, "err", res.Error)
 						}
 					}
 				}(pushConfig, title, subtitle, content, tagPrefix)
@@ -1990,13 +1990,22 @@ func extractSubStoreSourceTag(rawURL string) string {
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
 	for i, seg := range parts {
-		if (seg == "download" || seg == "sub" || seg == "collection") && i+1 < len(parts) {
-			last := parts[len(parts)-1]
-			if decoded, err := url.PathUnescape(last); err == nil && decoded != "" {
-				return decoded
+		switch seg {
+		case "download", "sub", "collection", "file", "artifact", "preview":
+			if i+1 < len(parts) {
+				last := parts[len(parts)-1]
+				if decoded, err := url.PathUnescape(last); err == nil && decoded != "" {
+					return decoded
+				}
+				return last
 			}
-			return last
 		}
+	}
+	if u.Path != "" && u.Path != "/" {
+		if decoded, err := url.PathUnescape(u.Path); err == nil && decoded != "" {
+			return decoded
+		}
+		return u.Path
 	}
 	return ""
 }

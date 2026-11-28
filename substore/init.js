@@ -606,10 +606,10 @@ function __throttled_log(level) {
     }
     __log_cache.set(key, count);
 
-    if (count <= 3) {
+    if (count === 1) {
         __console_log(level, msg);
-    } else if (count === 4) {
-        __console_log(level, msg + " (⚠️ 该日志重复出现，已折叠隐藏...)");
+    } else if (count === 2) {
+        __console_log(level, msg + " · 已折叠");
     }
 }
 
